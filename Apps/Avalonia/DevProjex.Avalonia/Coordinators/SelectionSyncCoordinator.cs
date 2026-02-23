@@ -257,13 +257,14 @@ public sealed class SelectionSyncCoordinator : IDisposable
         // ScanOptionsUseCase.GetExtensionsForRootFolders will include root-level files.
         var selectedIgnoreOptions = GetSelectedIgnoreOptionIds();
         var ignoreRules = _buildIgnoreRules(path, selectedIgnoreOptions, rootFolders);
+        var extensionScanRules = BuildExtensionAvailabilityScanRules(ignoreRules);
         return Task.Run(async () =>
         {
             cancellationToken.ThrowIfCancellationRequested();
             if (IsStalePathRequest(path)) return;
 
             // Scan extensions off the UI thread to avoid freezing on large folders.
-            var scan = _scanOptions.GetExtensionsForRootFolders(path, rootFolders, ignoreRules, cancellationToken);
+            var scan = _scanOptions.GetExtensionsForRootFolders(path, rootFolders, extensionScanRules, cancellationToken);
             if (scan.RootAccessDenied)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -871,6 +872,16 @@ public sealed class SelectionSyncCoordinator : IDisposable
 
         var extension = Path.GetExtension(value);
         return string.IsNullOrEmpty(extension) || extension == ".";
+    }
+
+    private static IgnoreRules BuildExtensionAvailabilityScanRules(IgnoreRules rules)
+    {
+        // Availability of "extensionless files" must not depend on the option itself.
+        // Otherwise the option can disappear right after user enables it.
+        if (!rules.IgnoreExtensionlessFiles)
+            return rules;
+
+        return rules with { IgnoreExtensionlessFiles = false };
     }
 
     private static void SetAllChecked<T>(
