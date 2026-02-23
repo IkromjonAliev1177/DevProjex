@@ -42,6 +42,7 @@ public sealed class SelectionSyncCoordinator : IDisposable
     private HashSet<string> _extensionsSelectionCache = new(StringComparer.OrdinalIgnoreCase);
     private bool _extensionsSelectionInitialized;
     private bool _hasExtensionlessExtensionEntries;
+    private int _extensionlessExtensionEntriesCount;
     private string? _lastLoadedPath;
     private string? _preparedSelectionPath;
     private PreparedSelectionMode _preparedSelectionMode;
@@ -272,7 +273,7 @@ public sealed class SelectionSyncCoordinator : IDisposable
 
             cancellationToken.ThrowIfCancellationRequested();
             var visibleExtensions = new List<string>(scan.Value.Count);
-            var hasExtensionlessEntries = SplitExtensions(scan.Value, visibleExtensions);
+            var extensionlessEntriesCount = SplitExtensions(scan.Value, visibleExtensions);
             var options = _filterSelectionService.BuildExtensionOptions(visibleExtensions, prev);
             options = ApplyMissingProfileSelectionsFallbackToExtensions(options);
             await Dispatcher.UIThread.InvokeAsync(() =>
@@ -280,7 +281,7 @@ public sealed class SelectionSyncCoordinator : IDisposable
                 cancellationToken.ThrowIfCancellationRequested();
                 if (version != _extensionScanVersion) return;
                 if (IsStalePathRequest(path)) return;
-                ApplyExtensionOptions(options, hasExtensionlessEntries);
+                ApplyExtensionOptions(options, extensionlessEntriesCount);
             });
         }, cancellationToken);
     }
@@ -529,6 +530,7 @@ public sealed class SelectionSyncCoordinator : IDisposable
         _extensionsSelectionCache.TrimExcess();
         _extensionsSelectionInitialized = false;
         _hasExtensionlessExtensionEntries = false;
+        _extensionlessExtensionEntriesCount = 0;
 
         // Clear ignore selection cache
         _ignoreSelectionCache.Clear();
@@ -596,7 +598,13 @@ public sealed class SelectionSyncCoordinator : IDisposable
         {
             var availability = _getIgnoreOptionsAvailability(path, selectedRootFolders);
             if (_hasExtensionlessExtensionEntries)
-                return availability with { IncludeExtensionlessFiles = true };
+            {
+                return availability with
+                {
+                    IncludeExtensionlessFiles = true,
+                    ExtensionlessFilesCount = _extensionlessExtensionEntriesCount
+                };
+            }
 
             return availability;
         }
@@ -666,14 +674,14 @@ public sealed class SelectionSyncCoordinator : IDisposable
     internal void ApplyExtensionScan(IReadOnlyCollection<string> extensions)
     {
         var visibleExtensions = new List<string>(extensions.Count);
-        var hasExtensionlessEntries = SplitExtensions(extensions, visibleExtensions);
+        var extensionlessEntriesCount = SplitExtensions(extensions, visibleExtensions);
         var prev = _extensionsSelectionInitialized
             ? new HashSet<string>(_extensionsSelectionCache, StringComparer.OrdinalIgnoreCase)
             : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         var options = _filterSelectionService.BuildExtensionOptions(visibleExtensions, prev);
         options = ApplyMissingProfileSelectionsFallbackToExtensions(options);
-        ApplyExtensionOptions(options, hasExtensionlessEntries);
+        ApplyExtensionOptions(options, extensionlessEntriesCount);
     }
 
     public void UpdateIgnoreSelectionCache(IReadOnlySet<IgnoreOptionId>? preserveMissingFrom = null)
@@ -792,11 +800,11 @@ public sealed class SelectionSyncCoordinator : IDisposable
         }
     }
 
-    private void ApplyExtensionOptions(IReadOnlyList<SelectionOption> options, bool hasExtensionlessEntries)
+    private void ApplyExtensionOptions(IReadOnlyList<SelectionOption> options, int extensionlessEntriesCount)
     {
         _viewModel.Extensions.Clear();
-        var keepExtensionlessAvailability = IsExtensionlessIgnoreEnabled();
-        _hasExtensionlessExtensionEntries = keepExtensionlessAvailability || hasExtensionlessEntries;
+        _extensionlessExtensionEntriesCount = extensionlessEntriesCount;
+        _hasExtensionlessExtensionEntries = extensionlessEntriesCount > 0;
 
         _suppressExtensionItemCheck = true;
         foreach (var option in options)
@@ -839,32 +847,21 @@ public sealed class SelectionSyncCoordinator : IDisposable
         return selected;
     }
 
-    private static bool SplitExtensions(IReadOnlyCollection<string> source, ICollection<string> visibleExtensions)
+    private static int SplitExtensions(IReadOnlyCollection<string> source, ICollection<string> visibleExtensions)
     {
-        var hasExtensionlessEntries = false;
+        var extensionlessEntriesCount = 0;
         foreach (var entry in source)
         {
             if (IsExtensionlessEntry(entry))
             {
-                hasExtensionlessEntries = true;
+                extensionlessEntriesCount++;
                 continue;
             }
 
             visibleExtensions.Add(entry);
         }
 
-        return hasExtensionlessEntries;
-    }
-
-    private bool IsExtensionlessIgnoreEnabled()
-    {
-        foreach (var option in _viewModel.IgnoreOptions)
-        {
-            if (option.Id == IgnoreOptionId.ExtensionlessFiles && option.IsChecked)
-                return true;
-        }
-
-        return false;
+        return extensionlessEntriesCount;
     }
 
     private static bool IsExtensionlessEntry(string value)

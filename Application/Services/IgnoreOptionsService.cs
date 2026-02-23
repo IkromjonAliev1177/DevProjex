@@ -38,9 +38,13 @@ public sealed class IgnoreOptionsService
 
 		if (availability.IncludeExtensionlessFiles)
 		{
+			var extensionlessLabel = availability.ExtensionlessFilesCount > 0
+				? $"{_localization["Settings.Ignore.ExtensionlessFiles"]} ({availability.ExtensionlessFilesCount})"
+				: _localization["Settings.Ignore.ExtensionlessFiles"];
+
 			options.Add(new IgnoreOptionDescriptor(
 				IgnoreOptionId.ExtensionlessFiles,
-				_localization["Settings.Ignore.ExtensionlessFiles"],
+				extensionlessLabel,
 				false));
 		}
 
