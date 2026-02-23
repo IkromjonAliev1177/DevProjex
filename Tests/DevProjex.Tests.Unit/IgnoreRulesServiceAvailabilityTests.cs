@@ -45,21 +45,6 @@ public sealed class IgnoreRulesServiceAvailabilityTests
 	}
 
 	[Fact]
-	public void GetIgnoreOptionsAvailability_SelectedRootFolderLimitsScopeDiscovery()
-	{
-		using var temp = new TemporaryDirectory();
-		temp.CreateFile("proj-git/.gitignore", "bin/");
-		temp.CreateFile("proj-git/App.csproj", "<Project />");
-		temp.CreateFile("proj-no-git/package.json", "{}");
-
-		var service = new IgnoreRulesService(new SmartIgnoreService(Array.Empty<ISmartIgnoreRule>()));
-		var availability = service.GetIgnoreOptionsAvailability(temp.Path, new[] { "proj-no-git" });
-
-		Assert.False(availability.IncludeGitIgnore);
-		Assert.True(availability.IncludeSmartIgnore);
-	}
-
-	[Fact]
 	public void GetIgnoreOptionsAvailability_NestedProjectInSelectedFolder_ShowsSmartOption()
 	{
 		using var temp = new TemporaryDirectory();

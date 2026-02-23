@@ -201,11 +201,14 @@ public sealed class RepoCacheServiceCleanupTests : IDisposable
         fileInfo.Attributes |= FileAttributes.ReadOnly;
 
         // Act
-        _service.DeleteRepositoryDirectory(dir);
+        var exception = Record.Exception(() => _service.DeleteRepositoryDirectory(dir));
+        Assert.Null(exception);
 
-        // Assert - on some systems this may fail due to locks, but should not throw
-        // Best effort deletion
-        Assert.True(true); // Test completes without exception
+        if (File.Exists(filePath))
+            File.SetAttributes(filePath, FileAttributes.Normal);
+
+        _service.DeleteRepositoryDirectory(dir);
+        Assert.False(Directory.Exists(dir));
     }
 
     [Fact]

@@ -243,24 +243,27 @@ public sealed class CancellationPatternTests
 	[Fact]
 	public void Cts_DisposalPattern_NoExceptions()
 	{
-		CancellationTokenSource? cts = null;
-
-		// Simulate multiple operations
-		for (int i = 0; i < 5; i++)
+		var exception = Record.Exception(() =>
 		{
+			CancellationTokenSource? cts = null;
+
+			// Simulate multiple operations
+			for (int i = 0; i < 5; i++)
+			{
+				cts?.Cancel();
+				cts = new CancellationTokenSource();
+			}
+
+			// Final cleanup
 			cts?.Cancel();
-			cts = new CancellationTokenSource();
-		}
+			cts?.Dispose();
 
-		// Final cleanup
-		cts?.Cancel();
-		cts?.Dispose();
+			// Disposing null should not throw
+			CancellationTokenSource? nullCts = null;
+			nullCts?.Dispose();
+		});
 
-		// Disposing null should not throw
-		CancellationTokenSource? nullCts = null;
-		nullCts?.Dispose();
-
-		Assert.True(true); // No exceptions thrown
+		Assert.Null(exception);
 	}
 
 	/// <summary>

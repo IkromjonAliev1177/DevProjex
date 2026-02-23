@@ -478,12 +478,10 @@ public class GitEdgeCasesTests : IAsyncLifetime
         var progressReports = new List<string>();
         var progress = new Progress<string>(msg => progressReports.Add(msg));
 
-        await _service.SwitchBranchAsync(repoPath, targetBranch, progress);
+        var exception = await Record.ExceptionAsync(() => _service.SwitchBranchAsync(repoPath, targetBranch, progress));
 
-        // First switch should report progress (fetching)
-        // Note: Fast path (revisit) might not report progress
-        // This test is informational rather than strict
-        Assert.True(true); // Just verify no crash during progress reporting
+        Assert.Null(exception);
+        Assert.All(progressReports, report => Assert.False(string.IsNullOrWhiteSpace(report)));
     }
 
     #endregion

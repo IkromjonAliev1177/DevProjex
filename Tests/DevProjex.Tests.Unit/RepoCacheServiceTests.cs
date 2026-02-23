@@ -105,10 +105,14 @@ public class RepoCacheServiceTests : IDisposable
         stream.Flush();
 
         // Delete should not throw even with locked file
-        _service.DeleteRepositoryDirectory(dir);
+        var deleteWhileLockedException = Record.Exception(() => _service.DeleteRepositoryDirectory(dir));
+        Assert.Null(deleteWhileLockedException);
 
-        // File might still exist if locked, but no exception should be thrown
-        Assert.True(true);
+        stream.Dispose();
+
+        // After lock release, deletion should finish successfully.
+        _service.DeleteRepositoryDirectory(dir);
+        Assert.False(Directory.Exists(dir));
     }
 
     [Fact]

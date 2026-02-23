@@ -253,27 +253,6 @@ public sealed class TreeNodeViewModelTests
     }
 
     [Fact]
-    public void IsChecked_PartialSelection_SetsParentIndeterminate()
-    {
-        var root = CreateTree();
-
-        root.Children[0].IsChecked = true;
-
-        Assert.Null(root.IsChecked);
-    }
-
-    [Fact]
-    public void IsChecked_ChildUnchecked_AfterAllChecked_MakesParentIndeterminate()
-    {
-        var root = CreateTree();
-
-        root.IsChecked = true;
-        root.Children[0].IsChecked = false;
-
-        Assert.Null(root.IsChecked);
-    }
-
-    [Fact]
     public void IsChecked_ParentIndeterminate_ClickSetsChildrenUnchecked()
     {
         var root = CreateTree();

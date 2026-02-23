@@ -296,6 +296,7 @@ public class ZipDownloadAdvancedTests : IAsyncLifetime
 
         // Our specific temp file should not exist
         // (Note: Other tests might create temp files, so we can't assert complete absence)
+        var cleanupException = default(Exception);
         foreach (var zip in tempZips)
         {
             var fileInfo = new FileInfo(zip);
@@ -308,12 +309,12 @@ public class ZipDownloadAdvancedTests : IAsyncLifetime
                 }
                 catch
                 {
-                    // Best effort cleanup
+                    cleanupException ??= new IOException($"Could not clean stale temp ZIP: {zip}");
                 }
             }
         }
 
-        Assert.True(true); // Just verify no exception during cleanup
+        Assert.Null(cleanupException);
     }
 
     #endregion
@@ -360,7 +361,7 @@ public class ZipDownloadAdvancedTests : IAsyncLifetime
 
         // Target directory might have partial content
         // but temp ZIP should be cleaned up
-        Assert.True(true); // Just verify no hanging resources
+        Assert.True(cts.IsCancellationRequested);
     }
 
     #endregion
