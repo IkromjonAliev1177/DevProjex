@@ -161,6 +161,8 @@ public partial class MainWindow : Window
     private long _lastFilterHotkeyTimestamp;
     private int _pendingSearchHotkeyToggle;
     private int _pendingFilterHotkeyToggle;
+    private int _searchFocusRequestVersion;
+    private int _filterFocusRequestVersion;
 
     // Filter bar animation
     private Border? _filterBarContainer;
@@ -328,7 +330,7 @@ public partial class MainWindow : Window
             // Start hidden (collapsed height, off-screen to the top)
             _searchBarContainer.Height = 0;
             _searchBarContainer.IsVisible = false;
-            _searchBarTransform.Y = -SearchBarHeight;
+            _searchBarTransform.Y = 0;
             _searchBar.Opacity = 0;
         }
 
@@ -341,7 +343,7 @@ public partial class MainWindow : Window
             // Start hidden (collapsed height, off-screen to the top)
             _filterBarContainer.Height = 0;
             _filterBarContainer.IsVisible = false;
-            _filterBarTransform.Y = -FilterBarHeight;
+            _filterBarTransform.Y = 0;
             _filterBar.Opacity = 0;
         }
 
@@ -2163,23 +2165,31 @@ public partial class MainWindow : Window
             EnsureSearchBarTransitions();
             if (!show)
                 SuppressSearchBoxAccentVisual();
-            _searchBar.IsHitTestVisible = false;
-            _searchBar.IsEnabled = false;
+            else
+            {
+                // Ensure controls are interactive even if a previous force-hide left them disabled.
+                _searchBar.IsHitTestVisible = true;
+                _searchBar.IsEnabled = true;
+            }
             if (show)
                 _searchBarContainer.IsVisible = true;
             _searchBarContainer.Height = show ? SearchBarHeight : 0.0;
             _searchBarContainer.Margin = new Thickness(0, 0, 0, show ? PanelIslandSpacing : 0.0);
-            _searchBarTransform.Y = show ? 0.0 : -SearchBarHeight;
+            _searchBarTransform.Y = 0.0;
             _searchBar.Opacity = show ? 1.0 : 0.0;
             await WaitForPanelAnimationAsync(SearchBarAnimationDuration);
             if (!show && !_viewModel.SearchVisible)
+            {
                 _searchBarContainer.IsVisible = false;
+                _searchBar.IsHitTestVisible = false;
+                _searchBar.IsEnabled = false;
+            }
             if (show && _viewModel.SearchVisible)
             {
-                RestoreSearchBoxAccentVisual();
-                _searchBar.IsHitTestVisible = true;
-                _searchBar.IsEnabled = true;
+                _ = RestoreSearchBoxAccentAfterOpenAsync();
             }
+
+            await RefreshSearchFilterHostAfterAnimationAsync();
         }
         finally
         {
@@ -2236,23 +2246,31 @@ public partial class MainWindow : Window
             EnsureFilterBarTransitions();
             if (!show)
                 SuppressFilterBoxAccentVisual();
-            _filterBar.IsHitTestVisible = false;
-            _filterBar.IsEnabled = false;
+            else
+            {
+                // Ensure controls are interactive even if a previous force-hide left them disabled.
+                _filterBar.IsHitTestVisible = true;
+                _filterBar.IsEnabled = true;
+            }
             if (show)
                 _filterBarContainer.IsVisible = true;
             _filterBarContainer.Height = show ? FilterBarHeight : 0.0;
             _filterBarContainer.Margin = new Thickness(0, 0, 0, show ? PanelIslandSpacing : 0.0);
-            _filterBarTransform.Y = show ? 0.0 : -FilterBarHeight;
+            _filterBarTransform.Y = 0.0;
             _filterBar.Opacity = show ? 1.0 : 0.0;
             await WaitForPanelAnimationAsync(FilterBarAnimationDuration);
             if (!show && !_viewModel.FilterVisible)
+            {
                 _filterBarContainer.IsVisible = false;
+                _filterBar.IsHitTestVisible = false;
+                _filterBar.IsEnabled = false;
+            }
             if (show && _viewModel.FilterVisible)
             {
-                RestoreFilterBoxAccentVisual();
-                _filterBar.IsHitTestVisible = true;
-                _filterBar.IsEnabled = true;
+                _ = RestoreFilterBoxAccentAfterOpenAsync();
             }
+
+            await RefreshSearchFilterHostAfterAnimationAsync();
         }
         finally
         {
@@ -2342,18 +2360,6 @@ public partial class MainWindow : Window
             ];
         }
 
-        if (_searchBarTransform is { } searchBarTransform && searchBarTransform.Transitions is null)
-        {
-            searchBarTransform.Transitions =
-            [
-                new DoubleTransition
-                {
-                    Property = TranslateTransform.YProperty,
-                    Duration = SearchBarAnimationDuration,
-                    Easing = new CubicEaseOut()
-                }
-            ];
-        }
     }
 
     private void EnsurePreviewBarTransitions()
@@ -2438,18 +2444,6 @@ public partial class MainWindow : Window
             ];
         }
 
-        if (_filterBarTransform is { } filterBarTransform && filterBarTransform.Transitions is null)
-        {
-            filterBarTransform.Transitions =
-            [
-                new DoubleTransition
-                {
-                    Property = TranslateTransform.YProperty,
-                    Duration = FilterBarAnimationDuration,
-                    Easing = new CubicEaseOut()
-                }
-            ];
-        }
     }
 
     private static Task WaitForPanelAnimationAsync(TimeSpan duration)
@@ -3189,18 +3183,21 @@ public partial class MainWindow : Window
         if (_viewModel.IsPreviewMode) return;
         if (_filterBarAnimating) return;
 
+        SuppressFilterBoxAccentVisual();
         _viewModel.FilterVisible = true;
         AnimateFilterBar(true);
 
         if (!focusInput)
             return;
 
-        _ = FocusFilterBoxAfterOpenAnimationAsync(selectAllOnFocus);
+        var focusRequestVersion = Interlocked.Increment(ref _filterFocusRequestVersion);
+        _ = FocusFilterBoxAfterOpenAnimationAsync(selectAllOnFocus, focusRequestVersion);
     }
 
     private async Task CloseFilterAsync(bool focusTree = true)
     {
         if (!IsFilterBarEffectivelyVisible()) return;
+        Interlocked.Increment(ref _filterFocusRequestVersion);
 
         // Remove focus from the filter textbox before close animation starts.
         // This avoids a transient focused-border artifact during panel collapse.
@@ -3244,6 +3241,8 @@ public partial class MainWindow : Window
         // Only hide search/filter islands visually for preview mode.
         // Do not clear queries or re-apply filters here, otherwise tree selection state
         // can be rebuilt and preview will diverge from copy/export behavior.
+        Interlocked.Increment(ref _searchFocusRequestVersion);
+        Interlocked.Increment(ref _filterFocusRequestVersion);
         _viewModel.SearchVisible = false;
         _viewModel.FilterVisible = false;
 
@@ -3262,7 +3261,7 @@ public partial class MainWindow : Window
         }
 
         if (_searchBarTransform is not null)
-            _searchBarTransform.Y = -SearchBarHeight;
+            _searchBarTransform.Y = 0;
 
         if (_searchBar is not null)
             _searchBar.Opacity = 0;
@@ -3275,7 +3274,7 @@ public partial class MainWindow : Window
         }
 
         if (_filterBarTransform is not null)
-            _filterBarTransform.Y = -FilterBarHeight;
+            _filterBarTransform.Y = 0;
 
         if (_filterBar is not null)
             _filterBar.Opacity = 0;
@@ -3549,6 +3548,9 @@ public partial class MainWindow : Window
 
     private void OnTreePointerEntered(object? sender, PointerEventArgs e)
     {
+        if (_viewModel.SearchVisible || _viewModel.FilterVisible || _viewModel.IsPreviewMode)
+            return;
+
         _treeView?.Focus();
     }
 
@@ -3648,37 +3650,33 @@ public partial class MainWindow : Window
         if (_viewModel.IsPreviewMode) return;
         if (_searchBarAnimating) return;
 
+        SuppressSearchBoxAccentVisual();
         _viewModel.SearchVisible = true;
         AnimateSearchBar(true);
 
         if (!focusInput)
             return;
 
-        _ = FocusSearchBoxAfterOpenAnimationAsync(selectAllOnFocus);
+        var focusRequestVersion = Interlocked.Increment(ref _searchFocusRequestVersion);
+        _ = FocusSearchBoxAfterOpenAnimationAsync(selectAllOnFocus, focusRequestVersion);
     }
 
-    private async Task FocusSearchBoxAfterOpenAnimationAsync(bool selectAllOnFocus)
+    private async Task FocusSearchBoxAfterOpenAnimationAsync(bool selectAllOnFocus, int focusRequestVersion)
     {
         await WaitForPanelAnimationAsync(SearchBarAnimationDuration);
-        if (!_viewModel.SearchVisible || _viewModel.IsPreviewMode)
+        if (!_viewModel.SearchVisible || _viewModel.IsPreviewMode || !IsSearchFocusRequestCurrent(focusRequestVersion))
             return;
 
-        await Dispatcher.UIThread.InvokeAsync(() =>
-        {
-            FocusInputTextBox(_searchBar?.SearchBoxControl, selectAllOnFocus);
-        }, DispatcherPriority.Background);
+        await TryFocusSearchBoxWithRetryAsync(selectAllOnFocus, focusRequestVersion);
     }
 
-    private async Task FocusFilterBoxAfterOpenAnimationAsync(bool selectAllOnFocus)
+    private async Task FocusFilterBoxAfterOpenAnimationAsync(bool selectAllOnFocus, int focusRequestVersion)
     {
         await WaitForPanelAnimationAsync(FilterBarAnimationDuration);
-        if (!_viewModel.FilterVisible || _viewModel.IsPreviewMode)
+        if (!_viewModel.FilterVisible || _viewModel.IsPreviewMode || !IsFilterFocusRequestCurrent(focusRequestVersion))
             return;
 
-        await Dispatcher.UIThread.InvokeAsync(() =>
-        {
-            FocusInputTextBox(_filterBar?.FilterBoxControl, selectAllOnFocus);
-        }, DispatcherPriority.Background);
+        await TryFocusFilterBoxWithRetryAsync(selectAllOnFocus, focusRequestVersion);
     }
 
     private void FocusInputTextBox(TextBox? textBox, bool selectAllOnFocus)
@@ -3706,10 +3704,77 @@ public partial class MainWindow : Window
         textBox.CaretIndex = end;
     }
 
+    private async Task TryFocusSearchBoxWithRetryAsync(bool selectAllOnFocus, int focusRequestVersion)
+    {
+        const int maxAttempts = 4;
+        for (var attempt = 0; attempt < maxAttempts; attempt++)
+        {
+            if (!IsSearchFocusRequestCurrent(focusRequestVersion))
+                return;
+
+            var focused = await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                var textBox = _searchBar?.SearchBoxControl;
+                if (textBox is null || !IsSearchInputReady(textBox))
+                    return false;
+
+                FocusInputTextBox(textBox, selectAllOnFocus);
+                return textBox.IsFocused;
+            }, DispatcherPriority.Input);
+
+            if (focused)
+                return;
+
+            await Dispatcher.UIThread.InvokeAsync(static () => { }, DispatcherPriority.Background);
+        }
+    }
+
+    private async Task TryFocusFilterBoxWithRetryAsync(bool selectAllOnFocus, int focusRequestVersion)
+    {
+        const int maxAttempts = 4;
+        for (var attempt = 0; attempt < maxAttempts; attempt++)
+        {
+            if (!IsFilterFocusRequestCurrent(focusRequestVersion))
+                return;
+
+            var focused = await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                var textBox = _filterBar?.FilterBoxControl;
+                if (textBox is null || !IsFilterInputReady(textBox))
+                    return false;
+
+                FocusInputTextBox(textBox, selectAllOnFocus);
+                return textBox.IsFocused;
+            }, DispatcherPriority.Input);
+
+            if (focused)
+                return;
+
+            await Dispatcher.UIThread.InvokeAsync(static () => { }, DispatcherPriority.Background);
+        }
+    }
+
+    private bool IsSearchFocusRequestCurrent(int requestVersion)
+        => Volatile.Read(ref _searchFocusRequestVersion) == requestVersion && _viewModel.SearchVisible;
+
+    private bool IsFilterFocusRequestCurrent(int requestVersion)
+        => Volatile.Read(ref _filterFocusRequestVersion) == requestVersion && _viewModel.FilterVisible;
+
+    private bool IsSearchInputReady(TextBox? textBox)
+        => textBox is { IsVisible: true, IsEnabled: true }
+           && _searchBar is { IsVisible: true, IsEnabled: true, IsHitTestVisible: true }
+           && _searchBarContainer is { IsVisible: true };
+
+    private bool IsFilterInputReady(TextBox? textBox)
+        => textBox is { IsVisible: true, IsEnabled: true }
+           && _filterBar is { IsVisible: true, IsEnabled: true, IsHitTestVisible: true }
+           && _filterBarContainer is { IsVisible: true };
+
     private async Task CloseSearchAsync(bool focusTree = true, bool waitForAnimation = false)
     {
         if (!IsSearchBarEffectivelyVisible())
             return;
+        Interlocked.Increment(ref _searchFocusRequestVersion);
 
         // Remove focus from the search textbox before close animation starts.
         // This avoids a transient focused-border artifact during panel collapse.
@@ -3768,7 +3833,11 @@ public partial class MainWindow : Window
 
     private void RestoreSearchBoxAccentVisual()
     {
-        _searchBar?.SearchBoxControl?.Classes.Remove("suppress-accent");
+        var textBox = _searchBar?.SearchBoxControl;
+        textBox?.Classes.Remove("suppress-accent");
+        textBox?.InvalidateVisual();
+        _searchBar?.InvalidateVisual();
+        _searchBarContainer?.InvalidateVisual();
     }
 
     private void SuppressFilterBoxAccentVisual()
@@ -3778,7 +3847,60 @@ public partial class MainWindow : Window
 
     private void RestoreFilterBoxAccentVisual()
     {
-        _filterBar?.FilterBoxControl?.Classes.Remove("suppress-accent");
+        var textBox = _filterBar?.FilterBoxControl;
+        textBox?.Classes.Remove("suppress-accent");
+        textBox?.InvalidateVisual();
+        _filterBar?.InvalidateVisual();
+        _filterBarContainer?.InvalidateVisual();
+    }
+
+    private async Task RestoreSearchBoxAccentAfterOpenAsync()
+    {
+        await Dispatcher.UIThread.InvokeAsync(static () => { }, DispatcherPriority.Render);
+        await Dispatcher.UIThread.InvokeAsync(static () => { }, DispatcherPriority.Render);
+
+        if (!_viewModel.SearchVisible || _viewModel.IsPreviewMode)
+            return;
+
+        RestoreSearchBoxAccentVisual();
+    }
+
+    private async Task RestoreFilterBoxAccentAfterOpenAsync()
+    {
+        await Dispatcher.UIThread.InvokeAsync(static () => { }, DispatcherPriority.Render);
+        await Dispatcher.UIThread.InvokeAsync(static () => { }, DispatcherPriority.Render);
+
+        if (!_viewModel.FilterVisible || _viewModel.IsPreviewMode)
+            return;
+
+        RestoreFilterBoxAccentVisual();
+    }
+
+    private async Task RefreshSearchFilterHostAfterAnimationAsync()
+    {
+        await Dispatcher.UIThread.InvokeAsync(() =>
+        {
+            _searchBar?.InvalidateVisual();
+            _filterBar?.InvalidateVisual();
+
+            _searchBarContainer?.InvalidateMeasure();
+            _searchBarContainer?.InvalidateArrange();
+            _searchBarContainer?.InvalidateVisual();
+
+            _filterBarContainer?.InvalidateMeasure();
+            _filterBarContainer?.InvalidateArrange();
+            _filterBarContainer?.InvalidateVisual();
+
+            if (_searchBarContainer?.Parent is Visual searchParentVisual)
+                searchParentVisual.InvalidateVisual();
+
+            if (_filterBarContainer?.Parent is Visual filterParentVisual)
+                filterParentVisual.InvalidateVisual();
+
+            InvalidateVisual();
+        }, DispatcherPriority.Render);
+
+        await Dispatcher.UIThread.InvokeAsync(static () => { }, DispatcherPriority.Render);
     }
 
     private void ForceHideSearchBarVisualState()
@@ -3793,7 +3915,7 @@ public partial class MainWindow : Window
         }
 
         if (_searchBarTransform is not null)
-            _searchBarTransform.Y = -SearchBarHeight;
+            _searchBarTransform.Y = 0;
 
         if (_searchBar is not null)
         {
@@ -3837,7 +3959,7 @@ public partial class MainWindow : Window
         }
 
         if (_filterBarTransform is not null)
-            _filterBarTransform.Y = -FilterBarHeight;
+            _filterBarTransform.Y = 0;
 
         if (_filterBar is not null)
         {
@@ -3900,6 +4022,8 @@ public partial class MainWindow : Window
         var hadVisibleSearch = IsSearchBarEffectivelyVisible();
         var hadVisibleFilter = IsFilterBarEffectivelyVisible();
 
+        Interlocked.Increment(ref _searchFocusRequestVersion);
+        Interlocked.Increment(ref _filterFocusRequestVersion);
         Interlocked.Increment(ref _suppressSearchFilterRealtimeDepth);
         try
         {

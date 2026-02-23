@@ -473,6 +473,7 @@
           <!-- Animated search bar container - only pushes tree down, not settings -->
           <Border DockPanel.Dock="Top"
                   Name="SearchBarContainer"
+                  UseLayoutRounding="True"
                   ClipToBounds="True"
                   Height="0">
             <views:SearchBarView Name="SearchBar"
@@ -490,6 +491,7 @@
           <!-- Animated filter bar container - only pushes tree down, not settings -->
           <Border DockPanel.Dock="Top"
                   Name="FilterBarContainer"
+                  UseLayoutRounding="True"
                   ClipToBounds="True"
                   Height="0">
             <views:FilterBarView Name="FilterBar"

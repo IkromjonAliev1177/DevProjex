@@ -168,7 +168,7 @@
                      TextBox.suppress-accent:focus,
                      TextBox.suppress-accent:pointerover">
         <Setter Property="BorderBrush" Value="{DynamicResource AppBorderBrush}" />
-        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="CornerRadius" Value="6" />
     </Style>
 
     <Style Selector="TextBox.suppress-accent /template/ Border#PART_BorderElement,
@@ -179,7 +179,7 @@
                      TextBox.suppress-accent:pointerover /template/ Border">
         <Setter Property="BorderBrush" Value="{DynamicResource AppBorderBrush}" />
         <Setter Property="Background" Value="{DynamicResource AppBackgroundBrush}" />
-        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="CornerRadius" Value="6" />
     </Style>
 
     <Style Selector="ComboBox">
@@ -529,6 +529,8 @@
         <Setter Property="CornerRadius" Value="6" />
         <!-- Prevent adorner-layer bleed while panel slides in/out under clipping. -->
         <Setter Property="FocusAdorner" Value="{x:Null}" />
+        <!-- Disable brush transitions for these animated inputs to avoid residual 1px border artifacts. -->
+        <Setter Property="Transitions" Value="{x:Null}" />
     </Style>
 
     <Style Selector="Border.search-panel Button, Border.filter-panel Button">

@@ -3,12 +3,13 @@
              xmlns:vm="using:DevProjex.Avalonia.ViewModels"
              x:Class="DevProjex.Avalonia.Views.SearchBarView"
              x:DataType="vm:MainWindowViewModel">
-  <Border Classes="search-panel" IsEnabled="{Binding IsProjectLoaded}">
+  <Border Classes="search-panel" IsEnabled="{Binding IsProjectLoaded}" UseLayoutRounding="True">
     <StackPanel Orientation="Horizontal" Spacing="8" Margin="12,6">
       <TextBox Name="SearchBox"
                Watermark="{Binding MenuSearch}"
                Text="{Binding SearchQuery, Mode=TwoWay}"
                Width="260"
+               FocusAdorner="{x:Null}"
                KeyDown="OnSearchKeyDown" />
       <Button Content="▲" Width="32" Click="OnSearchPrev" />
       <Button Content="▼" Width="32" Click="OnSearchNext" />
