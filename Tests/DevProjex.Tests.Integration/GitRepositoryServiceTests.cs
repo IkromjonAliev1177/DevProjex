@@ -145,9 +145,9 @@ public class GitRepositoryServiceTests : IAsyncLifetime
 
         var targetDir = Path.Combine(_tempDir!, "non-git-url-test");
 
-        // Try to clone a URL that is not a git repository (e.g., Telegram link)
+        // Use a stable, reachable non-git URL to avoid region-specific routing blocks/timeouts.
         var result = await _service.CloneAsync(
-            "https://t.me/addstickers/SomeSticker",
+            "https://www.google.com",
             targetDir);
 
         Assert.False(result.Success);

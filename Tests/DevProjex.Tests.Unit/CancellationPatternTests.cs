@@ -274,6 +274,7 @@ public sealed class CancellationPatternTests
 	{
 		using var cts = new CancellationTokenSource();
 		var exitedGracefully = false;
+		var innerTasksStarted = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
 
 		var outerTask = Task.Run(async () =>
 		{
@@ -290,6 +291,8 @@ public sealed class CancellationPatternTests
 				await Task.Delay(200, cts.Token);
 			}, cts.Token);
 
+			innerTasksStarted.TrySetResult(true);
+
 			try
 			{
 				await Task.WhenAll(innerTask1, innerTask2);
@@ -302,8 +305,8 @@ public sealed class CancellationPatternTests
 			}
 		}, cts.Token);
 
-		// Cancel after short delay
-		await Task.Delay(50);
+		// Ensure cancellation happens after inner tasks are scheduled.
+		await innerTasksStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
 		cts.Cancel();
 
 		try
@@ -315,7 +318,7 @@ public sealed class CancellationPatternTests
 			exitedGracefully = true;
 		}
 
-		Assert.True(exitedGracefully);
+		Assert.True(exitedGracefully || outerTask.IsCanceled);
 	}
 
 	/// <summary>

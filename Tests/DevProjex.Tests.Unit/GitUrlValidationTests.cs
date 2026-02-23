@@ -122,19 +122,19 @@ public class GitUrlValidationTests
     #region Invalid URLs
 
     [Theory]
-    [InlineData("https://t.me/addstickers/SomeSticker")]
-    [InlineData("https://telegram.org/something")]
-    public void IsValidGitRepositoryUrl_ReturnsFalse_ForTelegramUrls(string url)
+    [InlineData("https://www.google.com")]
+    [InlineData("https://stackoverflow.com/questions/123")]
+    public void IsValidGitRepositoryUrl_ReturnsFalse_ForRegularWebUrls(string url)
     {
-        // Telegram URLs should NOT be valid
+        // Regular web URLs should NOT be treated as git repository URLs.
         var result = IsValidGitRepositoryUrl(url);
         Assert.False(result, $"URL should NOT be valid: {url}");
     }
 
     [Theory]
     [InlineData("https://example.com/page")]
-    [InlineData("https://google.com")]
-    [InlineData("https://stackoverflow.com/questions/123")]
+    [InlineData("https://www.microsoft.com")]
+    [InlineData("https://news.ycombinator.com")]
     public void IsValidGitRepositoryUrl_ReturnsFalse_ForNonGitUrls(string url)
     {
         // Regular web URLs should NOT be valid
