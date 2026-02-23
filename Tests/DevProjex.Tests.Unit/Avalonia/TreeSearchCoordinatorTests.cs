@@ -25,6 +25,30 @@ public sealed class TreeSearchCoordinatorTests
 	}
 
 	[Fact]
+	public void UpdateSearchMatches_EmptyAfterNoMatches_ReExpandsRootAndClearsSearchEffect()
+	{
+		var (viewModel, treeView) = CreateContext();
+		var root = CreateTree();
+		viewModel.TreeNodes.Add(root);
+
+		using var coordinator = new TreeSearchCoordinator(viewModel, treeView);
+
+		// Simulate "nonsense" query: search collapses branches including root.
+		viewModel.SearchQuery = "___no_match___";
+		coordinator.UpdateSearchMatches();
+		Assert.False(root.IsExpanded);
+
+		// Clear query: search impact must be fully removed.
+		viewModel.SearchQuery = string.Empty;
+		coordinator.UpdateSearchMatches();
+
+		Assert.True(root.IsExpanded);
+		Assert.False(coordinator.HasMatches);
+		Assert.False(root.Children[1].IsExpanded);
+		Assert.False(root.Children[1].Children[0].IsExpanded);
+	}
+
+	[Fact]
 	public void UpdateSearchMatches_WithSingleDeepMatch_SelectsNodeAndExpandsAncestors()
 	{
 		var (viewModel, treeView) = CreateContext();

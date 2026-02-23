@@ -3161,7 +3161,7 @@ public partial class MainWindow : Window
 
         // Keep only one active text tool at a time: close search first, then open filter.
         if (IsSearchBarEffectivelyVisible())
-            await CloseSearchAsync(focusTree: false, waitForAnimation: true);
+            await CloseSearchAsync(focusTree: false);
 
         ShowFilter();
     }
@@ -3770,7 +3770,7 @@ public partial class MainWindow : Window
            && _filterBar is { IsVisible: true, IsEnabled: true, IsHitTestVisible: true }
            && _filterBarContainer is { IsVisible: true };
 
-    private async Task CloseSearchAsync(bool focusTree = true, bool waitForAnimation = false)
+    private async Task CloseSearchAsync(bool focusTree = true)
     {
         if (!IsSearchBarEffectivelyVisible())
             return;
@@ -3783,12 +3783,6 @@ public partial class MainWindow : Window
         SuppressSearchBoxAccentVisual();
 
         _viewModel.SearchVisible = false;
-        _viewModel.SearchQuery = string.Empty;
-
-        // Clear search and collapse tree immediately (same behavior as before),
-        // without waiting for debounce.
-        _searchCoordinator.CancelPending();
-        _searchCoordinator.UpdateSearchMatches();
         if (_searchBarAnimating)
             _searchBarClosePending = true;
         else
@@ -3796,12 +3790,27 @@ public partial class MainWindow : Window
         if (focusTree)
             _treeView?.Focus();
 
-        // Aggressively release search highlight objects (InlineCollections, Run instances)
-        // and trim working set on a background thread.
-        ScheduleBackgroundMemoryCleanup();
+        // Keep search close sequencing consistent with filter close:
+        // finish panel animation first, then clear query and apply tree state changes.
+        await WaitForPanelAnimationAsync(SearchBarAnimationDuration);
 
-        if (waitForAnimation)
-            await WaitForPanelAnimationAsync(SearchBarAnimationDuration);
+        // If search was reopened during animation, keep current query/state intact.
+        if (_viewModel.SearchVisible)
+            return;
+
+        if (!string.IsNullOrEmpty(_viewModel.SearchQuery))
+        {
+            _viewModel.SearchQuery = string.Empty;
+            _searchCoordinator.CancelPending();
+            _searchCoordinator.UpdateSearchMatches();
+
+            // Release stale highlight objects after search state is rebuilt.
+            ScheduleBackgroundMemoryCleanup();
+        }
+        else
+        {
+            _searchCoordinator.CancelPending();
+        }
     }
 
     private bool IsSearchBarEffectivelyVisible()

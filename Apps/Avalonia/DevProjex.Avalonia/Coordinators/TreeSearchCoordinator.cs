@@ -98,7 +98,11 @@ public sealed class TreeSearchCoordinator : IDisposable
         {
             ClearHighlightsIfNeeded();
             foreach (var node in _viewModel.TreeNodes)
+            {
+                // When search is cleared, restore root visibility and collapse descendants.
+                node.IsExpanded = true;
                 CollapseAllExceptRoot(node);
+            }
             return;
         }
 
