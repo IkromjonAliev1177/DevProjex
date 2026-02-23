@@ -635,7 +635,7 @@ public sealed class SelectionSyncCoordinator : IDisposable
         if (!ShouldSuppressAllTogglesOverride() && _viewModel.AllIgnoreChecked)
             SetAllChecked(_viewModel.IgnoreOptions, true, ref _suppressIgnoreItemCheck);
 
-        UpdateIgnoreSelectionCache();
+        UpdateIgnoreSelectionCache(hasPreviousSelections ? previousSelections : null);
         SyncIgnoreAllCheckbox();
     }
 
@@ -676,12 +676,33 @@ public sealed class SelectionSyncCoordinator : IDisposable
         ApplyExtensionOptions(options, hasExtensionlessEntries);
     }
 
-    public void UpdateIgnoreSelectionCache()
+    public void UpdateIgnoreSelectionCache(IReadOnlySet<IgnoreOptionId>? preserveMissingFrom = null)
     {
         if (_ignoreOptions.Count == 0 || _viewModel.IgnoreOptions.Count == 0)
+        {
+            if (preserveMissingFrom is not null && preserveMissingFrom.Count > 0)
+                _ignoreSelectionCache = new HashSet<IgnoreOptionId>(preserveMissingFrom);
             return;
+        }
 
-        _ignoreSelectionCache = CollectCheckedIgnoreIds(_viewModel.IgnoreOptions);
+        var selected = CollectCheckedIgnoreIds(_viewModel.IgnoreOptions);
+
+        if (preserveMissingFrom is not null && preserveMissingFrom.Count > 0)
+        {
+            // Keep user selections for ignore options that are temporarily unavailable
+            // (e.g. extensionless option before extension scan has completed).
+            var visibleIds = new HashSet<IgnoreOptionId>();
+            foreach (var option in _ignoreOptions)
+                visibleIds.Add(option.Id);
+
+            foreach (var id in preserveMissingFrom)
+            {
+                if (!visibleIds.Contains(id))
+                    selected.Add(id);
+            }
+        }
+
+        _ignoreSelectionCache = selected;
     }
 
     public void SyncIgnoreAllCheckbox()
