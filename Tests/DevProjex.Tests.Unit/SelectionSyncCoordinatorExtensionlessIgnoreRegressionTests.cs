@@ -100,7 +100,7 @@ public sealed class SelectionSyncCoordinatorExtensionlessIgnoreRegressionTests
 		{
 			foreach (var selectedIgnoreOptions in ignoreCases)
 			{
-				yield return new object[] { caseId++, selectedIgnoreOptions, selectedRoots };
+				yield return [ caseId++, selectedIgnoreOptions, selectedRoots ];
 			}
 		}
 	}
@@ -120,7 +120,7 @@ public sealed class SelectionSyncCoordinatorExtensionlessIgnoreRegressionTests
 
 		var sequences = new[]
 		{
-			new[] { 0, 1, 0 },
+			[0, 1, 0],
 			new[] { 1, 2, 1 },
 			new[] { 2, 0, 2 },
 			new[] { 3, 4, 3 },
@@ -139,7 +139,7 @@ public sealed class SelectionSyncCoordinatorExtensionlessIgnoreRegressionTests
 			{
 				var scanSequence = sequence.Select(index => patterns[index].Entries).ToArray();
 				var expectedCounts = sequence.Select(index => patterns[index].Count).ToArray();
-				yield return new object[] { caseId++, extensionlessSelectedInProfile, scanSequence, expectedCounts };
+				yield return [ caseId++, extensionlessSelectedInProfile, scanSequence, expectedCounts ];
 			}
 		}
 	}

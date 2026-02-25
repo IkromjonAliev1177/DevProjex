@@ -107,7 +107,7 @@ public sealed class SelectionProfileMatrixUnitTests
 			};
 
 			foreach (var saved in savedVariants)
-				yield return new object[] { caseId++, available, saved };
+				yield return [ caseId++, available, saved ];
 		}
 	}
 
@@ -158,7 +158,7 @@ public sealed class SelectionProfileMatrixUnitTests
 		foreach (var _ in contexts)
 		{
 			foreach (var saved in savedVariants)
-				yield return new object[] { caseId++, saved };
+				yield return [ caseId++, saved ];
 		}
 
 		// Sanity: 26 variants * 3 contexts = 78 theory cases.

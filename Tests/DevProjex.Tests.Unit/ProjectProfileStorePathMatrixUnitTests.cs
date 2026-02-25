@@ -94,7 +94,7 @@ public sealed class ProjectProfileStorePathMatrixUnitTests
 		{
 			foreach (var variant in variants)
 			{
-				yield return new object[] { caseId++, pathMode, variant.Roots, variant.Extensions, variant.IgnoreOptions };
+				yield return [ caseId++, pathMode, variant.Roots, variant.Extensions, variant.IgnoreOptions ];
 			}
 		}
 	}

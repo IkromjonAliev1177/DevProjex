@@ -25,7 +25,7 @@ public sealed class IgnorePipelineMatrixIntegrationTests
 				{
 					foreach (ExtensionMode extensionMode in Enum.GetValues(typeof(ExtensionMode)))
 					{
-						yield return new object[] { useGitIgnore, useSmartIgnore, rootSelection, extensionMode };
+						yield return [ useGitIgnore, useSmartIgnore, rootSelection, extensionMode ];
 					}
 				}
 			}

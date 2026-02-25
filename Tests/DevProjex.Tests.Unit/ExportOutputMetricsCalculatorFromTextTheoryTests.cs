@@ -41,7 +41,7 @@ public sealed class ExportOutputMetricsCalculatorFromTextTheoryTests
 			{
 				foreach (var suffix in suffixes)
 				{
-					yield return new object[] { id++, prefix + body + suffix };
+					yield return [ id++, prefix + body + suffix ];
 				}
 			}
 		}

@@ -29,7 +29,7 @@ public sealed class FileSystemScannerLocalPerformanceTests
         foreach (var branchFactor in branchFactors)
         foreach (var fileCount in filesPerDirectory)
         foreach (var profile in ignoreProfiles)
-            yield return new object[] { new FileSystemPerfCase(depth, branchFactor, fileCount, profile) };
+            yield return [ new FileSystemPerfCase(depth, branchFactor, fileCount, profile) ];
     }
 
     [LocalPerformanceTheory]

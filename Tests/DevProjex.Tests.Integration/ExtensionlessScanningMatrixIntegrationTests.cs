@@ -43,19 +43,19 @@ public sealed class ExtensionlessScanningMatrixIntegrationTests
 	public static IEnumerable<object[]> FileNameTokenMatrix()
 	{
 		foreach (var name in ExtensionlessFileNames)
-			yield return new object[] { name, name };
+			yield return [ name, name ];
 
 		foreach (var name in ExtensionFileNames)
-			yield return new object[] { name, Path.GetExtension(name) };
+			yield return [ name, Path.GetExtension(name) ];
 	}
 
 	public static IEnumerable<object[]> FileNameIgnoreMatrix()
 	{
 		foreach (var name in ExtensionlessFileNames)
-			yield return new object[] { name, name, false };
+			yield return [ name, name, false ];
 
 		foreach (var name in ExtensionFileNames)
-			yield return new object[] { name, Path.GetExtension(name), true };
+			yield return [ name, Path.GetExtension(name), true ];
 	}
 
 	private static IgnoreRules CreateRules(bool ignoreExtensionlessFiles) => new(

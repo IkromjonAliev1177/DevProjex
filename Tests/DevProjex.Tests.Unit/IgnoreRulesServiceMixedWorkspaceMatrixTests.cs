@@ -5,7 +5,7 @@ public sealed class IgnoreRulesServiceMixedWorkspaceMatrixTests
 	public static IEnumerable<object[]> OptionMatrix()
 	{
 		for (var bits = 0; bits < 64; bits++)
-			yield return new object[] { bits };
+			yield return [ bits ];
 	}
 
 	[Theory]

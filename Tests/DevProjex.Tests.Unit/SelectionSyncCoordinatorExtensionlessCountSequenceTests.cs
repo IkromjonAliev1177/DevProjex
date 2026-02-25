@@ -148,7 +148,7 @@ public sealed class SelectionSyncCoordinatorExtensionlessCountSequenceTests
 		{
 			var scans = sequence.Select(id => patterns[id].Scan).ToArray();
 			var counts = sequence.Select(id => patterns[id].Count).ToArray();
-			yield return new object[] { caseId++, scans, counts };
+			yield return [ caseId++, scans, counts ];
 		}
 	}
 

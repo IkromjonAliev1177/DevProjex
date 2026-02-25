@@ -11,7 +11,7 @@ public sealed class GitIgnoreToggleIntegrationMatrixTests
 			{
 				foreach (var ignoreDotFolders in new[] { false, true })
 				{
-					yield return new object[] { folder, useGitIgnore, ignoreDotFolders };
+					yield return [ folder, useGitIgnore, ignoreDotFolders ];
 				}
 			}
 		}

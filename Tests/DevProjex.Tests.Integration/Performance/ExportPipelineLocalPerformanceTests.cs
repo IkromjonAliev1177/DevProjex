@@ -24,7 +24,7 @@ public sealed class ExportPipelineLocalPerformanceTests
         foreach (var branchFactor in branchFactors)
         foreach (var files in filesPerDirectory)
         foreach (var format in formats)
-            yield return new object[] { new TreeExportPerfCase(depth, branchFactor, files, format) };
+            yield return [ new TreeExportPerfCase(depth, branchFactor, files, format) ];
     }
 
     public static IEnumerable<object[]> ContentExportCases()
@@ -38,7 +38,7 @@ public sealed class ExportPipelineLocalPerformanceTests
         foreach (var size in fileSizes)
         foreach (var selection in selectionModes)
         foreach (var format in formats)
-            yield return new object[] { new ContentExportPerfCase(count, size, selection, format) };
+            yield return [ new ContentExportPerfCase(count, size, selection, format) ];
     }
 
     [LocalPerformanceTheory]

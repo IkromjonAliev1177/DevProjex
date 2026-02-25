@@ -44,7 +44,7 @@ public sealed class ProjectProfilePersistenceClearMatrixIntegrationTests
 		foreach (var mode in pathModes)
 		{
 			foreach (var count in projectCounts)
-				yield return new object[] { caseId++, mode, count };
+				yield return [ caseId++, mode, count ];
 		}
 	}
 

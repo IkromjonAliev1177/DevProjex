@@ -93,18 +93,18 @@ public sealed class SelectionSyncCoordinatorExtensionlessMatrixTests
 
 	public static IEnumerable<object[]> ExtensionScanCases()
 	{
-		yield return new object[] { new[] { ".cs", ".md" }, new[] { ".cs", ".md" }, false, 0 };
-		yield return new object[] { new[] { "Dockerfile", ".cs" }, new[] { ".cs" }, true, 1 };
-		yield return new object[] { new[] { "Dockerfile", "Makefile" }, Array.Empty<string>(), true, 2 };
-		yield return new object[] { new[] { ".env", ".cs" }, new[] { ".env", ".cs" }, false, 0 };
-		yield return new object[] { new[] { ".gitignore", "README", ".txt" }, new[] { ".gitignore", ".txt" }, true, 1 };
-		yield return new object[] { new[] { "LICENSE", ".json", ".yml" }, new[] { ".json", ".yml" }, true, 1 };
-		yield return new object[] { new[] { ".axaml", ".cs", ".json" }, new[] { ".axaml", ".cs", ".json" }, false, 0 };
-		yield return new object[] { new[] { "WORKSPACE", ".csproj", ".sln" }, new[] { ".csproj", ".sln" }, true, 1 };
-		yield return new object[] { new[] { ".dockerignore", "Jenkinsfile", ".yaml" }, new[] { ".dockerignore", ".yaml" }, true, 1 };
-		yield return new object[] { new[] { ".rules", ".props", ".targets" }, new[] { ".rules", ".props", ".targets" }, false, 0 };
-		yield return new object[] { new[] { "Taskfile", ".txt", ".log", ".md" }, new[] { ".txt", ".log", ".md" }, true, 1 };
-		yield return new object[] { new[] { ".env", ".gitignore", ".editorconfig" }, new[] { ".env", ".gitignore", ".editorconfig" }, false, 0 };
+		yield return [ new[] { ".cs", ".md" }, new[] { ".cs", ".md" }, false, 0 ];
+		yield return [ new[] { "Dockerfile", ".cs" }, new[] { ".cs" }, true, 1 ];
+		yield return [ new[] { "Dockerfile", "Makefile" }, Array.Empty<string>(), true, 2 ];
+		yield return [ new[] { ".env", ".cs" }, new[] { ".env", ".cs" }, false, 0 ];
+		yield return [ new[] { ".gitignore", "README", ".txt" }, new[] { ".gitignore", ".txt" }, true, 1 ];
+		yield return [ new[] { "LICENSE", ".json", ".yml" }, new[] { ".json", ".yml" }, true, 1 ];
+		yield return [ new[] { ".axaml", ".cs", ".json" }, new[] { ".axaml", ".cs", ".json" }, false, 0 ];
+		yield return [ new[] { "WORKSPACE", ".csproj", ".sln" }, new[] { ".csproj", ".sln" }, true, 1 ];
+		yield return [ new[] { ".dockerignore", "Jenkinsfile", ".yaml" }, new[] { ".dockerignore", ".yaml" }, true, 1 ];
+		yield return [ new[] { ".rules", ".props", ".targets" }, new[] { ".rules", ".props", ".targets" }, false, 0 ];
+		yield return [ new[] { "Taskfile", ".txt", ".log", ".md" }, new[] { ".txt", ".log", ".md" }, true, 1 ];
+		yield return [ new[] { ".env", ".gitignore", ".editorconfig" }, new[] { ".env", ".gitignore", ".editorconfig" }, false, 0 ];
 	}
 
 	private static SelectionSyncCoordinator CreateCoordinator(MainWindowViewModel viewModel, string currentPath)

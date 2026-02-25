@@ -32,7 +32,7 @@ public sealed class LocalizationCatalogAccessDeniedTests
 	public static IEnumerable<object[]> AllLanguageCases()
 	{
 		foreach (var language in SupportedLanguages)
-			yield return new object[] { language };
+			yield return [ language ];
 	}
 
 	public static IEnumerable<object[]> NonEnglishLanguageCases()
@@ -42,7 +42,7 @@ public sealed class LocalizationCatalogAccessDeniedTests
 			if (language == AppLanguage.En)
 				continue;
 
-			yield return new object[] { language };
+			yield return [ language ];
 		}
 	}
 

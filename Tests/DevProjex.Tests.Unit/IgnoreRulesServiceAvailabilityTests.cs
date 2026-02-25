@@ -133,7 +133,7 @@ public sealed class IgnoreRulesServiceAvailabilityTests
 	[Theory]
 	[InlineData(0, false)]
 	[InlineData(1, true)]
-	[InlineData(2, false)]
+	[InlineData(2, true)]
 	public void GetIgnoreOptionsAvailability_NestedGitIgnoreProject_ReflectsDiscoveredScopesByOpenedRootLevel(
 		int rootMode,
 		bool expectedIncludeSmartIgnore)
