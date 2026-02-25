@@ -1324,6 +1324,22 @@ public partial class MainWindow : Window
         return _cachedPathPresentation;
     }
 
+    private static string MapExportDisplayPath(string filePath, Func<string, string>? mapFilePath)
+    {
+        if (mapFilePath is null)
+            return filePath;
+
+        try
+        {
+            var mapped = mapFilePath(filePath);
+            return string.IsNullOrWhiteSpace(mapped) ? filePath : mapped;
+        }
+        catch
+        {
+            return filePath;
+        }
+    }
+
     private void SchedulePreviewRefresh(bool immediate = false)
     {
         _previewRefreshRequested = true;
@@ -5091,6 +5107,8 @@ public partial class MainWindow : Window
         int CharCount,
         bool IsEmpty,
         bool IsWhitespaceOnly,
+        bool IsEstimated,
+        int CrLfPairCount,
         int TrailingNewlineChars,
         int TrailingNewlineLineBreaks);
 
@@ -5235,6 +5253,8 @@ public partial class MainWindow : Window
                                 metrics.CharCount,
                                 metrics.IsEmpty,
                                 metrics.IsWhitespaceOnly,
+                                metrics.IsEstimated,
+                                metrics.CrLfPairCount,
                                 metrics.TrailingNewlineChars,
                                 metrics.TrailingNewlineLineBreaks);
                         }
@@ -5484,6 +5504,8 @@ public partial class MainWindow : Window
         if (_currentTree is null)
             return ExportOutputMetrics.Empty;
 
+        var pathMapper = CreateExportPathPresentation()?.MapFilePath;
+
         var uniquePaths = new HashSet<string>(PathComparer.Default);
         if (hasSelection)
         {
@@ -5514,13 +5536,16 @@ public partial class MainWindow : Window
                 if (!_fileMetricsCache.TryGetValue(path, out var metrics))
                     continue;
 
+                var displayPath = MapExportDisplayPath(path, pathMapper);
                 metricsInputs.Add(new ContentFileMetrics(
-                    Path: path,
+                    Path: displayPath,
                     SizeBytes: metrics.Size,
                     LineCount: metrics.LineCount,
                     CharCount: metrics.CharCount,
                     IsEmpty: metrics.IsEmpty,
                     IsWhitespaceOnly: metrics.IsWhitespaceOnly,
+                    IsEstimated: metrics.IsEstimated,
+                    CrLfPairCount: metrics.CrLfPairCount,
                     TrailingNewlineChars: metrics.TrailingNewlineChars,
                     TrailingNewlineLineBreaks: metrics.TrailingNewlineLineBreaks));
             }

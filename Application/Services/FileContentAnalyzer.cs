@@ -117,7 +117,9 @@ public sealed class FileContentAnalyzer : IFileContentAnalyzer
 					LineCount: 0,
 					CharCount: 0,
 					IsEmpty: true,
-					IsWhitespaceOnly: false);
+					IsWhitespaceOnly: false,
+					IsEstimated: false,
+					CrLfPairCount: 0);
 
 			// Check if binary first (fast - only 512 bytes)
 			if (!CheckForNullBytes(path, cancellationToken))
@@ -132,6 +134,8 @@ public sealed class FileContentAnalyzer : IFileContentAnalyzer
 					CharCount: (int)Math.Min(sizeBytes, int.MaxValue),
 					IsEmpty: false,
 					IsWhitespaceOnly: false,
+					IsEstimated: true,
+					CrLfPairCount: 0,
 					TrailingNewlineChars: 0,
 					TrailingNewlineLineBreaks: 0);
 			}
@@ -276,8 +280,10 @@ public sealed class FileContentAnalyzer : IFileContentAnalyzer
 			int lineCount = 1; // Start with 1 (file with no newlines = 1 line)
 			int charCount = 0;
 			bool hasNonWhitespace = false;
+			int crLfPairCount = 0;
 			int trailingNewlineChars = 0;
 			int trailingNewlineLineBreaks = 0;
+			bool previousWasCarriageReturn = false;
 
 			using var reader = new StreamReader(path, Encoding.UTF8, detectEncodingFromByteOrderMarks: true, bufferSize: StreamingBufferSize);
 
@@ -300,7 +306,13 @@ public sealed class FileContentAnalyzer : IFileContentAnalyzer
 					charCount++;
 
 					if (c == '\n')
+					{
 						lineCount++;
+						if (previousWasCarriageReturn)
+							crLfPairCount++;
+					}
+
+					previousWasCarriageReturn = c == '\r';
 
 					if (c is '\r' or '\n')
 					{
@@ -329,6 +341,8 @@ public sealed class FileContentAnalyzer : IFileContentAnalyzer
 				CharCount: charCount,
 				IsEmpty: charCount == 0,
 				IsWhitespaceOnly: charCount > 0 && !hasNonWhitespace,
+				IsEstimated: false,
+				CrLfPairCount: crLfPairCount,
 				TrailingNewlineChars: trailingNewlineChars,
 				TrailingNewlineLineBreaks: trailingNewlineLineBreaks);
 		}

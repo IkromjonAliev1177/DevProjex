@@ -42,47 +42,108 @@ public static class ExportOutputMetricsCalculator
 
 		ordered.Sort(static (left, right) => PathComparer.Default.Compare(left.Path, right.Path));
 
-		var newLineChars = Environment.NewLine.Length;
+		// Status metrics use normalized line-break counting (CRLF/CR/LF => one character).
+		const int normalizedNewLineChars = 1;
 		int chars = 0;
 		int lineBreaks = 0;
+		int trailingLineBreakChars = 0;
+		int trailingLineBreaks = 0;
 		bool anyWritten = false;
 
 		foreach (var file in ordered)
 		{
 			if (anyWritten)
 			{
-				AppendLine(ClipboardBlankLine, newLineChars, ref chars, ref lineBreaks);
-				AppendLine(ClipboardBlankLine, newLineChars, ref chars, ref lineBreaks);
+				AppendLiteralLine(
+					ClipboardBlankLine,
+					normalizedNewLineChars,
+					ref chars,
+					ref lineBreaks,
+					ref trailingLineBreakChars,
+					ref trailingLineBreaks);
+				AppendLiteralLine(
+					ClipboardBlankLine,
+					normalizedNewLineChars,
+					ref chars,
+					ref lineBreaks,
+					ref trailingLineBreakChars,
+					ref trailingLineBreaks);
 			}
 
 			anyWritten = true;
 
-			AppendLine($"{file.Path}:", newLineChars, ref chars, ref lineBreaks);
-			AppendLine(ClipboardBlankLine, newLineChars, ref chars, ref lineBreaks);
+			AppendLiteralLine(
+				$"{file.Path}:",
+				normalizedNewLineChars,
+				ref chars,
+				ref lineBreaks,
+				ref trailingLineBreakChars,
+				ref trailingLineBreaks);
+			AppendLiteralLine(
+				ClipboardBlankLine,
+				normalizedNewLineChars,
+				ref chars,
+				ref lineBreaks,
+				ref trailingLineBreakChars,
+				ref trailingLineBreaks);
 
 			if (file.IsEmpty)
 			{
-				AppendLine(NoContentMarker, newLineChars, ref chars, ref lineBreaks);
+				AppendLiteralLine(
+					NoContentMarker,
+					normalizedNewLineChars,
+					ref chars,
+					ref lineBreaks,
+					ref trailingLineBreakChars,
+					ref trailingLineBreaks);
 				continue;
 			}
 
 			if (file.IsWhitespaceOnly)
 			{
-				AppendLine($"{WhitespaceMarkerPrefix}{file.SizeBytes}{WhitespaceMarkerSuffix}", newLineChars, ref chars, ref lineBreaks);
+				AppendLiteralLine(
+					$"{WhitespaceMarkerPrefix}{file.SizeBytes}{WhitespaceMarkerSuffix}",
+					normalizedNewLineChars,
+					ref chars,
+					ref lineBreaks,
+					ref trailingLineBreakChars,
+					ref trailingLineBreaks);
+				continue;
+			}
+
+			if (file.IsEstimated)
+			{
+				// SelectedContentExportService writes an empty content line for estimated files.
+				// It becomes relevant for intermediate files, while trailing line-break trim is handled below.
+				AppendRenderedLine(
+					renderedChars: 0,
+					internalLineBreaks: 0,
+					newLineChars: normalizedNewLineChars,
+					chars: ref chars,
+					lineBreaks: ref lineBreaks,
+					trailingLineBreakChars: ref trailingLineBreakChars,
+					trailingLineBreaks: ref trailingLineBreaks);
 				continue;
 			}
 
 			int internalLineBreaks = Math.Max(0, file.LineCount - 1);
 			int trimmedLineBreaks = Math.Max(0, internalLineBreaks - file.TrailingNewlineLineBreaks);
-			int trimmedChars = Math.Max(0, file.CharCount - file.TrailingNewlineChars);
+			int normalizedChars = Math.Max(0, file.CharCount - file.CrLfPairCount);
+			int trimmedChars = Math.Max(0, normalizedChars - file.TrailingNewlineLineBreaks);
 
-			chars += trimmedChars + newLineChars;
-			lineBreaks += trimmedLineBreaks + 1;
+			AppendRenderedLine(
+				renderedChars: trimmedChars,
+				internalLineBreaks: trimmedLineBreaks,
+				newLineChars: normalizedNewLineChars,
+				chars: ref chars,
+				lineBreaks: ref lineBreaks,
+				trailingLineBreakChars: ref trailingLineBreakChars,
+				trailingLineBreaks: ref trailingLineBreaks);
 		}
 
 		// SelectedContentExportService trims trailing CR/LF from the final result.
-		chars = Math.Max(0, chars - newLineChars);
-		lineBreaks = Math.Max(0, lineBreaks - 1);
+		chars = Math.Max(0, chars - trailingLineBreakChars);
+		lineBreaks = Math.Max(0, lineBreaks - trailingLineBreaks);
 
 		if (chars == 0)
 			return ExportOutputMetrics.Empty;
@@ -92,10 +153,45 @@ public static class ExportOutputMetricsCalculator
 		return new ExportOutputMetrics(lines, chars, tokens);
 	}
 
-	private static void AppendLine(string text, int newLineChars, ref int chars, ref int lineBreaks)
+	private static void AppendLiteralLine(
+		string text,
+		int newLineChars,
+		ref int chars,
+		ref int lineBreaks,
+		ref int trailingLineBreakChars,
+		ref int trailingLineBreaks)
 	{
-		chars += text.Length + newLineChars;
-		lineBreaks++;
+		AppendRenderedLine(
+			renderedChars: text.Length,
+			internalLineBreaks: 0,
+			newLineChars: newLineChars,
+			chars: ref chars,
+			lineBreaks: ref lineBreaks,
+			trailingLineBreakChars: ref trailingLineBreakChars,
+			trailingLineBreaks: ref trailingLineBreaks);
+	}
+
+	private static void AppendRenderedLine(
+		int renderedChars,
+		int internalLineBreaks,
+		int newLineChars,
+		ref int chars,
+		ref int lineBreaks,
+		ref int trailingLineBreakChars,
+		ref int trailingLineBreaks)
+	{
+		chars += renderedChars + newLineChars;
+		lineBreaks += internalLineBreaks + 1;
+
+		if (renderedChars == 0 && internalLineBreaks == 0)
+		{
+			trailingLineBreakChars += newLineChars;
+			trailingLineBreaks++;
+			return;
+		}
+
+		trailingLineBreakChars = newLineChars;
+		trailingLineBreaks = 1;
 	}
 
 	private static int EstimateTokens(int chars) =>
@@ -144,8 +240,10 @@ public readonly record struct ContentFileMetrics(
 	int CharCount,
 	bool IsEmpty,
 	bool IsWhitespaceOnly,
-	int TrailingNewlineChars,
-	int TrailingNewlineLineBreaks);
+	bool IsEstimated = false,
+	int CrLfPairCount = 0,
+	int TrailingNewlineChars = 0,
+	int TrailingNewlineLineBreaks = 0);
 
 public readonly record struct ExportOutputMetrics(int Lines, int Chars, int Tokens)
 {

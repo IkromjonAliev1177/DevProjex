@@ -12,7 +12,7 @@ public sealed class ExportOutputMetricsCalculatorContentTheoryTests
 		var variants = GetVariants();
 		var caseId = 0;
 
-		// 8 single-file cases
+		// 9 single-file cases
 		for (var i = 0; i < variants.Count; i++)
 		{
 			var entries = new List<(string Path, ContentVariant Variant)>
@@ -22,7 +22,7 @@ public sealed class ExportOutputMetricsCalculatorContentTheoryTests
 			yield return BuildCase(caseId++, entries);
 		}
 
-		// 64 two-file cases (8 x 8)
+		// 81 two-file cases (9 x 9)
 		for (var i = 0; i < variants.Count; i++)
 		{
 			for (var j = 0; j < variants.Count; j++)
@@ -36,7 +36,7 @@ public sealed class ExportOutputMetricsCalculatorContentTheoryTests
 			}
 		}
 
-		// 32 three-file cases with duplicate paths to verify first-entry dedup behavior.
+		// 36 three-file cases with duplicate paths to verify first-entry dedup behavior.
 		for (var i = 0; i < variants.Count; i++)
 		{
 			for (var offset = 1; offset <= 4; offset++)
@@ -63,7 +63,7 @@ public sealed class ExportOutputMetricsCalculatorContentTheoryTests
 		string expectedExportText)
 	{
 		var actual = ExportOutputMetricsCalculator.FromContentFiles(files);
-		var expected = GetExpectedRawMetrics(expectedExportText);
+		var expected = GetExpectedNormalizedMetrics(expectedExportText);
 
 		Assert.Equal(expected.Lines, actual.Lines);
 		Assert.Equal(expected.Chars, actual.Chars);
@@ -71,23 +71,78 @@ public sealed class ExportOutputMetricsCalculatorContentTheoryTests
 		Assert.True(caseId >= 0);
 	}
 
-	private static ExportOutputMetrics GetExpectedRawMetrics(string text)
+	[Fact]
+	public void FromContentFiles_EstimatedSingleFile_MatchesRenderedClipboardText()
+	{
+		const string path = "estimated.txt";
+		IReadOnlyList<ContentFileMetrics> files =
+		[
+			new ContentFileMetrics(
+				Path: path,
+				SizeBytes: 25_000_000,
+				LineCount: 150_000,
+				CharCount: 25_000_000,
+				IsEmpty: false,
+				IsWhitespaceOnly: false,
+				IsEstimated: true)
+		];
+
+		var actual = ExportOutputMetricsCalculator.FromContentFiles(files);
+		var expectedText = $"{path}:{Environment.NewLine}{ClipboardBlankLine}";
+		var expected = GetExpectedNormalizedMetrics(expectedText);
+
+		Assert.Equal(expected.Lines, actual.Lines);
+		Assert.Equal(expected.Chars, actual.Chars);
+		Assert.Equal(expected.Tokens, actual.Tokens);
+	}
+
+	private static ExportOutputMetrics GetExpectedNormalizedMetrics(string text)
 	{
 		if (string.IsNullOrEmpty(text))
 			return ExportOutputMetrics.Empty;
 
-		var chars = text.Length;
+		var chars = GetExpectedNormalizedCharCount(text);
 		var lineBreaks = 0;
-		foreach (var c in text.AsSpan())
+		for (var i = 0; i < text.Length; i++)
 		{
+			var c = text[i];
+			if (c == '\r')
+			{
+				if (i + 1 < text.Length && text[i + 1] == '\n')
+					i++;
+
+				lineBreaks++;
+				continue;
+			}
+
 			if (c == '\n')
 				lineBreaks++;
 		}
 
-		var endsWithLineBreak = text[^1] == '\n' || text[^1] == '\r';
-		var lines = lineBreaks + (endsWithLineBreak ? 0 : 1);
+		var lines = lineBreaks + 1;
 		var tokens = (int)Math.Ceiling(chars / 4.0);
 		return new ExportOutputMetrics(lines, chars, tokens);
+	}
+
+	private static int GetExpectedNormalizedCharCount(string text)
+	{
+		var normalizedChars = 0;
+		for (var i = 0; i < text.Length; i++)
+		{
+			var c = text[i];
+			if (c == '\r')
+			{
+				if (i + 1 < text.Length && text[i + 1] == '\n')
+					i++;
+
+				normalizedChars++;
+				continue;
+			}
+
+			normalizedChars++;
+		}
+
+		return normalizedChars;
 	}
 
 	private static object[] BuildCase(int caseId, IReadOnlyList<(string Path, ContentVariant Variant)> entries)
@@ -100,6 +155,8 @@ public sealed class ExportOutputMetricsCalculatorContentTheoryTests
 				CharCount: entry.Variant.CharCount,
 				IsEmpty: entry.Variant.IsEmpty,
 				IsWhitespaceOnly: entry.Variant.IsWhitespaceOnly,
+				IsEstimated: entry.Variant.IsEstimated,
+				CrLfPairCount: entry.Variant.CrLfPairCount,
 				TrailingNewlineChars: entry.Variant.TrailingNewlineChars,
 				TrailingNewlineLineBreaks: entry.Variant.TrailingNewlineLineBreaks))
 			.ToList();
@@ -164,7 +221,8 @@ public sealed class ExportOutputMetricsCalculatorContentTheoryTests
 		ContentVariant.FromRaw("lf_trailing", "a\nb\n"),
 		ContentVariant.FromRaw("crlf_trailing", "a\r\nb\r\n"),
 		ContentVariant.FromRaw("newline_only", "\n"),
-		ContentVariant.FromRaw("mixed", "x\r\ny\nz")
+		ContentVariant.FromRaw("mixed", "x\r\ny\nz"),
+		ContentVariant.FromEstimated("estimated_large")
 	];
 
 	private sealed record ContentVariant(
@@ -174,6 +232,8 @@ public sealed class ExportOutputMetricsCalculatorContentTheoryTests
 		int CharCount,
 		bool IsEmpty,
 		bool IsWhitespaceOnly,
+		bool IsEstimated,
+		int CrLfPairCount,
 		int TrailingNewlineChars,
 		int TrailingNewlineLineBreaks,
 		string RenderedText)
@@ -182,6 +242,7 @@ public sealed class ExportOutputMetricsCalculatorContentTheoryTests
 		{
 			var charCount = rawContent.Length;
 			var lineCount = rawContent.Length == 0 ? 0 : 1 + CountLineBreaks(rawContent);
+			var crLfPairCount = CountCrLfPairs(rawContent);
 			var isEmpty = rawContent.Length == 0;
 			var isWhitespaceOnly = rawContent.Length > 0 && string.IsNullOrWhiteSpace(rawContent);
 			var trailing = CountTrailingNewlineInfo(rawContent);
@@ -196,9 +257,27 @@ public sealed class ExportOutputMetricsCalculatorContentTheoryTests
 				CharCount: charCount,
 				IsEmpty: isEmpty,
 				IsWhitespaceOnly: isWhitespaceOnly,
+				IsEstimated: false,
+				CrLfPairCount: crLfPairCount,
 				TrailingNewlineChars: trailing.Chars,
 				TrailingNewlineLineBreaks: trailing.LineBreaks,
 				RenderedText: rendered);
+		}
+
+		public static ContentVariant FromEstimated(string name)
+		{
+			return new ContentVariant(
+				Name: name,
+				SizeBytes: 25_000_000,
+				LineCount: 150_000,
+				CharCount: 25_000_000,
+				IsEmpty: false,
+				IsWhitespaceOnly: false,
+				IsEstimated: true,
+				CrLfPairCount: 0,
+				TrailingNewlineChars: 0,
+				TrailingNewlineLineBreaks: 0,
+				RenderedText: string.Empty);
 		}
 
 		private static int CountLineBreaks(string text)
@@ -207,6 +286,18 @@ public sealed class ExportOutputMetricsCalculatorContentTheoryTests
 			foreach (var c in text.AsSpan())
 			{
 				if (c == '\n')
+					count++;
+			}
+
+			return count;
+		}
+
+		private static int CountCrLfPairs(string text)
+		{
+			var count = 0;
+			for (var i = 0; i < text.Length - 1; i++)
+			{
+				if (text[i] == '\r' && text[i + 1] == '\n')
 					count++;
 			}
 
