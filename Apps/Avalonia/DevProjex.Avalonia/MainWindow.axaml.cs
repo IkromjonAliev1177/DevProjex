@@ -211,6 +211,8 @@ public partial class MainWindow : Window
     private bool _previewScrollSyncActive;
     private CancellationTokenSource? _previewMemoryCleanupCts;
     private int _previewMemoryCleanupVersion;
+    private CancellationTokenSource? _searchMemoryCleanupCts;
+    private int _searchMemoryCleanupVersion;
     private PreviewCacheEntry? _previewCacheEntry;
     private CancellationTokenSource? _previewModeSwitchCts;
     private int _previewModeSwitchVersion;
@@ -393,7 +395,10 @@ public partial class MainWindow : Window
         }
         AddHandler(PointerWheelChangedEvent, OnWindowPointerWheelChanged, RoutingStrategies.Tunnel, true);
 
-        _searchCoordinator = new TreeSearchCoordinator(_viewModel, _treeView ?? throw new InvalidOperationException());
+        _searchCoordinator = new TreeSearchCoordinator(
+            _viewModel,
+            _treeView ?? throw new InvalidOperationException(),
+            ScheduleSearchMemoryCleanupAfterRender);
         _filterCoordinator = new NameFilterCoordinator(ApplyFilterRealtimeWithToken);
         _themeBrushCoordinator = new ThemeBrushCoordinator(this, _viewModel, () => _topMenuBar?.MainMenuControl);
         _selectionCoordinator = new SelectionSyncCoordinator(
@@ -539,6 +544,8 @@ public partial class MainWindow : Window
         }
         _previewMemoryCleanupCts?.Cancel();
         _previewMemoryCleanupCts?.Dispose();
+        _searchMemoryCleanupCts?.Cancel();
+        _searchMemoryCleanupCts?.Dispose();
         _previewModeSwitchCts?.Cancel();
         _previewModeSwitchCts?.Dispose();
 
@@ -2098,6 +2105,49 @@ public partial class MainWindow : Window
             await Task.Delay(400);
             ForceMemoryCleanup();
         });
+    }
+
+    /// <summary>
+    /// Schedules the same aggressive cleanup path used by search close,
+    /// but only after the latest search result has been rendered.
+    /// Rapid search updates are coalesced into a single cleanup request.
+    /// </summary>
+    private void ScheduleSearchMemoryCleanupAfterRender()
+    {
+        var cleanupCts = ReplaceCancellationSource(ref _searchMemoryCleanupCts);
+        var cleanupVersion = Interlocked.Increment(ref _searchMemoryCleanupVersion);
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Dispatcher.UIThread.InvokeAsync(
+                    static () => { },
+                    DispatcherPriority.Render);
+                cleanupCts.Token.ThrowIfCancellationRequested();
+
+                if (cleanupVersion != Volatile.Read(ref _searchMemoryCleanupVersion))
+                    return;
+
+                await Dispatcher.UIThread.InvokeAsync(
+                    static () => { },
+                    DispatcherPriority.Render);
+                cleanupCts.Token.ThrowIfCancellationRequested();
+
+                if (cleanupVersion != Volatile.Read(ref _searchMemoryCleanupVersion))
+                    return;
+
+                ScheduleBackgroundMemoryCleanup();
+            }
+            catch (OperationCanceledException)
+            {
+                // Ignore canceled coalesced cleanup requests.
+            }
+            finally
+            {
+                DisposeIfCurrent(ref _searchMemoryCleanupCts, cleanupCts);
+            }
+        }, cleanupCts.Token);
     }
 
     /// <summary>
