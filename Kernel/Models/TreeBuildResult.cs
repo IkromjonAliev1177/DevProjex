@@ -5,31 +5,22 @@ public sealed record TreeBuildResult(
 	bool RootAccessDenied,
 	bool HadAccessDenied);
 
-public sealed class FileSystemNode
+public sealed class FileSystemNode(
+	string name,
+	string fullPath,
+	bool isDirectory,
+	bool isAccessDenied,
+	IReadOnlyList<FileSystemNode> children)
 {
 	/// <summary>
 	/// Shared empty list for file nodes (files have no children).
 	/// Avoids allocating a new List for each of potentially 100k+ files.
 	/// </summary>
-	public static readonly IReadOnlyList<FileSystemNode> EmptyChildren = Array.Empty<FileSystemNode>();
+	public static readonly IReadOnlyList<FileSystemNode> EmptyChildren = [];
 
-	public FileSystemNode(
-		string name,
-		string fullPath,
-		bool isDirectory,
-		bool isAccessDenied,
-		IReadOnlyList<FileSystemNode> children)
-	{
-		Name = name;
-		FullPath = fullPath;
-		IsDirectory = isDirectory;
-		IsAccessDenied = isAccessDenied;
-		Children = children;
-	}
-
-	public string Name { get; }
-	public string FullPath { get; }
-	public bool IsDirectory { get; }
-	public bool IsAccessDenied { get; set; }
-	public IReadOnlyList<FileSystemNode> Children { get; }
+	public string Name { get; } = name;
+	public string FullPath { get; } = fullPath;
+	public bool IsDirectory { get; } = isDirectory;
+	public bool IsAccessDenied { get; set; } = isAccessDenied;
+	public IReadOnlyList<FileSystemNode> Children { get; } = children;
 }

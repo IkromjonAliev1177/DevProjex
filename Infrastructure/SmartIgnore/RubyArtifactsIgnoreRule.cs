@@ -7,18 +7,18 @@ namespace DevProjex.Infrastructure.SmartIgnore;
 public sealed class RubyArtifactsIgnoreRule : ISmartIgnoreRule
 {
 	private static readonly string[] MarkerFiles =
-	{
+	[
 		"Gemfile",
 		"Gemfile.lock"
-	};
+	];
 
 	private static readonly string[] FolderNames =
-	{
+	[
 		".bundle",
 		"vendor",
 		"log",
 		"tmp"
-	};
+	];
 
 	public SmartIgnoreResult Evaluate(string rootPath)
 	{

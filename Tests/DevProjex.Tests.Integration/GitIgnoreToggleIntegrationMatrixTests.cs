@@ -68,7 +68,7 @@ public sealed class GitIgnoreToggleIntegrationMatrixTests
 
 	private static IgnoreRules BuildIgnoreRules(string rootPath, bool useGitIgnore, bool ignoreDotFolders)
 	{
-		var matcher = GitIgnoreMatcher.Build(rootPath, new[] { "[Bb]in/", "[Oo]bj/" });
+		var matcher = GitIgnoreMatcher.Build(rootPath, ["[Bb]in/", "[Oo]bj/"]);
 		return new IgnoreRules(
 			IgnoreHiddenFolders: false,
 			IgnoreHiddenFiles: false,

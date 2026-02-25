@@ -46,13 +46,12 @@ public sealed class NestedMultiStackScopeIsolationMatrixIntegrationTests
 		var (openedRootPath, selectedRootFolders) = ResolveContext(temp.Path, openMode, selectionMode);
 		var selectedOptions = BuildSelectedOptions(useGitIgnore, useSmartIgnore);
 
-		var smartService = new SmartIgnoreService(new ISmartIgnoreRule[]
-		{
+		var smartService = new SmartIgnoreService([
 			new RustArtifactsIgnoreRule(),
 			new FrontendArtifactsIgnoreRule(),
 			new DotNetArtifactsIgnoreRule(),
 			new PythonArtifactsIgnoreRule()
-		});
+		]);
 		var rulesService = new IgnoreRulesService(smartService);
 		var rules = rulesService.Build(openedRootPath, selectedOptions, selectedRootFolders);
 

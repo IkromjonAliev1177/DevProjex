@@ -101,7 +101,7 @@ public class RepoCacheServiceTests : IDisposable
 
         // Create and lock a file
         using var stream = File.Open(filePath, FileMode.Create, FileAccess.Write, FileShare.None);
-        stream.Write(new byte[] { 1, 2, 3 });
+        stream.Write([1, 2, 3]);
         stream.Flush();
 
         // Delete should not throw even with locked file

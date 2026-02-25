@@ -15,7 +15,7 @@ public sealed class GitIgnoreMatcher
     // Pre-compiled search values for SIMD-optimized character lookup
     private static readonly SearchValues<char> GlobSpecialChars = SearchValues.Create("*?[");
 
-    public static GitIgnoreMatcher Empty { get; } = new(string.Empty, Array.Empty<Rule>(), false);
+    public static GitIgnoreMatcher Empty { get; } = new(string.Empty, [], false);
 
     private GitIgnoreMatcher(string normalizedRootPath, IReadOnlyList<Rule> rules, bool hasNegationRules)
     {

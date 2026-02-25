@@ -197,8 +197,8 @@ public sealed class IgnoreRulesHierarchicalGitIgnoreMatrixTests
 		temp.CreateFile(".gitignore", "*.log");
 		temp.CreateFile("logs/app.log", "x");
 
-		var service = new IgnoreRulesService(new SmartIgnoreService(Array.Empty<ISmartIgnoreRule>()));
-		var rules = service.Build(temp.Path, Array.Empty<IgnoreOptionId>(), selectedRootFolders: Array.Empty<string>());
+		var service = new IgnoreRulesService(new SmartIgnoreService([]));
+		var rules = service.Build(temp.Path, [], selectedRootFolders: []);
 		var path = Path.Combine(temp.Path, "logs", "app.log");
 
 		Assert.False(rules.UseGitIgnore);
@@ -207,11 +207,11 @@ public sealed class IgnoreRulesHierarchicalGitIgnoreMatrixTests
 
 	private static IgnoreRules BuildGitIgnoreRules(string rootPath)
 	{
-		var service = new IgnoreRulesService(new SmartIgnoreService(Array.Empty<ISmartIgnoreRule>()));
+		var service = new IgnoreRulesService(new SmartIgnoreService([]));
 		return service.Build(
 			rootPath,
-			new[] { IgnoreOptionId.UseGitIgnore },
-			selectedRootFolders: Array.Empty<string>());
+			[IgnoreOptionId.UseGitIgnore],
+			selectedRootFolders: []);
 	}
 
 	private static void CreatePath(TemporaryDirectory temp, string relativePath, bool isDirectory)

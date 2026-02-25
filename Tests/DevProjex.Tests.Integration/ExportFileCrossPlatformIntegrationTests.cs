@@ -592,7 +592,7 @@ public sealed class ExportFileCrossPlatformIntegrationTests
 		using var temp = new TemporaryDirectory();
 		var textFile = temp.CreateFile("readme.txt", "Hello World");
 		var binaryPath = Path.Combine(temp.Path, "image.png");
-		await File.WriteAllBytesAsync(binaryPath, new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00 });
+		await File.WriteAllBytesAsync(binaryPath, [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00]);
 
 		var root = new TreeNodeDescriptor(
 			"Root", temp.Path, true, false, "folder",

@@ -9,9 +9,9 @@ public sealed class IgnoreRulesServiceGitIgnoreTests
 		Directory.CreateDirectory(tempRoot);
 		try
 		{
-			var service = new IgnoreRulesService(new SmartIgnoreService(Array.Empty<ISmartIgnoreRule>()));
+			var service = new IgnoreRulesService(new SmartIgnoreService([]));
 
-			var rules = service.Build(tempRoot, new[] { IgnoreOptionId.UseGitIgnore });
+			var rules = service.Build(tempRoot, [IgnoreOptionId.UseGitIgnore]);
 
 			Assert.False(rules.UseGitIgnore);
 			Assert.Same(GitIgnoreMatcher.Empty, rules.GitIgnoreMatcher);
@@ -32,9 +32,9 @@ public sealed class IgnoreRulesServiceGitIgnoreTests
 			var smartResult = new SmartIgnoreResult(
 				new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "bin", "obj" },
 				new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Thumbs.db" });
-			var service = new IgnoreRulesService(new SmartIgnoreService(new[] { new StubSmartIgnoreRule(smartResult) }));
+			var service = new IgnoreRulesService(new SmartIgnoreService([new StubSmartIgnoreRule(smartResult)]));
 
-			var rules = service.Build(tempRoot, new[] { IgnoreOptionId.UseGitIgnore });
+			var rules = service.Build(tempRoot, [IgnoreOptionId.UseGitIgnore]);
 
 			Assert.False(rules.UseGitIgnore);
 			Assert.Same(GitIgnoreMatcher.Empty, rules.GitIgnoreMatcher);
@@ -54,16 +54,15 @@ public sealed class IgnoreRulesServiceGitIgnoreTests
 		Directory.CreateDirectory(tempRoot);
 		try
 		{
-			File.WriteAllLines(Path.Combine(tempRoot, ".gitignore"), new[]
-			{
+			File.WriteAllLines(Path.Combine(tempRoot, ".gitignore"), [
 				"bin/",
 				"*.log",
 				"!important.log",
 				"nested/cache/"
-			});
+			]);
 
-			var service = new IgnoreRulesService(new SmartIgnoreService(Array.Empty<ISmartIgnoreRule>()));
-			var rules = service.Build(tempRoot, new[] { IgnoreOptionId.UseGitIgnore });
+			var service = new IgnoreRulesService(new SmartIgnoreService([]));
+			var rules = service.Build(tempRoot, [IgnoreOptionId.UseGitIgnore]);
 
 			Assert.True(rules.UseGitIgnore);
 			Assert.False(ReferenceEquals(rules.GitIgnoreMatcher, GitIgnoreMatcher.Empty));
@@ -94,13 +93,13 @@ public sealed class IgnoreRulesServiceGitIgnoreTests
 			var gitIgnorePath = Path.Combine(tempRoot, ".gitignore");
 			File.WriteAllText(gitIgnorePath, "bin/");
 
-			var service = new IgnoreRulesService(new SmartIgnoreService(Array.Empty<ISmartIgnoreRule>()));
-			var firstRules = service.Build(tempRoot, new[] { IgnoreOptionId.UseGitIgnore });
+			var service = new IgnoreRulesService(new SmartIgnoreService([]));
+			var firstRules = service.Build(tempRoot, [IgnoreOptionId.UseGitIgnore]);
 			Assert.True(firstRules.GitIgnoreMatcher.IsIgnored(Path.Combine(tempRoot, "bin"), isDirectory: true, "bin"));
 			Assert.False(firstRules.GitIgnoreMatcher.IsIgnored(Path.Combine(tempRoot, "dist"), isDirectory: true, "dist"));
 
 			File.WriteAllText(gitIgnorePath, "dist/");
-			var secondRules = service.Build(tempRoot, new[] { IgnoreOptionId.UseGitIgnore });
+			var secondRules = service.Build(tempRoot, [IgnoreOptionId.UseGitIgnore]);
 
 			Assert.False(secondRules.GitIgnoreMatcher.IsIgnored(Path.Combine(tempRoot, "bin"), isDirectory: true, "bin"));
 			Assert.True(secondRules.GitIgnoreMatcher.IsIgnored(Path.Combine(tempRoot, "dist"), isDirectory: true, "dist"));

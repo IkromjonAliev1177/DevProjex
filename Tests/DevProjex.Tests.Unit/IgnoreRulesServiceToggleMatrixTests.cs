@@ -19,7 +19,7 @@ public sealed class IgnoreRulesServiceToggleMatrixTests
 		var smartResult = new SmartIgnoreResult(
 			new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "bin", "obj" },
 			new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".DS_Store", "Thumbs.db" });
-		var smartService = new SmartIgnoreService(new[] { new StubSmartIgnoreRule(smartResult) });
+		var smartService = new SmartIgnoreService([new StubSmartIgnoreRule(smartResult)]);
 		var service = new IgnoreRulesService(smartService);
 
 		var selected = BuildSelectedOptions(bits);

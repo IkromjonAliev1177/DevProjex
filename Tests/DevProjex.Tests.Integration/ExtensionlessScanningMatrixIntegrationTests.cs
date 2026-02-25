@@ -70,7 +70,7 @@ public sealed class ExtensionlessScanningMatrixIntegrationTests
 	};
 
 	private static readonly string[] ExtensionlessFileNames =
-	{
+	[
 		"Makefile",
 		"Dockerfile",
 		"README",
@@ -110,10 +110,10 @@ public sealed class ExtensionlessScanningMatrixIntegrationTests
 		"config",
 		"settings",
 		"seed"
-	};
+	];
 
 	private static readonly string[] ExtensionFileNames =
-	{
+	[
 		".env",
 		".gitignore",
 		".editorconfig",
@@ -155,5 +155,5 @@ public sealed class ExtensionlessScanningMatrixIntegrationTests
 		"workflow.yaml",
 		"translation.po",
 		"locale.resx"
-	};
+	];
 }

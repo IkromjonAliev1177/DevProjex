@@ -2,16 +2,9 @@ namespace DevProjex.Tests.Integration.Performance;
 
 [Collection("LocalPerformance")]
 [Trait("Category", "LocalPerformance")]
-public sealed class FileSystemScannerLocalPerformanceTests
+public sealed class FileSystemScannerLocalPerformanceTests(ITestOutputHelper output)
 {
-    private readonly ITestOutputHelper _output;
-    private readonly PerfBaselineStore _baselineStore;
-
-    public FileSystemScannerLocalPerformanceTests(ITestOutputHelper output)
-    {
-        _output = output;
-        _baselineStore = new PerfBaselineStore(LocalPerformanceSettings.BaselineFilePath);
-    }
+    private readonly PerfBaselineStore _baselineStore = new(LocalPerformanceSettings.BaselineFilePath);
 
     public static IEnumerable<object[]> ExtensionScanCases()
     {
@@ -54,7 +47,7 @@ public sealed class FileSystemScannerLocalPerformanceTests
 
         var scenarioId = $"scanner.extensions.{perfCase}";
         var verdict = _baselineStore.Evaluate(scenarioId, measurement);
-        _output.WriteLine(verdict.Message);
+        output.WriteLine(verdict.Message);
 
         if (LocalPerformanceSettings.ShouldEnforceBaselineRegression)
         {
@@ -62,7 +55,7 @@ public sealed class FileSystemScannerLocalPerformanceTests
         }
         else if (verdict.IsRegression)
         {
-            _output.WriteLine($"[regression-detected-nonblocking] {scenarioId}");
+            output.WriteLine($"[regression-detected-nonblocking] {scenarioId}");
         }
 
         Assert.True(measurement.MedianMilliseconds < 6000,
@@ -93,7 +86,7 @@ public sealed class FileSystemScannerLocalPerformanceTests
 
         var scenarioId = $"scanner.root-folders.{perfCase}";
         var verdict = _baselineStore.Evaluate(scenarioId, measurement);
-        _output.WriteLine(verdict.Message);
+        output.WriteLine(verdict.Message);
 
         if (LocalPerformanceSettings.ShouldEnforceBaselineRegression)
         {
@@ -101,7 +94,7 @@ public sealed class FileSystemScannerLocalPerformanceTests
         }
         else if (verdict.IsRegression)
         {
-            _output.WriteLine($"[regression-detected-nonblocking] {scenarioId}");
+            output.WriteLine($"[regression-detected-nonblocking] {scenarioId}");
         }
 
         Assert.True(measurement.MedianMilliseconds < 3000,

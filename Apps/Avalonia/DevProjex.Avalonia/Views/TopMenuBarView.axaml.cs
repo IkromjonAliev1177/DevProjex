@@ -479,21 +479,21 @@ public partial class TopMenuBarView : UserControl
         {
             if (viewModel.HasAnyEffect)
             {
-                popupLevel.TransparencyLevelHint = new[]
-                {
+                popupLevel.TransparencyLevelHint =
+                [
                     WindowTransparencyLevel.AcrylicBlur,
                     WindowTransparencyLevel.Blur,
                     WindowTransparencyLevel.None
-                };
+                ];
 
                 popupLevel.Background = Brushes.Transparent;
             }
             else
             {
-                popupLevel.TransparencyLevelHint = new[]
-                {
+                popupLevel.TransparencyLevelHint =
+                [
                     WindowTransparencyLevel.None
-                };
+                ];
             }
         }
         catch
@@ -521,22 +521,22 @@ public partial class TopMenuBarView : UserControl
         {
             if (viewModel.HasAnyEffect)
             {
-                tooltipLevel.TransparencyLevelHint = new[]
-                {
+                tooltipLevel.TransparencyLevelHint =
+                [
                     WindowTransparencyLevel.AcrylicBlur,
                     WindowTransparencyLevel.Blur,
                     WindowTransparencyLevel.Transparent,
                     WindowTransparencyLevel.None
-                };
+                ];
 
                 tooltipLevel.Background = Brushes.Transparent;
             }
             else
             {
-                tooltipLevel.TransparencyLevelHint = new[]
-                {
+                tooltipLevel.TransparencyLevelHint =
+                [
                     WindowTransparencyLevel.None
-                };
+                ];
             }
         }
         catch

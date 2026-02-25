@@ -8,7 +8,7 @@ public sealed class FilterOptionSelectionServiceTests
 	{
 		var service = new FilterOptionSelectionService();
 
-		var options = service.BuildExtensionOptions(new[] { ".txt", ".cs", ".sln" }, new HashSet<string>());
+		var options = service.BuildExtensionOptions([".txt", ".cs", ".sln"], new HashSet<string>());
 
 		Assert.Equal(3, options.Count);
 		Assert.False(options.Single(o => o.Name == ".cs").IsChecked);
@@ -22,7 +22,7 @@ public sealed class FilterOptionSelectionServiceTests
 	{
 		var service = new FilterOptionSelectionService();
 
-		var options = service.BuildExtensionOptions(new[] { ".B", ".a" }, new HashSet<string>());
+		var options = service.BuildExtensionOptions([".B", ".a"], new HashSet<string>());
 
 		Assert.Equal(".a", options[0].Name);
 		Assert.Equal(".B", options[1].Name);
@@ -35,7 +35,7 @@ public sealed class FilterOptionSelectionServiceTests
 		var service = new FilterOptionSelectionService();
 		var previous = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".txt" };
 
-		var options = service.BuildExtensionOptions(new[] { ".txt", ".cs" }, previous);
+		var options = service.BuildExtensionOptions([".txt", ".cs"], previous);
 
 		Assert.True(options.Single(o => o.Name == ".txt").IsChecked);
 		Assert.False(options.Single(o => o.Name == ".cs").IsChecked);
@@ -53,7 +53,7 @@ public sealed class FilterOptionSelectionServiceTests
 			SmartIgnoredFolders: new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "logs" },
 			SmartIgnoredFiles: new HashSet<string>());
 
-		var options = service.BuildRootFolderOptions(new[] { "bin", "obj", "logs", ".cache", "src" }, new HashSet<string>(), rules);
+		var options = service.BuildRootFolderOptions(["bin", "obj", "logs", ".cache", "src"], new HashSet<string>(), rules);
 
 		Assert.True(options.Single(o => o.Name == "bin").IsChecked);
 		Assert.True(options.Single(o => o.Name == "obj").IsChecked);
@@ -75,7 +75,7 @@ public sealed class FilterOptionSelectionServiceTests
 			SmartIgnoredFiles: new HashSet<string>());
 		var previous = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "bin" };
 
-		var options = service.BuildRootFolderOptions(new[] { "bin", "src" }, previous, rules);
+		var options = service.BuildRootFolderOptions(["bin", "src"], previous, rules);
 
 		Assert.True(options.Single(o => o.Name == "bin").IsChecked);
 		Assert.False(options.Single(o => o.Name == "src").IsChecked);
@@ -88,7 +88,7 @@ public sealed class FilterOptionSelectionServiceTests
 		var service = new FilterOptionSelectionService();
 		var previous = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".CS" };
 
-		var options = service.BuildExtensionOptions(new[] { ".cs" }, previous);
+		var options = service.BuildExtensionOptions([".cs"], previous);
 
 		Assert.True(options.Single(o => o.Name == ".cs").IsChecked);
 	}
@@ -106,7 +106,7 @@ public sealed class FilterOptionSelectionServiceTests
 			SmartIgnoredFiles: new HashSet<string>());
 		var previous = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "bin" };
 
-		var options = service.BuildRootFolderOptions(new[] { "bin", "src" }, previous, rules);
+		var options = service.BuildRootFolderOptions(["bin", "src"], previous, rules);
 
 		Assert.True(options.Single(o => o.Name == "bin").IsChecked);
 	}
@@ -123,7 +123,7 @@ public sealed class FilterOptionSelectionServiceTests
 			SmartIgnoredFolders: new HashSet<string>(),
 			SmartIgnoredFiles: new HashSet<string>());
 
-		var options = service.BuildRootFolderOptions(new[] { "b", "a" }, new HashSet<string>(), rules);
+		var options = service.BuildRootFolderOptions(["b", "a"], new HashSet<string>(), rules);
 
 		Assert.Equal("b", options[0].Name);
 		Assert.Equal("a", options[1].Name);
@@ -135,7 +135,7 @@ public sealed class FilterOptionSelectionServiceTests
 	{
 		var service = new FilterOptionSelectionService();
 
-		var options = service.BuildExtensionOptions(Array.Empty<string>(), new HashSet<string>());
+		var options = service.BuildExtensionOptions([], new HashSet<string>());
 
 		Assert.Empty(options);
 	}
@@ -152,7 +152,7 @@ public sealed class FilterOptionSelectionServiceTests
 			SmartIgnoredFolders: new HashSet<string>(),
 			SmartIgnoredFiles: new HashSet<string>());
 
-		var options = service.BuildRootFolderOptions(Array.Empty<string>(), new HashSet<string>(), rules);
+		var options = service.BuildRootFolderOptions([], new HashSet<string>(), rules);
 
 		Assert.Empty(options);
 	}
@@ -164,7 +164,7 @@ public sealed class FilterOptionSelectionServiceTests
 		var service = new FilterOptionSelectionService();
 		var previous = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".missing" };
 
-		var options = service.BuildExtensionOptions(new[] { ".cs" }, previous);
+		var options = service.BuildExtensionOptions([".cs"], previous);
 
 		Assert.False(options.Single(o => o.Name == ".cs").IsChecked);
 	}
@@ -181,7 +181,7 @@ public sealed class FilterOptionSelectionServiceTests
 			SmartIgnoredFolders: new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Cache" },
 			SmartIgnoredFiles: new HashSet<string>());
 
-		var options = service.BuildRootFolderOptions(new[] { "cache", "src" }, new HashSet<string>(), rules);
+		var options = service.BuildRootFolderOptions(["cache", "src"], new HashSet<string>(), rules);
 
 		Assert.False(options.Single(o => o.Name == "cache").IsChecked);
 		Assert.True(options.Single(o => o.Name == "src").IsChecked);
@@ -199,7 +199,7 @@ public sealed class FilterOptionSelectionServiceTests
 			SmartIgnoredFolders: new HashSet<string>(),
 			SmartIgnoredFiles: new HashSet<string>());
 
-		var options = service.BuildRootFolderOptions(new[] { ".git", "src" }, new HashSet<string>(), rules);
+		var options = service.BuildRootFolderOptions([".git", "src"], new HashSet<string>(), rules);
 
 		Assert.False(options.Single(o => o.Name == ".git").IsChecked);
 		Assert.True(options.Single(o => o.Name == "src").IsChecked);
@@ -217,7 +217,7 @@ public sealed class FilterOptionSelectionServiceTests
 			SmartIgnoredFiles: new HashSet<string>());
 
 		var options = service.BuildRootFolderOptions(
-			new[] { "src", "tests" },
+			["src", "tests"],
 			new HashSet<string>(),
 			rules,
 			hasPreviousSelections: true);

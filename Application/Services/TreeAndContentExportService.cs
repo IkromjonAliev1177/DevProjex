@@ -1,17 +1,10 @@
 namespace DevProjex.Application.Services;
 
-public sealed class TreeAndContentExportService
+public sealed class TreeAndContentExportService(
+	TreeExportService treeExport,
+	SelectedContentExportService contentExport)
 {
 	private const string ClipboardBlankLine = "\u00A0"; // NBSP: looks empty but won't collapse on paste
-
-	private readonly TreeExportService _treeExport;
-	private readonly SelectedContentExportService _contentExport;
-
-	public TreeAndContentExportService(TreeExportService treeExport, SelectedContentExportService contentExport)
-	{
-		_treeExport = treeExport;
-		_contentExport = contentExport;
-	}
 
 	public string Build(string rootPath, TreeNodeDescriptor root, IReadOnlySet<string> selectedPaths)
 		=> Build(rootPath, root, selectedPaths, TreeTextFormat.Ascii);
@@ -47,17 +40,17 @@ public sealed class TreeAndContentExportService
 		bool hasSelection = selectedPaths.Count > 0 && TreeExportService.HasSelectedDescendantOrSelf(root, selectedPaths);
 
 		string tree = hasSelection
-			? _treeExport.BuildSelectedTree(rootPath, root, selectedPaths, format, displayRootPath, displayRootName)
-			: _treeExport.BuildFullTree(rootPath, root, format, displayRootPath, displayRootName);
+			? treeExport.BuildSelectedTree(rootPath, root, selectedPaths, format, displayRootPath, displayRootName)
+			: treeExport.BuildFullTree(rootPath, root, format, displayRootPath, displayRootName);
 
 		if (hasSelection && string.IsNullOrWhiteSpace(tree))
-			tree = _treeExport.BuildFullTree(rootPath, root, format, displayRootPath, displayRootName);
+			tree = treeExport.BuildFullTree(rootPath, root, format, displayRootPath, displayRootName);
 
 		var files = hasSelection
 			? GetSelectedFiles(selectedPaths)
 			: GetAllFilePaths(root);
 
-		var content = await _contentExport.BuildAsync(files, cancellationToken, pathPresentation?.MapFilePath).ConfigureAwait(false);
+		var content = await contentExport.BuildAsync(files, cancellationToken, pathPresentation?.MapFilePath).ConfigureAwait(false);
 		if (string.IsNullOrWhiteSpace(content))
 			return tree;
 

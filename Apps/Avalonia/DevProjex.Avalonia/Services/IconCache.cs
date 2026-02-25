@@ -7,7 +7,7 @@ namespace DevProjex.Avalonia.Services;
 /// Supports concurrent access for parallel tree building operations.
 /// Properly disposes Bitmap resources when evicting or clearing.
 /// </summary>
-public sealed class IconCache : IDisposable
+public sealed class IconCache(IIconStore iconStore) : IDisposable
 {
     /// <summary>
     /// Maximum number of cached icons. Icons are typically limited (~50-100 types),
@@ -20,16 +20,10 @@ public sealed class IconCache : IDisposable
     /// </summary>
     private const int EvictionCount = 32;
 
-    private readonly IIconStore _iconStore;
     private readonly Dictionary<string, IImage> _cache = new(StringComparer.OrdinalIgnoreCase);
-    private readonly LinkedList<string> _accessOrder = new();
+    private readonly LinkedList<string> _accessOrder = [];
     private readonly Dictionary<string, LinkedListNode<string>> _accessNodes = new(StringComparer.OrdinalIgnoreCase);
     private readonly object _lock = new();
-
-    public IconCache(IIconStore iconStore)
-    {
-        _iconStore = iconStore;
-    }
 
     public IImage? GetIcon(string key)
     {
@@ -53,7 +47,7 @@ public sealed class IconCache : IDisposable
             if (_cache.Count >= MaxCacheSize)
                 EvictOldestUnsafe();
 
-            var bytes = _iconStore.GetIconBytes(key);
+            var bytes = iconStore.GetIconBytes(key);
             using var stream = new MemoryStream(bytes);
             var bitmap = new Bitmap(stream);
             _cache[key] = bitmap;

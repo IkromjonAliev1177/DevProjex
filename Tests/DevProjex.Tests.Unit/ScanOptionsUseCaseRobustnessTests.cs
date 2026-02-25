@@ -16,7 +16,7 @@ public sealed class ScanOptionsUseCaseRobustnessTests
         var scanner = new StubFileSystemScanner
         {
             GetExtensionsHandler = (_, _) => throw new InvalidOperationException("extensions failed"),
-            GetRootFolderNamesHandler = (_, _) => new ScanResult<List<string>>(new List<string> { "src" }, false, false)
+            GetRootFolderNamesHandler = (_, _) => new ScanResult<List<string>>(["src"], false, false)
         };
 
         var useCase = new ScanOptionsUseCase(scanner);
@@ -31,7 +31,7 @@ public sealed class ScanOptionsUseCaseRobustnessTests
     {
         var scanner = new StubFileSystemScanner
         {
-            GetExtensionsHandler = (_, _) => new ScanResult<HashSet<string>>(new HashSet<string> { ".cs" }, false, false),
+            GetExtensionsHandler = (_, _) => new ScanResult<HashSet<string>>([".cs"], false, false),
             GetRootFolderNamesHandler = (_, _) => throw new InvalidOperationException("roots failed")
         };
 
@@ -63,7 +63,7 @@ public sealed class ScanOptionsUseCaseRobustnessTests
         cts.Cancel();
 
         Assert.Throws<OperationCanceledException>(() =>
-            useCase.GetExtensionsForRootFolders("/root", new[] { "src" }, CreateRules(), cts.Token));
+            useCase.GetExtensionsForRootFolders("/root", ["src"], CreateRules(), cts.Token));
     }
 
     [Fact]
@@ -81,7 +81,7 @@ public sealed class ScanOptionsUseCaseRobustnessTests
 
         var result = useCase.GetExtensionsForRootFolders(
             "/root",
-            new[] { "src", "tests", "docs", "tools" },
+            ["src", "tests", "docs", "tools"],
             CreateRules());
 
         Assert.Equal(3, result.Value.Count);
@@ -98,14 +98,14 @@ public sealed class ScanOptionsUseCaseRobustnessTests
             GetExtensionsHandler = (_, _) => new ScanResult<HashSet<string>>(
                 new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".z", ".A", ".m", ".B" }, false, false),
             GetRootFolderNamesHandler = (_, _) => new ScanResult<List<string>>(
-                new List<string> { "zeta", "Alpha", "beta", "Gamma" }, false, false)
+                ["zeta", "Alpha", "beta", "Gamma"], false, false)
         };
 
         var useCase = new ScanOptionsUseCase(scanner);
         var result = useCase.Execute(new ScanOptionsRequest("/root", CreateRules()));
 
-        Assert.Equal(new[] { ".A", ".B", ".m", ".z" }, result.Extensions);
-        Assert.Equal(new[] { "Alpha", "beta", "Gamma", "zeta" }, result.RootFolders);
+        Assert.Equal([".A", ".B", ".m", ".z"], result.Extensions);
+        Assert.Equal(["Alpha", "beta", "Gamma", "zeta"], result.RootFolders);
     }
 
     private static void AssertContainsInnerError(Exception ex, string expectedMessagePart)

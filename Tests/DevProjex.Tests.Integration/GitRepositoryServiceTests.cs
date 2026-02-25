@@ -15,7 +15,7 @@ namespace DevProjex.Tests.Integration;
 /// </summary>
 public class GitRepositoryServiceTests : IAsyncLifetime
 {
-    private readonly GitRepositoryService _service;
+    private readonly GitRepositoryService _service = new();
     private string? _tempDir;
     private bool _gitAvailable;
 
@@ -23,11 +23,6 @@ public class GitRepositoryServiceTests : IAsyncLifetime
     // Using octocat/Hello-World - small and stable repo
     private const string TestRepoUrl = "https://github.com/octocat/Hello-World.git";
     private const string TestRepoName = "Hello-World";
-
-    public GitRepositoryServiceTests()
-    {
-        _service = new GitRepositoryService();
-    }
 
     public async Task InitializeAsync()
     {

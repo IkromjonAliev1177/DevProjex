@@ -53,12 +53,11 @@ public sealed class IgnorePipelineMatrixIntegrationTests
 		temp.CreateFile("proj-no-git/node_modules/lib.js", "module.exports = {};");
 		temp.CreateFile("proj-no-git/coverage/report.txt", "coverage");
 
-		var smartService = new SmartIgnoreService(new ISmartIgnoreRule[]
-		{
+		var smartService = new SmartIgnoreService([
 			new FixedSmartIgnoreRule(
-				new[] { "node_modules", "coverage" },
-				Array.Empty<string>())
-		});
+				["node_modules", "coverage"],
+				[])
+		]);
 		var rulesService = new IgnoreRulesService(smartService);
 
 		var selectedRootFolders = BuildSelectedRootFolders(rootSelectionMode);
@@ -138,22 +137,14 @@ public sealed class IgnorePipelineMatrixIntegrationTests
 		};
 	}
 
-	private sealed class FixedSmartIgnoreRule : ISmartIgnoreRule
+	private sealed class FixedSmartIgnoreRule(IReadOnlyCollection<string> folders, IReadOnlyCollection<string> files)
+		: ISmartIgnoreRule
 	{
-		private readonly IReadOnlyCollection<string> _folders;
-		private readonly IReadOnlyCollection<string> _files;
-
-		public FixedSmartIgnoreRule(IReadOnlyCollection<string> folders, IReadOnlyCollection<string> files)
-		{
-			_folders = folders;
-			_files = files;
-		}
-
 		public SmartIgnoreResult Evaluate(string rootPath)
 		{
 			return new SmartIgnoreResult(
-				new HashSet<string>(_folders, StringComparer.OrdinalIgnoreCase),
-				new HashSet<string>(_files, StringComparer.OrdinalIgnoreCase));
+				new HashSet<string>(folders, StringComparer.OrdinalIgnoreCase),
+				new HashSet<string>(files, StringComparer.OrdinalIgnoreCase));
 		}
 	}
 }

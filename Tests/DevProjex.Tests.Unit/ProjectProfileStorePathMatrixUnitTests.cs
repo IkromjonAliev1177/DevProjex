@@ -25,7 +25,7 @@ public sealed class ProjectProfileStorePathMatrixUnitTests
 			Assert.True(store.TryLoadProfile(canonicalPath, out var loaded));
 			Assert.Equal(SanitizeStrings(roots), new HashSet<string>(loaded.SelectedRootFolders, StringComparer.OrdinalIgnoreCase));
 			Assert.Equal(SanitizeStrings(extensions), new HashSet<string>(loaded.SelectedExtensions, StringComparer.OrdinalIgnoreCase));
-			Assert.Equal(SanitizeIgnore(ignoreOptions), new HashSet<IgnoreOptionId>(loaded.SelectedIgnoreOptions));
+			Assert.Equal(SanitizeIgnore(ignoreOptions), [..loaded.SelectedIgnoreOptions]);
 		}
 		finally
 		{
@@ -71,11 +71,11 @@ public sealed class ProjectProfileStorePathMatrixUnitTests
 
 			Assert.Equal(SanitizeStrings(secondRoots), new HashSet<string>(loadedA.SelectedRootFolders, StringComparer.OrdinalIgnoreCase));
 			Assert.Equal(SanitizeStrings(secondExtensions), new HashSet<string>(loadedA.SelectedExtensions, StringComparer.OrdinalIgnoreCase));
-			Assert.Equal(SanitizeIgnore(secondIgnore), new HashSet<IgnoreOptionId>(loadedA.SelectedIgnoreOptions));
+			Assert.Equal(SanitizeIgnore(secondIgnore), [..loadedA.SelectedIgnoreOptions]);
 
 			Assert.Equal(SanitizeStrings(secondRoots), new HashSet<string>(loadedB.SelectedRootFolders, StringComparer.OrdinalIgnoreCase));
 			Assert.Equal(SanitizeStrings(secondExtensions), new HashSet<string>(loadedB.SelectedExtensions, StringComparer.OrdinalIgnoreCase));
-			Assert.Equal(SanitizeIgnore(secondIgnore), new HashSet<IgnoreOptionId>(loadedB.SelectedIgnoreOptions));
+			Assert.Equal(SanitizeIgnore(secondIgnore), [..loadedB.SelectedIgnoreOptions]);
 		}
 		finally
 		{
@@ -119,8 +119,8 @@ public sealed class ProjectProfileStorePathMatrixUnitTests
 			{
 				var first = variants[firstIndex];
 				var second = variants[secondIndex];
-				yield return new object[]
-				{
+				yield return
+				[
 					caseId++,
 					a,
 					b,
@@ -130,28 +130,37 @@ public sealed class ProjectProfileStorePathMatrixUnitTests
 					second.Roots,
 					second.Extensions,
 					second.IgnoreOptions
-				};
+				];
 			}
 		}
 	}
 
 	private static IEnumerable<(string[] Roots, string[] Extensions, IgnoreOptionId[] IgnoreOptions)> ProfileVariants()
 	{
-		yield return (new[] { "src", "tests" }, new[] { ".cs", ".json" }, new[] { IgnoreOptionId.HiddenFolders, IgnoreOptionId.DotFiles });
-		yield return (new[] { "SRC", "src", " ", "" }, new[] { ".CS", ".cs", " ", "" }, new[] { IgnoreOptionId.HiddenFolders, IgnoreOptionId.HiddenFolders });
-		yield return (Array.Empty<string>(), Array.Empty<string>(), Array.Empty<IgnoreOptionId>());
-		yield return (new[] { "Client", "Server", "Shared" }, new[] { ".ts", ".tsx", ".json" }, new[] { IgnoreOptionId.UseGitIgnore, IgnoreOptionId.SmartIgnore });
-		yield return (new[] { "docs", "examples" }, new[] { ".md", ".txt" }, new[] { IgnoreOptionId.UseGitIgnore });
-		yield return (new[] { "scripts", "tools" }, new[] { ".ps1", ".sh", ".cmd" }, new[] { IgnoreOptionId.ExtensionlessFiles });
-		yield return (new[] { "images", "assets" }, new[] { ".png", ".jpg", ".svg" }, new[] { IgnoreOptionId.DotFolders, IgnoreOptionId.DotFiles });
-		yield return (new[] { "A", "B", "C" }, new[] { ".a", ".b", ".c" }, new[] { IgnoreOptionId.HiddenFolders, IgnoreOptionId.HiddenFiles, IgnoreOptionId.DotFolders, IgnoreOptionId.DotFiles });
-		yield return (new[] { "module", "module", "MODULE" }, new[] { ".xaml", ".XAML", ".axaml" }, new[] { IgnoreOptionId.SmartIgnore, IgnoreOptionId.SmartIgnore });
-		yield return (new[] { "infra", "deploy" }, new[] { ".yml", ".yaml", ".tf" }, new[] { IgnoreOptionId.HiddenFolders, IgnoreOptionId.UseGitIgnore, IgnoreOptionId.SmartIgnore });
-		yield return (new[] { "raw", "processed", "reports" }, new[] { ".csv", ".json", ".txt" }, new[] { IgnoreOptionId.HiddenFiles, IgnoreOptionId.ExtensionlessFiles, IgnoreOptionId.DotFiles });
-		yield return (new[] { "desktop" }, new[] { ".axaml", ".xaml" }, new[] { IgnoreOptionId.HiddenFiles });
-		yield return (new[] { "api", "domain", "infra" }, new[] { ".cs", ".props", ".sln" }, new[] { IgnoreOptionId.DotFolders });
-		yield return (new[] { "config" }, new[] { ".json", ".yaml", ".toml" }, new[] { IgnoreOptionId.HiddenFolders, IgnoreOptionId.HiddenFiles, IgnoreOptionId.DotFiles });
-		yield return (new[] { "mobile", "web", "desktop" }, new[] { ".kt", ".swift", ".cs" }, new[] { IgnoreOptionId.SmartIgnore, IgnoreOptionId.DotFolders });
+		yield return (["src", "tests"], [".cs", ".json"], [IgnoreOptionId.HiddenFolders, IgnoreOptionId.DotFiles]);
+		yield return (["SRC", "src", " ", ""], [".CS", ".cs", " ", ""], [IgnoreOptionId.HiddenFolders, IgnoreOptionId.HiddenFolders
+		]);
+		yield return ([], [], []);
+		yield return (["Client", "Server", "Shared"], [".ts", ".tsx", ".json"], [IgnoreOptionId.UseGitIgnore, IgnoreOptionId.SmartIgnore
+		]);
+		yield return (["docs", "examples"], [".md", ".txt"], [IgnoreOptionId.UseGitIgnore]);
+		yield return (["scripts", "tools"], [".ps1", ".sh", ".cmd"], [IgnoreOptionId.ExtensionlessFiles]);
+		yield return (["images", "assets"], [".png", ".jpg", ".svg"], [IgnoreOptionId.DotFolders, IgnoreOptionId.DotFiles
+		]);
+		yield return (["A", "B", "C"], [".a", ".b", ".c"], [IgnoreOptionId.HiddenFolders, IgnoreOptionId.HiddenFiles, IgnoreOptionId.DotFolders, IgnoreOptionId.DotFiles
+		]);
+		yield return (["module", "module", "MODULE"], [".xaml", ".XAML", ".axaml"], [IgnoreOptionId.SmartIgnore, IgnoreOptionId.SmartIgnore
+		]);
+		yield return (["infra", "deploy"], [".yml", ".yaml", ".tf"], [IgnoreOptionId.HiddenFolders, IgnoreOptionId.UseGitIgnore, IgnoreOptionId.SmartIgnore
+		]);
+		yield return (["raw", "processed", "reports"], [".csv", ".json", ".txt"], [IgnoreOptionId.HiddenFiles, IgnoreOptionId.ExtensionlessFiles, IgnoreOptionId.DotFiles
+		]);
+		yield return (["desktop"], [".axaml", ".xaml"], [IgnoreOptionId.HiddenFiles]);
+		yield return (["api", "domain", "infra"], [".cs", ".props", ".sln"], [IgnoreOptionId.DotFolders]);
+		yield return (["config"], [".json", ".yaml", ".toml"], [IgnoreOptionId.HiddenFolders, IgnoreOptionId.HiddenFiles, IgnoreOptionId.DotFiles
+		]);
+		yield return (["mobile", "web", "desktop"], [".kt", ".swift", ".cs"], [IgnoreOptionId.SmartIgnore, IgnoreOptionId.DotFolders
+		]);
 	}
 
 	private static string BuildPathByMode(string canonicalPath, int mode)

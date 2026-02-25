@@ -2,12 +2,9 @@ using Avalonia.LogicalTree;
 
 namespace DevProjex.Avalonia.Coordinators;
 
-public sealed class ThemeBrushCoordinator : IDisposable
+public sealed class ThemeBrushCoordinator(Window window, MainWindowViewModel viewModel, Func<Menu?> menuProvider)
+    : IDisposable
 {
-    private readonly Window _window;
-    private readonly MainWindowViewModel _viewModel;
-    private readonly Func<Menu?> _menuProvider;
-
     // Reusable brushes - mutate Color instead of allocating new instances
     private SolidColorBrush _currentMenuBrush = new(Colors.Black);
     private SolidColorBrush _currentMenuChildBrush = new(Colors.Black);
@@ -19,13 +16,6 @@ public sealed class ThemeBrushCoordinator : IDisposable
     private SolidColorBrush? _backgroundBrush;
     private SolidColorBrush? _panelBrush;
     private SolidColorBrush? _accentBrush;
-
-    public ThemeBrushCoordinator(Window window, MainWindowViewModel viewModel, Func<Menu?> menuProvider)
-    {
-        _window = window;
-        _viewModel = viewModel;
-        _menuProvider = menuProvider;
-    }
 
     public void HandleSubmenuOpened(object? sender, RoutedEventArgs e)
     {
@@ -50,63 +40,63 @@ public sealed class ThemeBrushCoordinator : IDisposable
 
     public void UpdateTransparencyEffect()
     {
-        if (!_viewModel.HasAnyEffect)
+        if (!viewModel.HasAnyEffect)
         {
-            _window.TransparencyLevelHint = new[]
-            {
+            window.TransparencyLevelHint =
+            [
                 WindowTransparencyLevel.None
-            };
+            ];
 
             UpdateDynamicThemeBrushes();
             return;
         }
 
-        if (_viewModel.IsMicaEnabled)
+        if (viewModel.IsMicaEnabled)
         {
-            _window.TransparencyLevelHint = new[]
-            {
+            window.TransparencyLevelHint =
+            [
                 WindowTransparencyLevel.Mica,
                 WindowTransparencyLevel.Blur,
                 WindowTransparencyLevel.None
-            };
+            ];
 
             UpdateDynamicThemeBrushes();
             return;
         }
 
-        if (_viewModel.IsAcrylicEnabled)
+        if (viewModel.IsAcrylicEnabled)
         {
-            _window.TransparencyLevelHint = new[]
-            {
+            window.TransparencyLevelHint =
+            [
                 WindowTransparencyLevel.AcrylicBlur,
                 WindowTransparencyLevel.Blur,
                 WindowTransparencyLevel.Transparent,
                 WindowTransparencyLevel.None
-            };
+            ];
 
             UpdateDynamicThemeBrushes();
             return;
         }
 
-        var blur = Math.Clamp(_viewModel.BlurRadius / 100.0, 0.0, 1.0);
+        var blur = Math.Clamp(viewModel.BlurRadius / 100.0, 0.0, 1.0);
 
         if (blur <= 0.0001)
         {
-            _window.TransparencyLevelHint = new[]
-            {
+            window.TransparencyLevelHint =
+            [
                 WindowTransparencyLevel.Transparent,
                 WindowTransparencyLevel.None
-            };
+            ];
         }
         else
         {
-            _window.TransparencyLevelHint = new[]
-            {
+            window.TransparencyLevelHint =
+            [
                 WindowTransparencyLevel.AcrylicBlur,
                 WindowTransparencyLevel.Blur,
                 WindowTransparencyLevel.Transparent,
                 WindowTransparencyLevel.None
-            };
+            ];
         }
 
         UpdateDynamicThemeBrushes();
@@ -123,11 +113,11 @@ public sealed class ThemeBrushCoordinator : IDisposable
         var baseBg = isDark ? Color.Parse("#121214") : Color.Parse("#FFFFFF");
         var basePanel = isDark ? Color.Parse("#17171A") : Color.Parse("#F3F3F3");
 
-        var material = Math.Clamp(_viewModel.MaterialIntensity / 100.0, 0.0, 1.0);
-        var contrast = Math.Clamp(_viewModel.PanelContrast / 100.0, 0.0, 1.0);
-        var borderStrength = Math.Clamp(_viewModel.BorderStrength / 100.0, 0.0, 1.0);
-        var menuChild = Math.Clamp(_viewModel.MenuChildIntensity / 100.0, 0.0, 1.0);
-        var blur = Math.Clamp(_viewModel.BlurRadius / 100.0, 0.0, 1.0);
+        var material = Math.Clamp(viewModel.MaterialIntensity / 100.0, 0.0, 1.0);
+        var contrast = Math.Clamp(viewModel.PanelContrast / 100.0, 0.0, 1.0);
+        var borderStrength = Math.Clamp(viewModel.BorderStrength / 100.0, 0.0, 1.0);
+        var menuChild = Math.Clamp(viewModel.MenuChildIntensity / 100.0, 0.0, 1.0);
+        var blur = Math.Clamp(viewModel.BlurRadius / 100.0, 0.0, 1.0);
 
         Color bgBase = baseBg;
         Color panelBase = basePanel;
@@ -139,14 +129,14 @@ public sealed class ThemeBrushCoordinator : IDisposable
         byte menuChildAlpha = 255;
         Color menuBase = panelBase;
         Color menuChildBase = panelBase;
-        if (!_viewModel.HasAnyEffect)
+        if (!viewModel.HasAnyEffect)
         {
             bgAlpha = 255;
             panelAlpha = 255;
             menuAlpha = 255;
             menuChildAlpha = 255;
         }
-        else if (_viewModel.IsMicaEnabled)
+        else if (viewModel.IsMicaEnabled)
         {
             var micaStrength = Math.Pow(material, 0.7);
 
@@ -173,7 +163,7 @@ public sealed class ThemeBrushCoordinator : IDisposable
                 panelBase = Color.Parse("#F7F7F7");
             }
         }
-        else if (_viewModel.IsAcrylicEnabled)
+        else if (viewModel.IsAcrylicEnabled)
         {
             bgAlpha = (byte)Math.Round(240 - (material * 200));
             panelAlpha = (byte)Math.Round(235 - (material * 150));
@@ -196,7 +186,7 @@ public sealed class ThemeBrushCoordinator : IDisposable
             menuChildAlpha = (byte)Math.Clamp(menuAlpha - (menuChild * 40), 150, 255);
         }
 
-        if (_viewModel.HasAnyEffect)
+        if (viewModel.HasAnyEffect)
         {
             // Keep window surface denser than content islands and preserve visible submenu contrast response.
             bgAlpha = (byte)Math.Clamp(bgAlpha + 22, 90, 255);
@@ -272,7 +262,7 @@ public sealed class ThemeBrushCoordinator : IDisposable
 
     public void ApplyMenuBrushesDirect()
     {
-        var mainMenu = _menuProvider();
+        var mainMenu = menuProvider();
         if (mainMenu is null) return;
 
         foreach (var menuItem in mainMenu.GetLogicalDescendants().OfType<MenuItem>())
@@ -314,29 +304,29 @@ public sealed class ThemeBrushCoordinator : IDisposable
         if (TopLevel.GetTopLevel(popup.Child) is not TopLevel topLevel)
             return;
 
-        if (ReferenceEquals(topLevel, _window))
+        if (ReferenceEquals(topLevel, window))
             return;
 
         try
         {
-            if (_viewModel.HasAnyEffect)
+            if (viewModel.HasAnyEffect)
             {
-                topLevel.TransparencyLevelHint = new[]
-                {
+                topLevel.TransparencyLevelHint =
+                [
                     WindowTransparencyLevel.AcrylicBlur,
                     WindowTransparencyLevel.Blur,
                     WindowTransparencyLevel.Transparent,
                     WindowTransparencyLevel.None
-                };
+                ];
 
                 topLevel.Background = Brushes.Transparent;
             }
             else
             {
-                topLevel.TransparencyLevelHint = new[]
-                {
+                topLevel.TransparencyLevelHint =
+                [
                     WindowTransparencyLevel.None
-                };
+                ];
             }
         }
         catch
@@ -385,7 +375,7 @@ public sealed class ThemeBrushCoordinator : IDisposable
 
         try
         {
-            _window.Resources[key] = value;
+            window.Resources[key] = value;
         }
         catch
         {

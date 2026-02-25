@@ -86,7 +86,7 @@ public sealed class ExportOutputMetricsCalculatorContentTheoryTests
 			.ToList();
 
 		var expectedText = RenderExpectedText(entries);
-		return new object[] { caseId, files, expectedText };
+		return [caseId, files, expectedText];
 	}
 
 	private static string RenderExpectedText(IReadOnlyList<(string Path, ContentVariant Variant)> entries)
@@ -137,17 +137,16 @@ public sealed class ExportOutputMetricsCalculatorContentTheoryTests
 	}
 
 	private static List<ContentVariant> GetVariants() =>
-		new()
-		{
-			ContentVariant.FromRaw("empty", string.Empty),
-			ContentVariant.FromRaw("spaces", "   "),
-			ContentVariant.FromRaw("single", "abc"),
-			ContentVariant.FromRaw("lf", "a\nb"),
-			ContentVariant.FromRaw("lf_trailing", "a\nb\n"),
-			ContentVariant.FromRaw("crlf_trailing", "a\r\nb\r\n"),
-			ContentVariant.FromRaw("newline_only", "\n"),
-			ContentVariant.FromRaw("mixed", "x\r\ny\nz")
-		};
+	[
+		ContentVariant.FromRaw("empty", string.Empty),
+		ContentVariant.FromRaw("spaces", "   "),
+		ContentVariant.FromRaw("single", "abc"),
+		ContentVariant.FromRaw("lf", "a\nb"),
+		ContentVariant.FromRaw("lf_trailing", "a\nb\n"),
+		ContentVariant.FromRaw("crlf_trailing", "a\r\nb\r\n"),
+		ContentVariant.FromRaw("newline_only", "\n"),
+		ContentVariant.FromRaw("mixed", "x\r\ny\nz")
+	];
 
 	private sealed record ContentVariant(
 		string Name,

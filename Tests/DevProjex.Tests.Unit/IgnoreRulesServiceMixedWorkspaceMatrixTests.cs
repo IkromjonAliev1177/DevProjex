@@ -20,7 +20,7 @@ public sealed class IgnoreRulesServiceMixedWorkspaceMatrixTests
 		var smartResult = new SmartIgnoreResult(
 			new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "smart_only" },
 			new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Thumbs.db" });
-		var service = new IgnoreRulesService(new SmartIgnoreService(new[] { new StubSmartIgnoreRule(smartResult) }));
+		var service = new IgnoreRulesService(new SmartIgnoreService([new StubSmartIgnoreRule(smartResult)]));
 		var selected = BuildSelectedOptions(bits);
 
 		var rules = service.Build(temp.Path, selected);
@@ -77,8 +77,8 @@ public sealed class IgnoreRulesServiceMixedWorkspaceMatrixTests
 		temp.CreateFile("proj-git/App.csproj", "<Project />");
 		temp.CreateFile("proj-no-git/package.json", "{}");
 
-		var service = new IgnoreRulesService(new SmartIgnoreService(Array.Empty<ISmartIgnoreRule>()));
-		var availability = service.GetIgnoreOptionsAvailability(temp.Path, new[] { "proj-git" });
+		var service = new IgnoreRulesService(new SmartIgnoreService([]));
+		var availability = service.GetIgnoreOptionsAvailability(temp.Path, ["proj-git"]);
 
 		Assert.True(availability.IncludeGitIgnore);
 		Assert.False(availability.IncludeSmartIgnore);
@@ -92,8 +92,8 @@ public sealed class IgnoreRulesServiceMixedWorkspaceMatrixTests
 		temp.CreateFile("proj-git/App.csproj", "<Project />");
 		temp.CreateFile("proj-no-git/package.json", "{}");
 
-		var service = new IgnoreRulesService(new SmartIgnoreService(Array.Empty<ISmartIgnoreRule>()));
-		var availability = service.GetIgnoreOptionsAvailability(temp.Path, new[] { "proj-no-git" });
+		var service = new IgnoreRulesService(new SmartIgnoreService([]));
+		var availability = service.GetIgnoreOptionsAvailability(temp.Path, ["proj-no-git"]);
 
 		Assert.False(availability.IncludeGitIgnore);
 		Assert.True(availability.IncludeSmartIgnore);
@@ -110,12 +110,12 @@ public sealed class IgnoreRulesServiceMixedWorkspaceMatrixTests
 		var smartResult = new SmartIgnoreResult(
 			new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "bin" },
 			new HashSet<string>(StringComparer.OrdinalIgnoreCase));
-		var service = new IgnoreRulesService(new SmartIgnoreService(new[] { new StubSmartIgnoreRule(smartResult) }));
+		var service = new IgnoreRulesService(new SmartIgnoreService([new StubSmartIgnoreRule(smartResult)]));
 
 		var rules = service.Build(
 			temp.Path,
-			new[] { IgnoreOptionId.UseGitIgnore, IgnoreOptionId.SmartIgnore },
-			selectedRootFolders: new[] { "proj-git" });
+			[IgnoreOptionId.UseGitIgnore, IgnoreOptionId.SmartIgnore],
+			selectedRootFolders: ["proj-git"]);
 
 		Assert.True(rules.UseGitIgnore);
 		Assert.True(rules.UseSmartIgnore);

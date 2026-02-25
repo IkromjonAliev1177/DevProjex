@@ -9,8 +9,8 @@ public sealed class IgnoreRulesServiceAvailabilityTests
 		temp.CreateFile(".gitignore", "bin/");
 		temp.CreateFile("App.csproj", "<Project />");
 
-		var service = new IgnoreRulesService(new SmartIgnoreService(Array.Empty<ISmartIgnoreRule>()));
-		var availability = service.GetIgnoreOptionsAvailability(temp.Path, Array.Empty<string>());
+		var service = new IgnoreRulesService(new SmartIgnoreService([]));
+		var availability = service.GetIgnoreOptionsAvailability(temp.Path, []);
 
 		Assert.True(availability.IncludeGitIgnore);
 		Assert.False(availability.IncludeSmartIgnore);
@@ -22,8 +22,8 @@ public sealed class IgnoreRulesServiceAvailabilityTests
 		using var temp = new TemporaryDirectory();
 		temp.CreateFile("package.json", "{}");
 
-		var service = new IgnoreRulesService(new SmartIgnoreService(Array.Empty<ISmartIgnoreRule>()));
-		var availability = service.GetIgnoreOptionsAvailability(temp.Path, Array.Empty<string>());
+		var service = new IgnoreRulesService(new SmartIgnoreService([]));
+		var availability = service.GetIgnoreOptionsAvailability(temp.Path, []);
 
 		Assert.False(availability.IncludeGitIgnore);
 		Assert.True(availability.IncludeSmartIgnore);
@@ -37,8 +37,8 @@ public sealed class IgnoreRulesServiceAvailabilityTests
 		temp.CreateFile("proj-git/App.csproj", "<Project />");
 		temp.CreateFile("proj-no-git/package.json", "{}");
 
-		var service = new IgnoreRulesService(new SmartIgnoreService(Array.Empty<ISmartIgnoreRule>()));
-		var availability = service.GetIgnoreOptionsAvailability(temp.Path, Array.Empty<string>());
+		var service = new IgnoreRulesService(new SmartIgnoreService([]));
+		var availability = service.GetIgnoreOptionsAvailability(temp.Path, []);
 
 		Assert.True(availability.IncludeGitIgnore);
 		Assert.True(availability.IncludeSmartIgnore);
@@ -51,8 +51,8 @@ public sealed class IgnoreRulesServiceAvailabilityTests
 		temp.CreateFile("Visual Studio 2019/America/America.sln", "");
 		temp.CreateFile("Visual Studio 2019/America/America/America.csproj", "<Project />");
 
-		var service = new IgnoreRulesService(new SmartIgnoreService(Array.Empty<ISmartIgnoreRule>()));
-		var availability = service.GetIgnoreOptionsAvailability(temp.Path, new[] { "Visual Studio 2019" });
+		var service = new IgnoreRulesService(new SmartIgnoreService([]));
+		var availability = service.GetIgnoreOptionsAvailability(temp.Path, ["Visual Studio 2019"]);
 
 		Assert.False(availability.IncludeGitIgnore);
 		Assert.True(availability.IncludeSmartIgnore);
@@ -65,15 +65,14 @@ public sealed class IgnoreRulesServiceAvailabilityTests
 		temp.CreateFile("Visual Studio 2019/America/America.sln", "");
 		temp.CreateFile("Visual Studio 2019/America/America/America.csproj", "<Project />");
 
-		var smartService = new SmartIgnoreService(new ISmartIgnoreRule[]
-		{
+		var smartService = new SmartIgnoreService([
 			new DotNetArtifactsIgnoreRule()
-		});
+		]);
 		var service = new IgnoreRulesService(smartService);
 		var rules = service.Build(
 			temp.Path,
-			new[] { IgnoreOptionId.SmartIgnore },
-			selectedRootFolders: new[] { "Visual Studio 2019" });
+			[IgnoreOptionId.SmartIgnore],
+			selectedRootFolders: ["Visual Studio 2019"]);
 
 		Assert.True(rules.UseSmartIgnore);
 		Assert.Contains("bin", rules.SmartIgnoredFolders);
@@ -91,8 +90,8 @@ public sealed class IgnoreRulesServiceAvailabilityTests
 		temp.CreateFile("Documents/Visual Studio 2019/America/America.sln", "");
 		temp.CreateFile("Documents/Visual Studio 2019/America/America/America.csproj", "<Project />");
 
-		var service = new IgnoreRulesService(new SmartIgnoreService(Array.Empty<ISmartIgnoreRule>()));
-		var availability = service.GetIgnoreOptionsAvailability(temp.Path, new[] { "Documents" });
+		var service = new IgnoreRulesService(new SmartIgnoreService([]));
+		var availability = service.GetIgnoreOptionsAvailability(temp.Path, ["Documents"]);
 
 		Assert.False(availability.IncludeGitIgnore);
 		Assert.True(availability.IncludeSmartIgnore);
@@ -105,8 +104,8 @@ public sealed class IgnoreRulesServiceAvailabilityTests
 		temp.CreateFile("Documents/Visual Studio 2019/America/.gitignore", "bin/\nobj/\n");
 		temp.CreateFile("Documents/Visual Studio 2019/America/America/America.csproj", "<Project />");
 
-		var service = new IgnoreRulesService(new SmartIgnoreService(Array.Empty<ISmartIgnoreRule>()));
-		var availability = service.GetIgnoreOptionsAvailability(temp.Path, new[] { "Documents" });
+		var service = new IgnoreRulesService(new SmartIgnoreService([]));
+		var availability = service.GetIgnoreOptionsAvailability(temp.Path, ["Documents"]);
 
 		Assert.True(availability.IncludeGitIgnore);
 		Assert.False(availability.IncludeSmartIgnore);
@@ -123,7 +122,7 @@ public sealed class IgnoreRulesServiceAvailabilityTests
 		temp.CreateFile("Documents/Visual Studio 2019/America/America/America.csproj", "<Project />");
 
 		var (openedRootPath, selectedRootFolders) = ResolveRootMode(temp.Path, rootMode);
-		var service = new IgnoreRulesService(new SmartIgnoreService(Array.Empty<ISmartIgnoreRule>()));
+		var service = new IgnoreRulesService(new SmartIgnoreService([]));
 		var availability = service.GetIgnoreOptionsAvailability(openedRootPath, selectedRootFolders);
 
 		Assert.False(availability.IncludeGitIgnore);
@@ -143,7 +142,7 @@ public sealed class IgnoreRulesServiceAvailabilityTests
 		temp.CreateFile("Documents/Visual Studio 2019/America/America/America.csproj", "<Project />");
 
 		var (openedRootPath, selectedRootFolders) = ResolveRootMode(temp.Path, rootMode);
-		var service = new IgnoreRulesService(new SmartIgnoreService(Array.Empty<ISmartIgnoreRule>()));
+		var service = new IgnoreRulesService(new SmartIgnoreService([]));
 		var availability = service.GetIgnoreOptionsAvailability(openedRootPath, selectedRootFolders);
 
 		Assert.True(availability.IncludeGitIgnore);
@@ -157,15 +156,14 @@ public sealed class IgnoreRulesServiceAvailabilityTests
 		temp.CreateFile("Documents/Visual Studio 2019/America/.gitignore", "bin/\nobj/\n");
 		temp.CreateFile("Documents/Visual Studio 2019/America/America/America.csproj", "<Project />");
 
-		var smartService = new SmartIgnoreService(new ISmartIgnoreRule[]
-		{
+		var smartService = new SmartIgnoreService([
 			new DotNetArtifactsIgnoreRule()
-		});
+		]);
 		var service = new IgnoreRulesService(smartService);
 		var rules = service.Build(
 			temp.Path,
-			new[] { IgnoreOptionId.UseGitIgnore },
-			selectedRootFolders: new[] { "Documents" });
+			[IgnoreOptionId.UseGitIgnore],
+			selectedRootFolders: ["Documents"]);
 
 		Assert.True(rules.UseGitIgnore);
 		Assert.False(rules.UseSmartIgnore);
@@ -180,13 +178,12 @@ public sealed class IgnoreRulesServiceAvailabilityTests
 		using var temp = new TemporaryDirectory();
 		temp.CreateFile("Documents/Visual Studio 2019/America/America.sln", "");
 
-		var smartService = new SmartIgnoreService(new ISmartIgnoreRule[]
-		{
+		var smartService = new SmartIgnoreService([
 			new ThrowingSmartIgnoreRule()
-		});
+		]);
 		var service = new IgnoreRulesService(smartService);
 
-		var availability = service.GetIgnoreOptionsAvailability(temp.Path, new[] { "Documents" });
+		var availability = service.GetIgnoreOptionsAvailability(temp.Path, ["Documents"]);
 		Assert.False(availability.IncludeGitIgnore);
 		Assert.True(availability.IncludeSmartIgnore);
 	}
@@ -199,10 +196,10 @@ public sealed class IgnoreRulesServiceAvailabilityTests
 		{
 			0 => (
 				OpenedRootPath: tempPath,
-				SelectedRootFolders: new[] { "Documents" }),
+				SelectedRootFolders: ["Documents"]),
 			1 => (
 				OpenedRootPath: Path.Combine(tempPath, "Documents"),
-				SelectedRootFolders: new[] { "Visual Studio 2019" }),
+				SelectedRootFolders: ["Visual Studio 2019"]),
 			2 => (
 				OpenedRootPath: Path.Combine(tempPath, "Documents", "Visual Studio 2019"),
 				SelectedRootFolders: new[] { "America" }),

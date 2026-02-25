@@ -38,12 +38,11 @@ public sealed class PolyglotWorkspaceSelectionPermutationIntegrationTests
 		using var temp = new TemporaryDirectory();
 		SeedWorkspace(temp);
 
-		var smartService = new SmartIgnoreService(new ISmartIgnoreRule[]
-		{
+		var smartService = new SmartIgnoreService([
 			new FixedSmartIgnoreRule(
-				folders: new[] { "target", "node_modules", "bin", "obj", "__pycache__", ".venv", "dist", "coverage" },
-				files: new[] { ".DS_Store", "Thumbs.db" })
-		});
+				folders: ["target", "node_modules", "bin", "obj", "__pycache__", ".venv", "dist", "coverage"],
+				files: [".DS_Store", "Thumbs.db"])
+		]);
 		var rulesService = new IgnoreRulesService(smartService);
 		var selectedOptions = BuildOptions(useGitIgnore, useSmartIgnore);
 		var openedRoot = Path.Combine(temp.Path, "workspace");
@@ -230,22 +229,14 @@ public sealed class PolyglotWorkspaceSelectionPermutationIntegrationTests
 		temp.CreateFile("workspace/monolith/dist/main.js", "blocked");
 	}
 
-	private sealed class FixedSmartIgnoreRule : ISmartIgnoreRule
+	private sealed class FixedSmartIgnoreRule(IReadOnlyCollection<string> folders, IReadOnlyCollection<string> files)
+		: ISmartIgnoreRule
 	{
-		private readonly IReadOnlyCollection<string> _folders;
-		private readonly IReadOnlyCollection<string> _files;
-
-		public FixedSmartIgnoreRule(IReadOnlyCollection<string> folders, IReadOnlyCollection<string> files)
-		{
-			_folders = folders;
-			_files = files;
-		}
-
 		public SmartIgnoreResult Evaluate(string rootPath)
 		{
 			return new SmartIgnoreResult(
-				new HashSet<string>(_folders, StringComparer.OrdinalIgnoreCase),
-				new HashSet<string>(_files, StringComparer.OrdinalIgnoreCase));
+				new HashSet<string>(folders, StringComparer.OrdinalIgnoreCase),
+				new HashSet<string>(files, StringComparer.OrdinalIgnoreCase));
 		}
 	}
 }

@@ -26,8 +26,8 @@ public sealed class TreeSearchCoordinator : IDisposable
     private readonly Timer _searchDebounceTimer;
     private readonly object _searchCtsLock = new();
     private CancellationTokenSource? _searchCts;
-    private readonly List<TreeNodeViewModel> _searchMatches = new();
-    private readonly HashSet<TreeNodeViewModel> _activeHighlightNodes = new();
+    private readonly List<TreeNodeViewModel> _searchMatches = [];
+    private readonly HashSet<TreeNodeViewModel> _activeHighlightNodes = [];
     private int _searchMatchIndex = -1;
     private TreeNodeViewModel? _currentSearchMatch;
     private string? _activeHighlightQuery;

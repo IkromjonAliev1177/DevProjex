@@ -17,11 +17,11 @@ namespace DevProjex.Tests.Integration;
 public class GitLocalizationTests
 {
     private readonly string _localizationPath;
-    private readonly string[] _supportedLanguages = { "en", "ru", "uz", "tg", "kk", "de", "fr", "it" };
+    private readonly string[] _supportedLanguages = ["en", "ru", "uz", "tg", "kk", "de", "fr", "it"];
 
     // All required Git localization keys
     private readonly string[] _requiredGitKeys =
-    {
+    [
         // Menu items
         "Menu.Git.Clone",
         "Menu.Git.Branch",
@@ -52,7 +52,7 @@ public class GitLocalizationTests
         // Dialog buttons
         "Dialog.OK",
         "Dialog.Cancel"
-    };
+    ];
 
     public GitLocalizationTests()
     {

@@ -2,16 +2,9 @@ namespace DevProjex.Tests.Integration.Performance;
 
 [Collection("LocalPerformance")]
 [Trait("Category", "LocalPerformance")]
-public sealed class ExportPipelineLocalPerformanceTests
+public sealed class ExportPipelineLocalPerformanceTests(ITestOutputHelper output)
 {
-    private readonly ITestOutputHelper _output;
-    private readonly PerfBaselineStore _baselineStore;
-
-    public ExportPipelineLocalPerformanceTests(ITestOutputHelper output)
-    {
-        _output = output;
-        _baselineStore = new PerfBaselineStore(LocalPerformanceSettings.BaselineFilePath);
-    }
+    private readonly PerfBaselineStore _baselineStore = new(LocalPerformanceSettings.BaselineFilePath);
 
     public static IEnumerable<object[]> TreeExportCases()
     {
@@ -133,10 +126,10 @@ public sealed class ExportPipelineLocalPerformanceTests
     private void ReportAndAssert(string scenarioId, PerfMeasurement measurement, double maxMs, long maxAllocatedBytes)
     {
         var verdict = _baselineStore.Evaluate(scenarioId, measurement);
-        _output.WriteLine(verdict.Message);
+        output.WriteLine(verdict.Message);
 
         if (verdict.IsAcceleration)
-            _output.WriteLine($"[acceleration-detected] {scenarioId}");
+            output.WriteLine($"[acceleration-detected] {scenarioId}");
 
         if (LocalPerformanceSettings.ShouldEnforceBaselineRegression)
         {
@@ -144,7 +137,7 @@ public sealed class ExportPipelineLocalPerformanceTests
         }
         else if (verdict.IsRegression)
         {
-            _output.WriteLine($"[regression-detected-nonblocking] {scenarioId}");
+            output.WriteLine($"[regression-detected-nonblocking] {scenarioId}");
         }
 
         Assert.True(measurement.MedianMilliseconds < maxMs,

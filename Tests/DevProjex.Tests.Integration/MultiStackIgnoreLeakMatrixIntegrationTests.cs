@@ -46,13 +46,12 @@ public sealed class MultiStackIgnoreLeakMatrixIntegrationTests
 		var (openedRootPath, selectedRootFolders) = ResolveOpenContext(temp.Path, openMode, rootSelectionMode);
 		var selectedOptions = BuildOptions(useGitIgnore, useSmartIgnore);
 
-		var smartService = new SmartIgnoreService(new ISmartIgnoreRule[]
-		{
+		var smartService = new SmartIgnoreService([
 			new DotNetArtifactsIgnoreRule(),
 			new FrontendArtifactsIgnoreRule(),
 			new PythonArtifactsIgnoreRule(),
 			new RustArtifactsIgnoreRule()
-		});
+		]);
 		var rulesService = new IgnoreRulesService(smartService);
 		var rules = rulesService.Build(openedRootPath, selectedOptions, selectedRootFolders);
 

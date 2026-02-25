@@ -21,10 +21,10 @@ public sealed record IgnoreRules(
 	public GitIgnoreMatcher GitIgnoreMatcher { get; init; } = GitIgnoreMatcher.Empty;
 
 	public IReadOnlyList<ScopedGitIgnoreMatcher> ScopedGitIgnoreMatchers { get; init; } =
-		Array.Empty<ScopedGitIgnoreMatcher>();
+		[];
 
 	public IReadOnlyList<string> SmartIgnoreScopeRoots { get; init; } =
-		Array.Empty<string>();
+		[];
 
 	public GitIgnoreMatcher ResolveGitIgnoreMatcher(string fullPath)
 	{

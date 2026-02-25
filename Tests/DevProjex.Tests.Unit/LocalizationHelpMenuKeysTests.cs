@@ -3,13 +3,13 @@ namespace DevProjex.Tests.Unit;
 public sealed class LocalizationHelpMenuKeysTests
 {
 	private static readonly string[] RequiredHelpMenuKeys =
-	{
+	[
 		"Menu.Help",
 		"Menu.Help.Help",
 		"Menu.Help.About",
 		"Menu.Help.ResetSettings",
 		"Menu.Help.ResetData"
-	};
+	];
 
 	[Fact]
 	public void LocalizationFiles_ContainAllHelpMenuKeys()

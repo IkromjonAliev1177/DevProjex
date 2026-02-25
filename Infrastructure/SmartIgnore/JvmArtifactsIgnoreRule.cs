@@ -7,21 +7,21 @@ namespace DevProjex.Infrastructure.SmartIgnore;
 public sealed class JvmArtifactsIgnoreRule : ISmartIgnoreRule
 {
 	private static readonly string[] MarkerFiles =
-	{
+	[
 		"pom.xml",
 		"build.gradle",
 		"build.gradle.kts",
 		"settings.gradle",
 		"settings.gradle.kts"
-	};
+	];
 
 	private static readonly string[] FolderNames =
-	{
+	[
 		"target",
 		".gradle",
 		"build",
 		"out"
-	};
+	];
 
 	public SmartIgnoreResult Evaluate(string rootPath)
 	{

@@ -1691,14 +1691,14 @@ public partial class MainWindow : Window
 
         var jsonFileType = new FilePickerFileType("JSON")
         {
-            Patterns = new[] { "*.json" },
-            MimeTypes = new[] { "application/json" }
+            Patterns = ["*.json"],
+            MimeTypes = ["application/json"]
         };
 
         var textFileType = new FilePickerFileType("Text")
         {
-            Patterns = new[] { "*.txt" },
-            MimeTypes = new[] { "text/plain" }
+            Patterns = ["*.txt"],
+            MimeTypes = ["text/plain"]
         };
 
         var options = new FilePickerSaveOptions
@@ -1710,7 +1710,7 @@ public partial class MainWindow : Window
             // Other export modes stay text-only for predictable output format.
             DefaultExtension = useJsonDefaultExtension ? "json" : "txt",
             FileTypeChoices = allowBothExtensions
-                ? new[] { jsonFileType, textFileType }
+                ? [jsonFileType, textFileType]
                 : useJsonDefaultExtension
                     ? new[] { jsonFileType }
                     : new[] { textFileType }
@@ -1882,15 +1882,15 @@ public partial class MainWindow : Window
         if (_previewSegmentThumbTransform is null || _previewSegmentThumbTransform.Transitions is not null)
             return;
 
-        _previewSegmentThumbTransform.Transitions = new Transitions
-        {
+        _previewSegmentThumbTransform.Transitions =
+        [
             new DoubleTransition
             {
                 Property = TranslateTransform.XProperty,
                 Duration = PreviewSegmentThumbAnimationDuration,
                 Easing = new CubicEaseInOut()
             }
-        };
+        ];
     }
 
     private void UpdatePreviewSegmentThumbPosition(bool animate)
@@ -4145,9 +4145,9 @@ public partial class MainWindow : Window
     private bool TryGetLocalProjectProfile(out ProjectSelectionProfile profile)
     {
         profile = new ProjectSelectionProfile(
-            SelectedRootFolders: Array.Empty<string>(),
-            SelectedExtensions: Array.Empty<string>(),
-            SelectedIgnoreOptions: Array.Empty<IgnoreOptionId>());
+            SelectedRootFolders: [],
+            SelectedExtensions: [],
+            SelectedIgnoreOptions: []);
 
         if (!IsLocalProjectProfilePersistenceApplicable() || string.IsNullOrWhiteSpace(_currentPath))
             return false;

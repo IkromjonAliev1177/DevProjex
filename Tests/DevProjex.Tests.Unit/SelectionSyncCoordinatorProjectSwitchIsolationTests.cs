@@ -35,24 +35,24 @@ public sealed class SelectionSyncCoordinatorProjectSwitchIsolationTests
 			});
 
 		var profileA = new ProjectSelectionProfile(
-			SelectedRootFolders: Array.Empty<string>(),
-			SelectedExtensions: Array.Empty<string>(),
+			SelectedRootFolders: [],
+			SelectedExtensions: [],
 			SelectedIgnoreOptions: projectASavedIgnore);
 
 		coordinator.ApplyProjectProfileSelections(projectA, profileA);
 		coordinator.ApplyExtensionScan(projectAExtensions);
-		coordinator.PopulateIgnoreOptionsForRootSelection(Array.Empty<string>(), projectA);
+		coordinator.PopulateIgnoreOptionsForRootSelection([], projectA);
 		var initialProjectAState = SnapshotIgnoreState(viewModel.IgnoreOptions);
 
 		currentPath = projectB;
 		coordinator.ResetProjectProfileSelections(projectB);
-		coordinator.ApplyExtensionScan(new[] { ".cs", ".json" });
-		coordinator.PopulateIgnoreOptionsForRootSelection(Array.Empty<string>(), projectB);
+		coordinator.ApplyExtensionScan([".cs", ".json"]);
+		coordinator.PopulateIgnoreOptionsForRootSelection([], projectB);
 
 		currentPath = projectA;
 		coordinator.ApplyProjectProfileSelections(projectA, profileA);
 		coordinator.ApplyExtensionScan(projectAExtensions);
-		coordinator.PopulateIgnoreOptionsForRootSelection(Array.Empty<string>(), projectA);
+		coordinator.PopulateIgnoreOptionsForRootSelection([], projectA);
 		var restoredProjectAState = SnapshotIgnoreState(viewModel.IgnoreOptions);
 
 		AssertIgnoreState(restoredProjectAState, initialProjectAState);
@@ -78,9 +78,9 @@ public sealed class SelectionSyncCoordinatorProjectSwitchIsolationTests
 			availabilityProvider: (_, _) => new IgnoreOptionsAvailability(false, false));
 
 		var profileA = new ProjectSelectionProfile(
-			SelectedRootFolders: Array.Empty<string>(),
+			SelectedRootFolders: [],
 			SelectedExtensions: projectASelectedExtensions,
-			SelectedIgnoreOptions: Array.Empty<IgnoreOptionId>());
+			SelectedIgnoreOptions: []);
 
 		coordinator.ApplyProjectProfileSelections(projectA, profileA);
 		coordinator.ApplyExtensionScan(firstScan);
@@ -135,14 +135,14 @@ public sealed class SelectionSyncCoordinatorProjectSwitchIsolationTests
 			{
 				foreach (var scan in extensionScanVariants)
 				{
-					yield return new object[]
-					{
+					yield return
+					[
 						caseId++,
 						saved,
 						availability.IncludeGit,
 						availability.IncludeSmart,
 						scan
-					};
+					];
 				}
 			}
 		}
@@ -173,13 +173,13 @@ public sealed class SelectionSyncCoordinatorProjectSwitchIsolationTests
 			{
 				foreach (var second in scans)
 				{
-					yield return new object[]
-					{
+					yield return
+					[
 						caseId++,
 						saved,
 						first,
 						second
-					};
+					];
 				}
 			}
 		}

@@ -15,7 +15,7 @@ public sealed class SelectionSyncCoordinatorExtensionlessMatrixTests
 
 		coordinator.ApplyExtensionScan(scanEntries);
 		viewModel.AllIgnoreChecked = false;
-		coordinator.PopulateIgnoreOptionsForRootSelection(Array.Empty<string>(), @"C:\Temp\Project");
+		coordinator.PopulateIgnoreOptionsForRootSelection([], @"C:\Temp\Project");
 
 		var visible = viewModel.Extensions.Select(option => option.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
 		Assert.Equal(expectedVisibleEntries.Length, visible.Count);
@@ -40,12 +40,12 @@ public sealed class SelectionSyncCoordinatorExtensionlessMatrixTests
 		var viewModel = CreateViewModel();
 		var coordinator = CreateCoordinator(viewModel, @"C:\Temp\Project");
 
-		coordinator.ApplyExtensionScan(new[] { "Dockerfile", ".cs" });
-		coordinator.PopulateIgnoreOptionsForRootSelection(Array.Empty<string>(), @"C:\Temp\Project");
+		coordinator.ApplyExtensionScan(["Dockerfile", ".cs"]);
+		coordinator.PopulateIgnoreOptionsForRootSelection([], @"C:\Temp\Project");
 		Assert.Contains(viewModel.IgnoreOptions, option => option.Id == IgnoreOptionId.ExtensionlessFiles);
 
-		coordinator.ApplyExtensionScan(new[] { ".cs", ".json", ".md" });
-		coordinator.PopulateIgnoreOptionsForRootSelection(Array.Empty<string>(), @"C:\Temp\Project");
+		coordinator.ApplyExtensionScan([".cs", ".json", ".md"]);
+		coordinator.PopulateIgnoreOptionsForRootSelection([], @"C:\Temp\Project");
 
 		Assert.DoesNotContain(viewModel.IgnoreOptions, option => option.Id == IgnoreOptionId.ExtensionlessFiles);
 	}
@@ -56,12 +56,12 @@ public sealed class SelectionSyncCoordinatorExtensionlessMatrixTests
 		var viewModel = CreateViewModel();
 		var coordinator = CreateCoordinator(viewModel, @"C:\Temp\Project");
 
-		coordinator.ApplyExtensionScan(new[] { ".cs", ".json" });
-		coordinator.PopulateIgnoreOptionsForRootSelection(Array.Empty<string>(), @"C:\Temp\Project");
+		coordinator.ApplyExtensionScan([".cs", ".json"]);
+		coordinator.PopulateIgnoreOptionsForRootSelection([], @"C:\Temp\Project");
 		Assert.DoesNotContain(viewModel.IgnoreOptions, option => option.Id == IgnoreOptionId.ExtensionlessFiles);
 
-		coordinator.ApplyExtensionScan(new[] { "Dockerfile", "Makefile", ".cs" });
-		coordinator.PopulateIgnoreOptionsForRootSelection(Array.Empty<string>(), @"C:\Temp\Project");
+		coordinator.ApplyExtensionScan(["Dockerfile", "Makefile", ".cs"]);
+		coordinator.PopulateIgnoreOptionsForRootSelection([], @"C:\Temp\Project");
 
 		var extensionlessOption = viewModel.IgnoreOptions.Single(option => option.Id == IgnoreOptionId.ExtensionlessFiles);
 		Assert.Equal("Files without extension (2)", extensionlessOption.Label);
@@ -74,17 +74,17 @@ public sealed class SelectionSyncCoordinatorExtensionlessMatrixTests
 		var coordinator = CreateCoordinator(viewModel, @"C:\Temp\Project");
 
 		var profile = new ProjectSelectionProfile(
-			SelectedRootFolders: Array.Empty<string>(),
-			SelectedExtensions: Array.Empty<string>(),
-			SelectedIgnoreOptions: new[] { IgnoreOptionId.ExtensionlessFiles });
+			SelectedRootFolders: [],
+			SelectedExtensions: [],
+			SelectedIgnoreOptions: [IgnoreOptionId.ExtensionlessFiles]);
 		coordinator.ApplyProjectProfileSelections(@"C:\Temp\Project", profile);
 
-		coordinator.ApplyExtensionScan(new[] { ".cs", ".json" });
-		coordinator.PopulateIgnoreOptionsForRootSelection(Array.Empty<string>(), @"C:\Temp\Project");
+		coordinator.ApplyExtensionScan([".cs", ".json"]);
+		coordinator.PopulateIgnoreOptionsForRootSelection([], @"C:\Temp\Project");
 		Assert.DoesNotContain(viewModel.IgnoreOptions, option => option.Id == IgnoreOptionId.ExtensionlessFiles);
 
-		coordinator.ApplyExtensionScan(new[] { "Dockerfile", "Makefile", "LICENSE", ".cs" });
-		coordinator.PopulateIgnoreOptionsForRootSelection(Array.Empty<string>(), @"C:\Temp\Project");
+		coordinator.ApplyExtensionScan(["Dockerfile", "Makefile", "LICENSE", ".cs"]);
+		coordinator.PopulateIgnoreOptionsForRootSelection([], @"C:\Temp\Project");
 
 		var extensionlessOption = viewModel.IgnoreOptions.Single(option => option.Id == IgnoreOptionId.ExtensionlessFiles);
 		Assert.True(extensionlessOption.IsChecked);

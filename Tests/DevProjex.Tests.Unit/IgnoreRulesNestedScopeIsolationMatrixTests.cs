@@ -89,11 +89,11 @@ public sealed class IgnoreRulesNestedScopeIsolationMatrixTests
 
 	private static IgnoreRules BuildGitRules(string rootPath)
 	{
-		var service = new IgnoreRulesService(new SmartIgnoreService(Array.Empty<ISmartIgnoreRule>()));
+		var service = new IgnoreRulesService(new SmartIgnoreService([]));
 		return service.Build(
 			rootPath,
-			new[] { IgnoreOptionId.UseGitIgnore },
-			selectedRootFolders: Array.Empty<string>());
+			[IgnoreOptionId.UseGitIgnore],
+			selectedRootFolders: []);
 	}
 
 	private static void SeedComplexWorkspace(TemporaryDirectory temp)

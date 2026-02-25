@@ -3,13 +3,13 @@ namespace DevProjex.Tests.Unit;
 public sealed class IgnoreRulesPolyglotScopeSelectionStressTests
 {
 	private static readonly string[] ScopeNames =
-	{
+	[
 		"rust-core",
 		"web-app",
 		"service-dotnet",
 		"python-worker",
 		"go-tool"
-	};
+	];
 
 	private static readonly HashSet<string> NonGitScopes = new(StringComparer.OrdinalIgnoreCase)
 	{
@@ -65,15 +65,15 @@ public sealed class IgnoreRulesPolyglotScopeSelectionStressTests
 			{
 				foreach (var testCase in cases)
 				{
-					yield return new object[]
-					{
+					yield return
+					[
 						openRootAsWorkspace,
 						useGitIgnore,
 						testCase.Name,
 						testCase.RelativePath,
 						testCase.IsDirectory,
 						useGitIgnore && testCase.ExpectedIgnoredWhenEnabled
-					};
+					];
 				}
 			}
 		}
@@ -86,13 +86,12 @@ public sealed class IgnoreRulesPolyglotScopeSelectionStressTests
 		using var temp = new TemporaryDirectory();
 		SeedWorkspace(temp);
 
-		var service = new IgnoreRulesService(new SmartIgnoreService(new ISmartIgnoreRule[]
-		{
+		var service = new IgnoreRulesService(new SmartIgnoreService([
 			new DotNetArtifactsIgnoreRule(),
 			new FrontendArtifactsIgnoreRule(),
 			new PythonArtifactsIgnoreRule(),
 			new RustArtifactsIgnoreRule()
-		}));
+		]));
 
 		var availability = service.GetIgnoreOptionsAvailability(Path.Combine(temp.Path, "workspace"), selectedScopes);
 
@@ -129,7 +128,7 @@ public sealed class IgnoreRulesPolyglotScopeSelectionStressTests
 			? new[] { IgnoreOptionId.UseGitIgnore }
 			: Array.Empty<IgnoreOptionId>();
 
-		var service = new IgnoreRulesService(new SmartIgnoreService(Array.Empty<ISmartIgnoreRule>()));
+		var service = new IgnoreRulesService(new SmartIgnoreService([]));
 		var rules = service.Build(openedRootPath, selectedOptions, selectedRootFolders);
 		var normalizedRelativePath = relativePath.Replace('/', Path.DirectorySeparatorChar);
 		var fullPath = Path.Combine(temp.Path, normalizedRelativePath);
@@ -144,11 +143,11 @@ public sealed class IgnoreRulesPolyglotScopeSelectionStressTests
 		using var temp = new TemporaryDirectory();
 		SeedWorkspace(temp);
 
-		var service = new IgnoreRulesService(new SmartIgnoreService(Array.Empty<ISmartIgnoreRule>()));
+		var service = new IgnoreRulesService(new SmartIgnoreService([]));
 		var rules = service.Build(
 			Path.Combine(temp.Path, "workspace"),
-			new[] { IgnoreOptionId.UseGitIgnore },
-			new[] { "rust-core", "web-app", "service-dotnet", "python-worker", "go-tool", "monolith" });
+			[IgnoreOptionId.UseGitIgnore],
+			["rust-core", "web-app", "service-dotnet", "python-worker", "go-tool", "monolith"]);
 
 		Assert.True(rules.UseGitIgnore);
 		Assert.True(rules.ScopedGitIgnoreMatchers.Count >= 2);

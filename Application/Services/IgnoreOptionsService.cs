@@ -1,14 +1,7 @@
 namespace DevProjex.Application.Services;
 
-public sealed class IgnoreOptionsService
+public sealed class IgnoreOptionsService(LocalizationService localization)
 {
-	private readonly LocalizationService _localization;
-
-	public IgnoreOptionsService(LocalizationService localization)
-	{
-		_localization = localization;
-	}
-
 	public IReadOnlyList<IgnoreOptionDescriptor> GetOptions(IgnoreOptionsAvailability availability)
 	{
 		var options = new List<IgnoreOptionDescriptor>();
@@ -16,7 +9,7 @@ public sealed class IgnoreOptionsService
 		{
 			options.Add(new IgnoreOptionDescriptor(
 				IgnoreOptionId.SmartIgnore,
-				_localization["Settings.Ignore.SmartIgnore"],
+				localization["Settings.Ignore.SmartIgnore"],
 				true));
 		}
 
@@ -24,23 +17,22 @@ public sealed class IgnoreOptionsService
 		{
 			options.Add(new IgnoreOptionDescriptor(
 				IgnoreOptionId.UseGitIgnore,
-				_localization["Settings.Ignore.UseGitIgnore"],
+				localization["Settings.Ignore.UseGitIgnore"],
 				true));
 		}
 
-		options.AddRange(new[]
-		{
-			new IgnoreOptionDescriptor(IgnoreOptionId.HiddenFolders, _localization["Settings.Ignore.HiddenFolders"], true),
-			new IgnoreOptionDescriptor(IgnoreOptionId.HiddenFiles, _localization["Settings.Ignore.HiddenFiles"], true),
-			new IgnoreOptionDescriptor(IgnoreOptionId.DotFolders, _localization["Settings.Ignore.DotFolders"], true),
-			new IgnoreOptionDescriptor(IgnoreOptionId.DotFiles, _localization["Settings.Ignore.DotFiles"], true)
-		});
+		options.AddRange([
+			new IgnoreOptionDescriptor(IgnoreOptionId.HiddenFolders, localization["Settings.Ignore.HiddenFolders"], true),
+			new IgnoreOptionDescriptor(IgnoreOptionId.HiddenFiles, localization["Settings.Ignore.HiddenFiles"], true),
+			new IgnoreOptionDescriptor(IgnoreOptionId.DotFolders, localization["Settings.Ignore.DotFolders"], true),
+			new IgnoreOptionDescriptor(IgnoreOptionId.DotFiles, localization["Settings.Ignore.DotFiles"], true)
+		]);
 
 		if (availability.IncludeExtensionlessFiles)
 		{
 			var extensionlessLabel = availability.ExtensionlessFilesCount > 0
-				? $"{_localization["Settings.Ignore.ExtensionlessFiles"]} ({availability.ExtensionlessFilesCount})"
-				: _localization["Settings.Ignore.ExtensionlessFiles"];
+				? $"{localization["Settings.Ignore.ExtensionlessFiles"]} ({availability.ExtensionlessFilesCount})"
+				: localization["Settings.Ignore.ExtensionlessFiles"];
 
 			options.Add(new IgnoreOptionDescriptor(
 				IgnoreOptionId.ExtensionlessFiles,

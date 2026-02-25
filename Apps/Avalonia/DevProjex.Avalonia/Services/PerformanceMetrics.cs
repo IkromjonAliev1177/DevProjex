@@ -22,16 +22,9 @@ public static class PerformanceMetrics
         return IsEnabled ? new OperationTimer(operationName) : NoOpTimer.Instance;
     }
 
-    private sealed class OperationTimer : IDisposable
+    private sealed class OperationTimer(string operationName) : IDisposable
     {
-        private readonly string _operationName;
-        private readonly Stopwatch _stopwatch;
-
-        public OperationTimer(string operationName)
-        {
-            _operationName = operationName;
-            _stopwatch = Stopwatch.StartNew();
-        }
+        private readonly Stopwatch _stopwatch = Stopwatch.StartNew();
 
         public void Dispose()
         {
@@ -41,7 +34,7 @@ public static class PerformanceMetrics
             // Only log operations that take significant time (>10ms)
             if (elapsed > 10)
             {
-                Debug.WriteLine($"[PERF] {_operationName}: {elapsed}ms");
+                Debug.WriteLine($"[PERF] {operationName}: {elapsed}ms");
             }
         }
     }

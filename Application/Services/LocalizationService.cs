@@ -1,23 +1,16 @@
 namespace DevProjex.Application.Services;
 
-public sealed class LocalizationService
+public sealed class LocalizationService(ILocalizationCatalog catalog, AppLanguage initialLanguage)
 {
-	private readonly ILocalizationCatalog _catalog;
-	public AppLanguage CurrentLanguage { get; private set; }
+	public AppLanguage CurrentLanguage { get; private set; } = initialLanguage;
 
 	public event EventHandler? LanguageChanged;
-
-	public LocalizationService(ILocalizationCatalog catalog, AppLanguage initialLanguage)
-	{
-		_catalog = catalog;
-		CurrentLanguage = initialLanguage;
-	}
 
 	public string this[string key]
 	{
 		get
 		{
-			var dict = _catalog.Get(CurrentLanguage);
+			var dict = catalog.Get(CurrentLanguage);
 			return dict.TryGetValue(key, out var value) ? value : $"[[{key}]]";
 		}
 	}

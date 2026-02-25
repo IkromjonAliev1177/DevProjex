@@ -3,9 +3,8 @@ using System.Runtime.CompilerServices;
 
 namespace DevProjex.Application.Services;
 
-public sealed class IgnoreRulesService
+public sealed class IgnoreRulesService(SmartIgnoreService smartIgnore)
 {
-	private readonly SmartIgnoreService _smartIgnore;
 	private const int CacheLimit = 64;
 	private static readonly object CacheSync = new();
 	private static readonly Dictionary<string, GitIgnoreCacheEntry> GitIgnoreCache =
@@ -21,7 +20,7 @@ public sealed class IgnoreRulesService
 		: StringComparer.OrdinalIgnoreCase;
 
 	private static readonly string[] ProjectMarkerFiles =
-	{
+	[
 		"package.json",
 		"pyproject.toml",
 		"pom.xml",
@@ -32,7 +31,7 @@ public sealed class IgnoreRulesService
 		"composer.json",
 		"pubspec.yaml",
 		"Gemfile"
-	};
+	];
 
 	private static readonly HashSet<string> ProjectMarkerExtensions = new(StringComparer.OrdinalIgnoreCase)
 	{
@@ -46,11 +45,6 @@ public sealed class IgnoreRulesService
 	// Prevent expensive directory fan-out when probing nested project scopes.
 	private const int NestedProjectProbeMaxDepth = 2;
 	private const int NestedProjectProbeMaxDirectoriesPerScope = 256;
-
-	public IgnoreRulesService(SmartIgnoreService smartIgnore)
-	{
-		_smartIgnore = smartIgnore;
-	}
 
 	public IgnoreRules Build(string rootPath, IReadOnlyCollection<IgnoreOptionId> selectedOptions) =>
 		Build(rootPath, selectedOptions, selectedRootFolders: null);
@@ -103,7 +97,7 @@ public sealed class IgnoreRulesService
 		{
 			smartFolders = EmptyStringSet;
 			smartFiles = EmptyStringSet;
-			smartScopeRoots = Array.Empty<string>();
+			smartScopeRoots = [];
 		}
 
 		return new IgnoreRules(
@@ -173,7 +167,7 @@ public sealed class IgnoreRulesService
 
 	private bool HasSmartCandidatesInRootEntries(string rootPath)
 	{
-		var smart = _smartIgnore.Build(rootPath);
+		var smart = smartIgnore.Build(rootPath);
 		if (smart.FolderNames.Count == 0)
 			return false;
 
@@ -205,7 +199,7 @@ public sealed class IgnoreRulesService
 			new ParallelOptions { MaxDegreeOfParallelism = maxDegree },
 			scope =>
 			{
-				var smart = _smartIgnore.Build(scope.RootPath);
+				var smart = smartIgnore.Build(scope.RootPath);
 				foreach (var folder in smart.FolderNames)
 					folderNames.TryAdd(folder, 0);
 				foreach (var file in smart.FileNames)
@@ -329,14 +323,13 @@ public sealed class IgnoreRulesService
 
 		if (candidateDirectories.Count == 0)
 		{
-			return ProjectScanContext.FromScopes(new[]
-			{
+			return ProjectScanContext.FromScopes([
 				new ProjectScope(
 					rootPath,
 					rootHasGitIgnore,
 					HasProjectMarker: rootHasProjectMarker,
 					LooksLikeProject: rootHasGitIgnore || rootHasProjectMarker)
-			});
+			]);
 		}
 
 		var scopedCandidates = new ConcurrentBag<ProjectScope>();
@@ -387,14 +380,13 @@ public sealed class IgnoreRulesService
 		}
 		if (!workspaceDetected)
 		{
-			return ProjectScanContext.FromScopes(new[]
-			{
+			return ProjectScanContext.FromScopes([
 				new ProjectScope(
 					rootPath,
 					rootHasGitIgnore,
 					HasProjectMarker: rootHasProjectMarker,
 					LooksLikeProject: rootHasGitIgnore || rootHasProjectMarker)
-			});
+			]);
 		}
 
 		var scopes = new List<ProjectScope>(expandedCandidates.Length + (rootHasGitIgnore ? 1 : 0));
@@ -414,7 +406,7 @@ public sealed class IgnoreRulesService
 		int maxDegree)
 	{
 		if (candidates.Count == 0)
-			return Array.Empty<ProjectScope>();
+			return [];
 
 		var allScopes = new ConcurrentBag<ProjectScope>();
 		var parallelDegree = Math.Min(4, Math.Max(1, maxDegree));
@@ -641,7 +633,7 @@ public sealed class IgnoreRulesService
 		bool HasAnyWithoutGitIgnore)
 	{
 		public static ProjectScanContext Empty { get; } = new(
-			Array.Empty<ProjectScope>(),
+			[],
 			IsSingleScopeWithGitIgnore: false,
 			HasAnyGitIgnore: false,
 			HasAnyWithoutGitIgnore: false);

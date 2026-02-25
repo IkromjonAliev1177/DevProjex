@@ -3,7 +3,7 @@ namespace DevProjex.Tests.Unit;
 public sealed class LocalizationToastKeysTests
 {
 	private static readonly string[] RequiredToastKeys =
-	{
+	[
 		"Toast.Copy.Tree",
 		"Toast.Copy.Content",
 		"Toast.Copy.TreeAndContent",
@@ -19,7 +19,7 @@ public sealed class LocalizationToastKeysTests
 		"Toast.Refresh.Success",
 		"Toast.Settings.Reset",
 		"Toast.Data.Reset"
-	};
+	];
 
 	[Fact]
 	public void LocalizationFiles_ContainAllToastKeys()

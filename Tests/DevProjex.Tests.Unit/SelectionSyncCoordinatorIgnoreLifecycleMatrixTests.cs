@@ -20,9 +20,9 @@ public sealed class SelectionSyncCoordinatorIgnoreLifecycleMatrixTests
 			availabilityProvider: () => availability);
 
 		var profile = new ProjectSelectionProfile(
-			SelectedRootFolders: Array.Empty<string>(),
-			SelectedExtensions: Array.Empty<string>(),
-			SelectedIgnoreOptions: new[] { IgnoreOptionId.ExtensionlessFiles });
+			SelectedRootFolders: [],
+			SelectedExtensions: [],
+			SelectedIgnoreOptions: [IgnoreOptionId.ExtensionlessFiles]);
 
 		coordinator.ApplyProjectProfileSelections(@"C:\ProjectA", profile);
 
@@ -66,14 +66,14 @@ public sealed class SelectionSyncCoordinatorIgnoreLifecycleMatrixTests
 			availabilityProvider: () => availability);
 
 		var profile = new ProjectSelectionProfile(
-			SelectedRootFolders: Array.Empty<string>(),
-			SelectedExtensions: Array.Empty<string>(),
+			SelectedRootFolders: [],
+			SelectedExtensions: [],
 			SelectedIgnoreOptions: savedSelections);
 
 		coordinator.ApplyProjectProfileSelections(@"C:\ProjectA", profile);
 
 		// First pass: git/smart unavailable, extensionless unavailable as scan is not applied yet.
-		coordinator.PopulateIgnoreOptionsForRootSelection(Array.Empty<string>(), @"C:\ProjectA");
+		coordinator.PopulateIgnoreOptionsForRootSelection([], @"C:\ProjectA");
 
 		availability = new IgnoreOptionsAvailability(
 			IncludeGitIgnore: secondIncludeGitIgnore,
@@ -82,7 +82,7 @@ public sealed class SelectionSyncCoordinatorIgnoreLifecycleMatrixTests
 		coordinator.ApplyExtensionScan(includeExtensionlessOnSecondPass
 			? new[] { ".cs", "Dockerfile" }
 			: new[] { ".cs", ".json" });
-		coordinator.PopulateIgnoreOptionsForRootSelection(Array.Empty<string>(), @"C:\ProjectA");
+		coordinator.PopulateIgnoreOptionsForRootSelection([], @"C:\ProjectA");
 
 		foreach (var id in savedSelections.Distinct())
 		{
@@ -135,14 +135,14 @@ public sealed class SelectionSyncCoordinatorIgnoreLifecycleMatrixTests
 				{
 					foreach (var useEmptyRoots in new[] { false, true })
 					{
-						yield return new object[]
-						{
+						yield return
+						[
 							caseId++,
 							includeGitIgnore,
 							includeSmartIgnore,
 							scanEntries,
 							useEmptyRoots
-						};
+						];
 					}
 				}
 			}
@@ -175,14 +175,14 @@ public sealed class SelectionSyncCoordinatorIgnoreLifecycleMatrixTests
 			{
 				foreach (var includeExtensionlessOnSecondPass in new[] { false, true })
 				{
-					yield return new object[]
-					{
+					yield return
+					[
 						caseId++,
 						saved,
 						availability.IncludeGit,
 						availability.IncludeSmart,
 						includeExtensionlessOnSecondPass
-					};
+					];
 				}
 			}
 		}
