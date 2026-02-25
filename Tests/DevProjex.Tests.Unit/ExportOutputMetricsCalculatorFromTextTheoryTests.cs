@@ -99,9 +99,6 @@ public sealed class ExportOutputMetricsCalculatorFromTextTheoryTests
 			{
 				if (i + 1 < text.Length && text[i + 1] == '\n')
 					i++;
-
-				normalizedChars++;
-				continue;
 			}
 
 			normalizedChars++;
