@@ -52,8 +52,8 @@ public sealed class ExportOutputMetricsCalculatorFromTextTheoryTests
 	public void FromText_ReturnsExpectedMetrics(int caseId, string text)
 	{
 		var actual = ExportOutputMetricsCalculator.FromText(text);
-		var expectedChars = text.Length;
-		var expectedLines = GetExpectedLineCount(text);
+		var expectedChars = GetExpectedNormalizedCharCount(text);
+		var expectedLines = GetExpectedNormalizedLineCount(text);
 		var expectedTokens = (int)Math.Ceiling(expectedChars / 4.0);
 
 		Assert.Equal(expectedLines, actual.Lines);
@@ -62,19 +62,77 @@ public sealed class ExportOutputMetricsCalculatorFromTextTheoryTests
 		Assert.True(caseId >= 0);
 	}
 
-	private static int GetExpectedLineCount(string text)
+	[Fact]
+	public void FromText_NormalizesLineBreakStyles_ToSameMetrics()
+	{
+		const string lfText = "root:\n\n├── child\n└── file";
+		const string crlfText = "root:\r\n\r\n├── child\r\n└── file";
+
+		var lf = ExportOutputMetricsCalculator.FromText(lfText);
+		var crlf = ExportOutputMetricsCalculator.FromText(crlfText);
+
+		Assert.Equal(lf.Lines, crlf.Lines);
+		Assert.Equal(lf.Chars, crlf.Chars);
+		Assert.Equal(lf.Tokens, crlf.Tokens);
+	}
+
+	[Fact]
+	public void FromText_TrailingLineBreak_AddsVisualEmptyLine()
+	{
+		var withoutTrailing = ExportOutputMetricsCalculator.FromText("a");
+		var withTrailing = ExportOutputMetricsCalculator.FromText("a\n");
+
+		Assert.Equal(1, withoutTrailing.Lines);
+		Assert.Equal(2, withTrailing.Lines);
+	}
+
+	private static int GetExpectedNormalizedCharCount(string text)
+	{
+		if (string.IsNullOrEmpty(text))
+			return 0;
+
+		var normalizedChars = 0;
+		for (var i = 0; i < text.Length; i++)
+		{
+			var c = text[i];
+			if (c == '\r')
+			{
+				if (i + 1 < text.Length && text[i + 1] == '\n')
+					i++;
+
+				normalizedChars++;
+				continue;
+			}
+
+			normalizedChars++;
+		}
+
+		return normalizedChars;
+	}
+
+	private static int GetExpectedNormalizedLineCount(string text)
 	{
 		if (string.IsNullOrEmpty(text))
 			return 0;
 
 		var lineBreaks = 0;
-		foreach (var c in text.AsSpan())
+		for (var i = 0; i < text.Length; i++)
 		{
+			var c = text[i];
+			if (c == '\r')
+			{
+				if (i + 1 < text.Length && text[i + 1] == '\n')
+					i++;
+
+				lineBreaks++;
+				continue;
+			}
+
 			if (c == '\n')
 				lineBreaks++;
 		}
 
-		var endsWithLineBreak = text[^1] == '\n' || text[^1] == '\r';
-		return lineBreaks + (endsWithLineBreak ? 0 : 1);
+		// Visual line counting: non-empty text always has at least one line.
+		return lineBreaks + 1;
 	}
 }

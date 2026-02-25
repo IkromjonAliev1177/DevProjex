@@ -12,9 +12,9 @@ public static class ExportOutputMetricsCalculator
 		if (string.IsNullOrEmpty(text))
 			return ExportOutputMetrics.Empty;
 
-		int chars = text.Length;
-		int lineBreaks = CountLineBreaks(text.AsSpan());
-		int lines = lineBreaks + (EndsWithLineBreak(text) ? 0 : 1);
+		var stats = GetNormalizedTextStats(text.AsSpan());
+		int chars = stats.NormalizedChars;
+		int lines = stats.LineBreaks + 1;
 		int tokens = EstimateTokens(chars);
 
 		return new ExportOutputMetrics(lines, chars, tokens);
@@ -99,20 +99,39 @@ public static class ExportOutputMetricsCalculator
 	private static int EstimateTokens(int chars) =>
 		(int)Math.Ceiling(chars / 4.0);
 
-	private static int CountLineBreaks(ReadOnlySpan<char> text)
+	private static NormalizedTextStats GetNormalizedTextStats(ReadOnlySpan<char> text)
 	{
-		int count = 0;
-		foreach (var c in text)
+		var normalizedChars = 0;
+		var lineBreaks = 0;
+
+		for (var i = 0; i < text.Length; i++)
 		{
+			var c = text[i];
+			if (c == '\r')
+			{
+				// Treat CRLF as a single line-break character in normalized metrics.
+				if (i + 1 < text.Length && text[i + 1] == '\n')
+					i++;
+
+				normalizedChars++;
+				lineBreaks++;
+				continue;
+			}
+
 			if (c == '\n')
-				count++;
+			{
+				normalizedChars++;
+				lineBreaks++;
+				continue;
+			}
+
+			normalizedChars++;
 		}
 
-		return count;
+		return new NormalizedTextStats(normalizedChars, lineBreaks);
 	}
 
-	private static bool EndsWithLineBreak(string text) =>
-		text.Length > 0 && (text[^1] == '\n' || text[^1] == '\r');
+	private readonly record struct NormalizedTextStats(int NormalizedChars, int LineBreaks);
 }
 
 public readonly record struct ContentFileMetrics(

@@ -63,12 +63,31 @@ public sealed class ExportOutputMetricsCalculatorContentTheoryTests
 		string expectedExportText)
 	{
 		var actual = ExportOutputMetricsCalculator.FromContentFiles(files);
-		var expected = ExportOutputMetricsCalculator.FromText(expectedExportText);
+		var expected = GetExpectedRawMetrics(expectedExportText);
 
 		Assert.Equal(expected.Lines, actual.Lines);
 		Assert.Equal(expected.Chars, actual.Chars);
 		Assert.Equal(expected.Tokens, actual.Tokens);
 		Assert.True(caseId >= 0);
+	}
+
+	private static ExportOutputMetrics GetExpectedRawMetrics(string text)
+	{
+		if (string.IsNullOrEmpty(text))
+			return ExportOutputMetrics.Empty;
+
+		var chars = text.Length;
+		var lineBreaks = 0;
+		foreach (var c in text.AsSpan())
+		{
+			if (c == '\n')
+				lineBreaks++;
+		}
+
+		var endsWithLineBreak = text[^1] == '\n' || text[^1] == '\r';
+		var lines = lineBreaks + (endsWithLineBreak ? 0 : 1);
+		var tokens = (int)Math.Ceiling(chars / 4.0);
+		return new ExportOutputMetrics(lines, chars, tokens);
 	}
 
 	private static object[] BuildCase(int caseId, IReadOnlyList<(string Path, ContentVariant Variant)> entries)
