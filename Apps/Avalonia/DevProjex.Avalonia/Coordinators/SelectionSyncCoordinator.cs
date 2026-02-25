@@ -631,7 +631,7 @@ public sealed class SelectionSyncCoordinator(
             var availability = getIgnoreOptionsAvailability(path, selectedRootFolders);
             if (_hasIgnoreOptionCounts)
             {
-                availability = availability with
+                return availability with
                 {
                     IncludeHiddenFolders = _ignoreOptionCounts.HiddenFolders > 0,
                     HiddenFoldersCount = _ignoreOptionCounts.HiddenFolders,
@@ -642,7 +642,9 @@ public sealed class SelectionSyncCoordinator(
                     IncludeDotFiles = _ignoreOptionCounts.DotFiles > 0,
                     DotFilesCount = _ignoreOptionCounts.DotFiles,
                     IncludeEmptyFolders = _ignoreOptionCounts.EmptyFolders > 0,
-                    EmptyFoldersCount = _ignoreOptionCounts.EmptyFolders
+                    EmptyFoldersCount = _ignoreOptionCounts.EmptyFolders,
+                    IncludeExtensionlessFiles = _ignoreOptionCounts.ExtensionlessFiles > 0,
+                    ExtensionlessFilesCount = _ignoreOptionCounts.ExtensionlessFiles
                 };
             }
 
@@ -860,8 +862,12 @@ public sealed class SelectionSyncCoordinator(
         bool hasIgnoreOptionCounts)
     {
         viewModel.Extensions.Clear();
-        _extensionlessExtensionEntriesCount = extensionlessEntriesCount;
-        _hasExtensionlessExtensionEntries = extensionlessEntriesCount > 0;
+        var effectiveExtensionlessCount = hasIgnoreOptionCounts
+            ? ignoreOptionCounts.ExtensionlessFiles
+            : extensionlessEntriesCount;
+
+        _extensionlessExtensionEntriesCount = effectiveExtensionlessCount;
+        _hasExtensionlessExtensionEntries = effectiveExtensionlessCount > 0;
         _ignoreOptionCounts = ignoreOptionCounts;
         _hasIgnoreOptionCounts = hasIgnoreOptionCounts;
 

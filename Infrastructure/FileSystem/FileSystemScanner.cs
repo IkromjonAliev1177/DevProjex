@@ -467,6 +467,8 @@ public sealed class FileSystemScanner : IFileSystemScanner, IFileSystemScannerAd
 		string name,
 		ref MutableIgnoreOptionCounts counts)
 	{
+		if (IsExtensionlessFileName(name))
+			counts.ExtensionlessFiles++;
 		if (IsDotName(name))
 			counts.DotFiles++;
 		if (HasHiddenAttribute(fullPath))
@@ -536,6 +538,7 @@ public sealed class FileSystemScanner : IFileSystemScanner, IFileSystemScannerAd
 		public int DotFolders;
 		public int DotFiles;
 		public int EmptyFolders;
+		public int ExtensionlessFiles;
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void Add(in MutableIgnoreOptionCounts other)
@@ -545,12 +548,13 @@ public sealed class FileSystemScanner : IFileSystemScanner, IFileSystemScannerAd
 			DotFolders += other.DotFolders;
 			DotFiles += other.DotFiles;
 			EmptyFolders += other.EmptyFolders;
+			ExtensionlessFiles += other.ExtensionlessFiles;
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public readonly IgnoreOptionCounts ToImmutable()
 		{
-			return new IgnoreOptionCounts(HiddenFolders, HiddenFiles, DotFolders, DotFiles, EmptyFolders);
+			return new IgnoreOptionCounts(HiddenFolders, HiddenFiles, DotFolders, DotFiles, EmptyFolders, ExtensionlessFiles);
 		}
 	}
 }
