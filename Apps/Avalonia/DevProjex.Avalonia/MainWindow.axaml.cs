@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Collections.Frozen;
 using System.Runtime;
 using System.Runtime.CompilerServices;
@@ -5319,6 +5320,7 @@ public partial class MainWindow : Window
             indeterminate: false,
             operationType: StatusOperationType.MetricsCalculation,
             cancelAction: CancelBackgroundMetricsCalculation);
+        var stagedMetrics = new ConcurrentDictionary<string, FileMetricsData>(PathComparer.Default);
         try
         {
             if (IsStatusOperationActive(statusOperationId))
@@ -5385,19 +5387,16 @@ public partial class MainWindow : Window
                     // Skip binary files - they won't be exported
                     if (metrics is not null)
                     {
-                        lock (_metricsLock)
-                        {
-                            _fileMetricsCache[filePath] = new FileMetricsData(
-                                metrics.SizeBytes,
-                                metrics.LineCount,
-                                metrics.CharCount,
-                                metrics.IsEmpty,
-                                metrics.IsWhitespaceOnly,
-                                metrics.IsEstimated,
-                                metrics.CrLfPairCount,
-                                metrics.TrailingNewlineChars,
-                                metrics.TrailingNewlineLineBreaks);
-                        }
+                        stagedMetrics[filePath] = new FileMetricsData(
+                            metrics.SizeBytes,
+                            metrics.LineCount,
+                            metrics.CharCount,
+                            metrics.IsEmpty,
+                            metrics.IsWhitespaceOnly,
+                            metrics.IsEstimated,
+                            metrics.CrLfPairCount,
+                            metrics.TrailingNewlineChars,
+                            metrics.TrailingNewlineLineBreaks);
                     }
 
                     // Update progress periodically (every 5%) to reduce UI dispatch pressure.
@@ -5425,6 +5424,8 @@ public partial class MainWindow : Window
                 }
             });
 
+            MergeStagedMetricsIntoCache(stagedMetrics);
+
             // Calculation completed successfully
             _isBackgroundMetricsActive = false;
             _hasCompleteMetricsBaseline = true;
@@ -5439,6 +5440,7 @@ public partial class MainWindow : Window
             // Show explicit fallback for user-initiated cancellation.
             _isBackgroundMetricsActive = false;
             _hasCompleteMetricsBaseline = false;
+            MergeStagedMetricsIntoCache(stagedMetrics);
             var hasCachedMetrics = false;
             lock (_metricsLock)
                 hasCachedMetrics = _fileMetricsCache.Count > 0;
@@ -5459,6 +5461,20 @@ public partial class MainWindow : Window
         {
             DisposeIfCurrent(ref _metricsCalculationCts, metricsCts);
         }
+    }
+
+    private void MergeStagedMetricsIntoCache(ConcurrentDictionary<string, FileMetricsData> stagedMetrics)
+    {
+        if (stagedMetrics.IsEmpty)
+            return;
+
+        lock (_metricsLock)
+        {
+            foreach (var pair in stagedMetrics)
+                _fileMetricsCache[pair.Key] = pair.Value;
+        }
+
+        stagedMetrics.Clear();
     }
 
     /// <summary>

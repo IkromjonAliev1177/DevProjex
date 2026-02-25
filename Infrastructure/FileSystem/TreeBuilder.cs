@@ -4,6 +4,8 @@ public sealed class TreeBuilder : ITreeBuilder
 {
 	// Pre-allocated comparer instance to avoid allocation per sort
 	private static readonly FileSystemInfoComparer EntryComparer = new();
+	private static readonly int RootBuildParallelism =
+		Math.Clamp(Environment.ProcessorCount, min: 2, max: 16);
 
 	public TreeBuildResult Build(string rootPath, TreeFilterOptions options, CancellationToken cancellationToken = default)
 	{
@@ -47,8 +49,10 @@ public sealed class TreeBuilder : ITreeBuilder
 		}
 		catch (UnauthorizedAccessException)
 		{
-			state.HadAccessDenied = true;
-			if (isRoot) state.RootAccessDenied = true;
+			if (isRoot)
+				state.MarkRootAccessDenied();
+			else
+				state.MarkAccessDenied();
 			parent.IsAccessDenied = true;
 			return;
 		}
@@ -60,97 +64,139 @@ public sealed class TreeBuilder : ITreeBuilder
 		var children = (List<FileSystemNode>)parent.Children;
 		var hasNameFilter = !string.IsNullOrWhiteSpace(options.NameFilter);
 
+		if (isRoot && entries.Length > 1)
+		{
+			BuildRootChildrenInParallel(entries, children, options, hasNameFilter, state, cancellationToken);
+			return;
+		}
+
 		foreach (var entry in entries)
 		{
 			cancellationToken.ThrowIfCancellationRequested();
 
-			var name = entry.Name;
-			bool isDir = IsDirectory(entry);
-
-			if (isDir && isRoot && !options.AllowedRootFolders.Contains(name))
-				continue;
-
-			var ignore = options.IgnoreRules;
-
-			if (isDir)
-			{
-				var directoryGitIgnore = ignore.EvaluateGitIgnore(entry.FullName, isDirectory: true, name);
-				if (ShouldSkipDirectory(entry, ignore, directoryGitIgnore))
-					continue;
-
-				var dirNode = new FileSystemNode(
-					name: name,
-					fullPath: entry.FullName,
-					isDirectory: true,
-					isAccessDenied: false,
-					children: new List<FileSystemNode>());
-
-				BuildChildren(dirNode, entry.FullName, options, isRoot: false, state, cancellationToken);
-
-				// Keep full directory context when extension/ignore filters remove all files.
-				// Name filter remains strict to preserve intentional narrowing behavior.
-				if (hasNameFilter)
-				{
-					bool hasMatchingChildren = dirNode.Children.Count > 0;
-					bool matchesName = name.Contains(options.NameFilter!, StringComparison.OrdinalIgnoreCase);
-					if (hasMatchingChildren || matchesName)
-						children.Add(dirNode);
-				}
-				else
-				{
-					// Keep empty directories hidden when gitignore effectively ignores their content
-					// (e.g. patterns like **/bin/* that may not ignore the directory entry itself).
-					if (dirNode.Children.Count == 0 &&
-					    !dirNode.IsAccessDenied &&
-					    IsEffectivelyGitIgnoredDirectory(entry, ignore, directoryGitIgnore))
-					{
-						continue;
-					}
-
-					// Keep ignored directories out of UI when traversal found no visible descendants.
-					if (directoryGitIgnore.IsIgnored &&
-					    directoryGitIgnore.ShouldTraverseIgnoredDirectory &&
-					    dirNode.Children.Count == 0 &&
-					    !dirNode.IsAccessDenied)
-					{
-						continue;
-					}
-
-					children.Add(dirNode);
-				}
-			}
-			else
-			{
-				var fileGitIgnore = ignore.EvaluateGitIgnore(entry.FullName, isDirectory: false, name);
-				if (ShouldSkipFile(entry, ignore, fileGitIgnore))
-					continue;
-
-				if (IsExtensionlessFileName(name))
-				{
-					// Extensionless files are intentionally controlled only by ignore options.
-				}
-				else
-				{
-					if (options.AllowedExtensions.Count == 0)
-						continue;
-
-					var ext = Path.GetExtension(name);
-					if (!options.AllowedExtensions.Contains(ext))
-						continue;
-				}
-
-				// Apply name filter for files
-				if (hasNameFilter && !name.Contains(options.NameFilter!, StringComparison.OrdinalIgnoreCase))
-					continue;
-
-				children.Add(new FileSystemNode(
-					name: name,
-					fullPath: entry.FullName,
-					isDirectory: false,
-					isAccessDenied: false,
-					children: FileSystemNode.EmptyChildren));
-			}
+			var node = BuildNodeForEntry(entry, options, isRoot, hasNameFilter, state, cancellationToken);
+			if (node is not null)
+				children.Add(node);
 		}
+	}
+
+	private static void BuildRootChildrenInParallel(
+		FileSystemInfo[] entries,
+		List<FileSystemNode> children,
+		TreeFilterOptions options,
+		bool hasNameFilter,
+		BuildState state,
+		CancellationToken cancellationToken)
+	{
+		var nodes = new FileSystemNode?[entries.Length];
+		var maxDegree = Math.Min(RootBuildParallelism, entries.Length);
+		var parallelOptions = new ParallelOptions
+		{
+			MaxDegreeOfParallelism = maxDegree,
+			CancellationToken = cancellationToken
+		};
+
+		Parallel.For(0, entries.Length, parallelOptions, i =>
+		{
+			var entry = entries[i];
+			nodes[i] = BuildNodeForEntry(entry, options, isRoot: true, hasNameFilter, state, parallelOptions.CancellationToken);
+		});
+
+		for (var i = 0; i < nodes.Length; i++)
+		{
+			var node = nodes[i];
+			if (node is not null)
+				children.Add(node);
+		}
+	}
+
+	private static FileSystemNode? BuildNodeForEntry(
+		FileSystemInfo entry,
+		TreeFilterOptions options,
+		bool isRoot,
+		bool hasNameFilter,
+		BuildState state,
+		CancellationToken cancellationToken)
+	{
+		var name = entry.Name;
+		bool isDir = IsDirectory(entry);
+
+		if (isDir && isRoot && !options.AllowedRootFolders.Contains(name))
+			return null;
+
+		var ignore = options.IgnoreRules;
+		if (isDir)
+		{
+			var directoryGitIgnore = ignore.EvaluateGitIgnore(entry.FullName, isDirectory: true, name);
+			if (ShouldSkipDirectory(entry, ignore, directoryGitIgnore))
+				return null;
+
+			var dirNode = new FileSystemNode(
+				name: name,
+				fullPath: entry.FullName,
+				isDirectory: true,
+				isAccessDenied: false,
+				children: new List<FileSystemNode>());
+
+			BuildChildren(dirNode, entry.FullName, options, isRoot: false, state, cancellationToken);
+
+			// Keep full directory context when extension/ignore filters remove all files.
+			// Name filter remains strict to preserve intentional narrowing behavior.
+			if (hasNameFilter)
+			{
+				bool hasMatchingChildren = dirNode.Children.Count > 0;
+				bool matchesName = name.Contains(options.NameFilter!, StringComparison.OrdinalIgnoreCase);
+				return (hasMatchingChildren || matchesName) ? dirNode : null;
+			}
+
+			// Keep empty directories hidden when gitignore effectively ignores their content
+			// (e.g. patterns like **/bin/* that may not ignore the directory entry itself).
+			if (dirNode.Children.Count == 0 &&
+			    !dirNode.IsAccessDenied &&
+			    IsEffectivelyGitIgnoredDirectory(entry, ignore, directoryGitIgnore))
+			{
+				return null;
+			}
+
+			// Keep ignored directories out of UI when traversal found no visible descendants.
+			if (directoryGitIgnore.IsIgnored &&
+			    directoryGitIgnore.ShouldTraverseIgnoredDirectory &&
+			    dirNode.Children.Count == 0 &&
+			    !dirNode.IsAccessDenied)
+			{
+				return null;
+			}
+
+			return dirNode;
+		}
+
+		var fileGitIgnore = ignore.EvaluateGitIgnore(entry.FullName, isDirectory: false, name);
+		if (ShouldSkipFile(entry, ignore, fileGitIgnore))
+			return null;
+
+		if (IsExtensionlessFileName(name))
+		{
+			// Extensionless files are intentionally controlled only by ignore options.
+		}
+		else
+		{
+			if (options.AllowedExtensions.Count == 0)
+				return null;
+
+			var ext = Path.GetExtension(name);
+			if (!options.AllowedExtensions.Contains(ext))
+				return null;
+		}
+
+		if (hasNameFilter && !name.Contains(options.NameFilter!, StringComparison.OrdinalIgnoreCase))
+			return null;
+
+		return new FileSystemNode(
+			name: name,
+			fullPath: entry.FullName,
+			isDirectory: false,
+			isAccessDenied: false,
+			children: FileSystemNode.EmptyChildren);
 	}
 
 	private static bool IsDirectory(FileSystemInfo entry)
@@ -274,8 +320,24 @@ public sealed class TreeBuilder : ITreeBuilder
 
 	private sealed class BuildState
 	{
-		public bool RootAccessDenied { get; set; }
-		public bool HadAccessDenied { get; set; }
+		private int _rootAccessDenied;
+		private int _hadAccessDenied;
+
+		public bool RootAccessDenied => Volatile.Read(ref _rootAccessDenied) == 1;
+		public bool HadAccessDenied => Volatile.Read(ref _hadAccessDenied) == 1;
+
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public void MarkRootAccessDenied()
+		{
+			Interlocked.Exchange(ref _rootAccessDenied, 1);
+			Interlocked.Exchange(ref _hadAccessDenied, 1);
+		}
+
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public void MarkAccessDenied()
+		{
+			Interlocked.Exchange(ref _hadAccessDenied, 1);
+		}
 	}
 
 	/// <summary>
