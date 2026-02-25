@@ -106,6 +106,7 @@ public sealed class UserSettingsStoreTests
 			{
 				IsCompactMode = true,
 				IsTreeAnimationEnabled = true,
+				IsAdvancedIgnoreCountsEnabled = false,
 				PreferredLanguage = AppLanguage.Fr
 			}
 		};
@@ -115,6 +116,7 @@ public sealed class UserSettingsStoreTests
 
 		Assert.True(loaded.ViewSettings.IsCompactMode);
 		Assert.True(loaded.ViewSettings.IsTreeAnimationEnabled);
+		Assert.False(loaded.ViewSettings.IsAdvancedIgnoreCountsEnabled);
 		Assert.Equal(AppLanguage.Fr, loaded.ViewSettings.PreferredLanguage);
 	}
 
@@ -764,8 +766,8 @@ public sealed class UserSettingsStoreTests
 	}
 
 	[Fact]
-	// Ensures ResetToDefaults always restores view toggles to default disabled state.
-	public void ResetToDefaults_DisablesViewTogglesByDefault()
+	// Ensures ResetToDefaults restores view toggles to their default state.
+	public void ResetToDefaults_RestoresViewTogglesToDefaults()
 	{
 		using var scope = new AppDataScope();
 		var store = new UserSettingsStore();
@@ -788,6 +790,7 @@ public sealed class UserSettingsStoreTests
 
 		Assert.False(resetDb.ViewSettings.IsCompactMode);
 		Assert.False(resetDb.ViewSettings.IsTreeAnimationEnabled);
+		Assert.True(resetDb.ViewSettings.IsAdvancedIgnoreCountsEnabled);
 		Assert.Null(resetDb.ViewSettings.PreferredLanguage);
 	}
 

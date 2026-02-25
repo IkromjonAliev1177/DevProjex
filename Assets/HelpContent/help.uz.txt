@@ -139,6 +139,7 @@ Daraxt qatorlarini kursorga tutganda silliq siljish animatsiyasini yoqadi.
 
 ### Qo‘shimcha hisoblagichlar
 «E’tiborsiz qoldirish» blokidagi bandlar yonidagi qavs ichidagi sonni ko‘rsatadi/yashiradi.
+Standart holatda yoqilgan.
 Filtrlash qoidalariga ta’sir qilmaydi.
 
 ## 8) Daraxt bo'yicha qidiruv
@@ -198,11 +199,11 @@ Muhim:
 Variantlar tartibi:
 * Smart ignore (mavjud bo‘lsa)
 * .gitignore dan foydalanish (kamida bitta `.gitignore` topilsa)
+* Bo‘sh papkalar
 * Yashirin papkalar
 * Yashirin fayllar
 * Boshida nuqtali papkalar
 * Boshida nuqtali fayllar
-* Bo‘sh papkalar
 * Kengaytmasiz fayllar
 
 Asosiy qoidalar bandlari (yashirin, nuqtali, bo‘sh, kengaytmasiz) faqat mos elementlar mavjud bo‘lganda ko‘rsatiladi.
@@ -333,7 +334,7 @@ Tema popoveri quyilarni almashtiradi:
 ## 15) Yordam
 
 ### 15.1 Sozlamalarni tiklash
-Sozlamalarni tiklash (Yordam → Sozlamalarni tiklash) faqat interfeysning vizual sozlamalarini tiklaydi (tema, effektlar, ixcham rejim, daraxt animatsiyasi) va loyiha ma’lumotlarini o‘zgartirmaydi.
+Sozlamalarni tiklash (Yordam → Sozlamalarni tiklash) faqat interfeysning vizual sozlamalarini tiklaydi (tema, effektlar, ixcham rejim, daraxt animatsiyasi, qo‘shimcha hisoblagichlar) va loyiha ma’lumotlarini o‘zgartirmaydi. Tiklangandan keyin qo‘shimcha hisoblagichlar standart holatda yoqilgan bo‘ladi.
 
 ### 15.2 Ma’lumotlarni tiklash
 Ma’lumotlarni tiklash (Yordam → Ma’lumotlarni tiklash) mahalliy loyiha parametrlarining saqlangan profillarini o‘chiradi:

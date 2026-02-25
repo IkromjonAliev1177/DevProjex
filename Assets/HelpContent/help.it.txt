@@ -139,6 +139,7 @@ Attiva un'animazione di scorrimento fluido quando si passa il mouse sulle righe 
 
 ### Contatori aggiuntivi
 Mostra/nasconde le quantità tra parentesi nelle opzioni del blocco « Ignora ».
+Attivi per impostazione predefinita.
 Non modifica le regole di filtro.
 
 ## 8) Ricerca nell'albero
@@ -198,11 +199,11 @@ L’elenco « Ignora » viene generato automaticamente in base al percorso corre
 Ordine delle opzioni:
 * Smart ignore (se disponibile)
 * Usa .gitignore (se viene trovato almeno un `.gitignore`)
+* Cartelle vuote
 * Cartelle nascoste
 * File nascosti
 * Cartelle con punto iniziale
 * File con punto iniziale
-* Cartelle vuote
 * File senza estensione
 
 Le opzioni delle regole base (nascosti, con punto, vuoti, senza estensione) vengono mostrate solo se esistono elementi corrispondenti.
@@ -333,7 +334,7 @@ Gli elementi [Beta] possono cambiare tra versioni.
 ## 15) Aiuto
 
 ### 15.1 Ripristina impostazioni
-Ripristina impostazioni (Aiuto → Ripristina impostazioni) reimposta solo i parametri visivi dell’interfaccia (tema, effetti, modalità compatta, animazione albero) e non modifica i dati del progetto.
+Ripristina impostazioni (Aiuto → Ripristina impostazioni) reimposta solo i parametri visivi dell’interfaccia (tema, effetti, modalità compatta, animazione albero, contatori aggiuntivi) e non modifica i dati del progetto. Dopo il ripristino, i contatori aggiuntivi sono attivi per impostazione predefinita.
 
 ### 15.2 Ripristina dati
 Ripristina dati (Aiuto → Ripristina dati) rimuove i profili salvati dei parametri dei progetti locali:

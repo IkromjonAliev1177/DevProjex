@@ -139,6 +139,7 @@ Aktiviert eine sanfte Schiebe-Animation beim Überfahren von Baumzeilen.
 
 ### Zusätzliche Zähler
 Zeigt/blendet Mengen in Klammern bei den Optionen im Block „Ignorieren“.
+Standardmäßig aktiviert.
 Ändert die Filterregeln nicht.
 
 ## 8) Suche im Baum
@@ -198,11 +199,11 @@ Die Liste „Ignorieren“ wird automatisch aus dem aktuellen Pfad und den ausge
 Reihenfolge der Optionen:
 * Smart Ignore (wenn verfügbar)
 * .gitignore verwenden (wenn mindestens eine `.gitignore` gefunden wurde)
+* Leere Ordner
 * Versteckte Ordner
 * Versteckte Dateien
 * Ordner mit führendem Punkt
 * Dateien mit führendem Punkt
-* Leere Ordner
 * Dateien ohne Erweiterung
 
 Optionen der Grundregeln (versteckt, mit Punkt, leer, ohne Erweiterung) werden nur angezeigt, wenn passende Elemente vorhanden sind.
@@ -333,7 +334,7 @@ Einträge mit [Beta] können sich zwischen Versionen ändern.
 ## 15) Hilfe
 
 ### 15.1 Einstellungen zurücksetzen
-Einstellungen zurücksetzen (Hilfe → Einstellungen zurücksetzen) setzt nur visuelle UI-Parameter zurück (Theme, Effekte, Kompaktmodus, Baumanimation) und ändert keine Projektdaten.
+Einstellungen zurücksetzen (Hilfe → Einstellungen zurücksetzen) setzt nur visuelle UI-Parameter zurück (Theme, Effekte, Kompaktmodus, Baumanimation, zusätzliche Zähler) und ändert keine Projektdaten. Nach dem Zurücksetzen sind zusätzliche Zähler standardmäßig aktiviert.
 
 ### 15.2 Daten zurücksetzen
 Daten zurücksetzen (Hilfe → Daten zurücksetzen) löscht gespeicherte Profile lokaler Projektparameter:

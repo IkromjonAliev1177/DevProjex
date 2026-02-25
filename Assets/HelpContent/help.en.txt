@@ -139,6 +139,7 @@ Enables smooth slide animation when hovering over tree rows.
 
 ### Additional counters
 Shows/hides counts in parentheses for options in the "Ignore" block.
+Enabled by default.
 Does not change filtering rules.
 
 ## 8) Search (tree)
@@ -198,11 +199,11 @@ The "Ignore" list is built automatically from the current path and selected top-
 Option order:
 * Smart ignore (when available)
 * Use .gitignore (when at least one `.gitignore` is found)
+* Empty folders
 * Hidden folders
 * Hidden files
 * Dot-prefixed folders
 * Dot-prefixed files
-* Empty folders
 * Files without extension
 
 Basic-rule options (hidden, dot-prefixed, empty, extensionless) are shown only when matching elements exist.
@@ -333,7 +334,7 @@ Items marked [Beta] may change between versions.
 ## 15) Help
 
 ### 15.1 Reset settings
-Reset settings (Help → Reset settings) resets only visual interface settings (theme, effects, Compact mode, Tree animation) and does not modify project data.
+Reset settings (Help → Reset settings) resets only visual interface settings (theme, effects, Compact mode, Tree animation, Additional counters) and does not modify project data. After reset, Additional counters are enabled by default.
 
 ### 15.2 Reset data
 Reset data (Help → Reset data) removes saved local-project parameter profiles:

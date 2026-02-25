@@ -84,9 +84,9 @@ public sealed class IgnoreOptionsServiceEmptyFoldersCountTests
 		var emptyIndex = ids.IndexOf(IgnoreOptionId.EmptyFolders);
 		Assert.NotEqual(-1, emptyIndex);
 
-		var dotFilesIndex = ids.IndexOf(IgnoreOptionId.DotFiles);
-		Assert.NotEqual(-1, dotFilesIndex);
-		Assert.True(emptyIndex > dotFilesIndex);
+		var hiddenFoldersIndex = ids.IndexOf(IgnoreOptionId.HiddenFolders);
+		Assert.NotEqual(-1, hiddenFoldersIndex);
+		Assert.True(emptyIndex < hiddenFoldersIndex);
 
 		if (includeExtensionless)
 		{

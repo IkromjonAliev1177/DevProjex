@@ -21,6 +21,14 @@ public sealed class IgnoreOptionsService(LocalizationService localization)
 				true));
 		}
 
+		if (availability.IncludeEmptyFolders)
+		{
+			options.Add(new IgnoreOptionDescriptor(
+				IgnoreOptionId.EmptyFolders,
+				FormatLabelWithCount(localization["Settings.Ignore.EmptyFolders"], availability.EmptyFoldersCount, availability.ShowAdvancedCounts),
+				true));
+		}
+
 		if (availability.IncludeHiddenFolders)
 		{
 			options.Add(new IgnoreOptionDescriptor(
@@ -50,14 +58,6 @@ public sealed class IgnoreOptionsService(LocalizationService localization)
 			options.Add(new IgnoreOptionDescriptor(
 				IgnoreOptionId.DotFiles,
 				FormatLabelWithCount(localization["Settings.Ignore.DotFiles"], availability.DotFilesCount, availability.ShowAdvancedCounts),
-				true));
-		}
-
-		if (availability.IncludeEmptyFolders)
-		{
-			options.Add(new IgnoreOptionDescriptor(
-				IgnoreOptionId.EmptyFolders,
-				FormatLabelWithCount(localization["Settings.Ignore.EmptyFolders"], availability.EmptyFoldersCount, availability.ShowAdvancedCounts),
 				true));
 		}
 

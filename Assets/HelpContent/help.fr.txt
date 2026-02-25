@@ -139,6 +139,7 @@ Active une animation de glissement fluide au survol des lignes de l'arborescence
 
 ### Compteurs supplémentaires
 Affiche/masque les quantités entre parenthèses pour les options du bloc « Ignorer ».
+Activés par défaut.
 N’affecte pas les règles de filtrage.
 
 ## 8) Recherche dans l'arbre
@@ -198,11 +199,11 @@ La liste « Ignorer » est générée automatiquement à partir du chemin actuel
 Ordre des options :
 * Smart ignore (si disponible)
 * Utiliser .gitignore (si au moins un `.gitignore` est trouvé)
+* Dossiers vides
 * Dossiers cachés
 * Fichiers cachés
 * Dossiers commençant par un point
 * Fichiers commençant par un point
-* Dossiers vides
 * Fichiers sans extension
 
 Les options des règles de base (cachés, avec point, vides, sans extension) sont affichées uniquement si des éléments correspondants existent.
@@ -333,7 +334,7 @@ Les éléments [Beta] peuvent évoluer entre versions.
 ## 15) Aide
 
 ### 15.1 Réinitialiser les paramètres
-Réinitialiser les paramètres (Aide → Réinitialiser les paramètres) réinitialise uniquement les paramètres visuels de l’interface (thème, effets, mode compact, animation de l'arborescence) et ne modifie pas les données du projet.
+Réinitialiser les paramètres (Aide → Réinitialiser les paramètres) réinitialise uniquement les paramètres visuels de l’interface (thème, effets, mode compact, animation de l'arborescence, compteurs supplémentaires) et ne modifie pas les données du projet. Après réinitialisation, les compteurs supplémentaires sont activés par défaut.
 
 ### 15.2 Réinitialiser les données
 Réinitialiser les données (Aide → Réinitialiser les données) supprime les profils enregistrés de paramètres des projets locaux :
