@@ -2,6 +2,10 @@ namespace DevProjex.Application.Services;
 
 public static class TreeSearchEngine
 {
+    public readonly record struct SearchCollectionResult<TNode>(
+        IReadOnlyList<TNode> Matches,
+        int VisitedCount);
+
     public static IReadOnlyList<TNode> CollectMatches<TNode>(
         IEnumerable<TNode> roots,
         string query,
@@ -9,14 +13,26 @@ public static class TreeSearchEngine
         Func<TNode, IEnumerable<TNode>> getChildren,
         StringComparison comparison)
     {
+        return CollectMatchesWithStats(roots, query, getName, getChildren, comparison).Matches;
+    }
+
+    public static SearchCollectionResult<TNode> CollectMatchesWithStats<TNode>(
+        IEnumerable<TNode> roots,
+        string query,
+        Func<TNode, string> getName,
+        Func<TNode, IEnumerable<TNode>> getChildren,
+        StringComparison comparison)
+    {
         var matches = new List<TNode>();
+        var visitedCount = 0;
         foreach (var node in Traverse(roots, getChildren))
         {
+            visitedCount++;
             if (getName(node).Contains(query, comparison))
                 matches.Add(node);
         }
 
-        return matches;
+        return new SearchCollectionResult<TNode>(matches, visitedCount);
     }
 
     public static void ApplySmartExpandForSearch<TNode>(

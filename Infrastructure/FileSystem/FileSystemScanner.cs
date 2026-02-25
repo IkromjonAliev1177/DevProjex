@@ -71,7 +71,8 @@ public sealed class FileSystemScanner : IFileSystemScanner
 				cancellationToken.ThrowIfCancellationRequested();
 
 				var dirName = Path.GetFileName(sd);
-				if (ShouldSkipDirectoryByName(dirName, sd, rules))
+				var directoryGitIgnore = rules.EvaluateGitIgnore(sd, isDirectory: true, dirName);
+				if (ShouldSkipDirectoryByName(dirName, sd, rules, directoryGitIgnore))
 					continue;
 
 				pending.Push(sd);
@@ -121,7 +122,8 @@ public sealed class FileSystemScanner : IFileSystemScanner
 					parallelOptions.CancellationToken.ThrowIfCancellationRequested();
 
 					var name = Path.GetFileName(file);
-					if (ShouldSkipFileByName(name, file, rules))
+					var fileGitIgnore = rules.EvaluateGitIgnore(file, isDirectory: false, name);
+					if (ShouldSkipFileByName(name, file, rules, fileGitIgnore))
 						continue;
 
 					var ext = Path.GetExtension(name);
@@ -182,7 +184,8 @@ public sealed class FileSystemScanner : IFileSystemScanner
 			cancellationToken.ThrowIfCancellationRequested();
 
 			var name = Path.GetFileName(file);
-			if (ShouldSkipFileByName(name, file, rules))
+			var fileGitIgnore = rules.EvaluateGitIgnore(file, isDirectory: false, name);
+			if (ShouldSkipFileByName(name, file, rules, fileGitIgnore))
 				continue;
 
 			var ext = Path.GetExtension(name);
@@ -227,7 +230,8 @@ public sealed class FileSystemScanner : IFileSystemScanner
 			cancellationToken.ThrowIfCancellationRequested();
 
 			var dirName = Path.GetFileName(dir);
-			if (ShouldSkipDirectoryByName(dirName, dir, rules))
+			var directoryGitIgnore = rules.EvaluateGitIgnore(dir, isDirectory: true, dirName);
+			if (ShouldSkipDirectoryByName(dirName, dir, rules, directoryGitIgnore))
 				continue;
 
 			names.Add(dirName);
@@ -241,11 +245,15 @@ public sealed class FileSystemScanner : IFileSystemScanner
 	/// Optimized version that avoids DirectoryInfo allocation when possible.
 	/// Only creates DirectoryInfo when checking Hidden attribute.
 	/// </summary>
-	private static bool ShouldSkipDirectoryByName(string name, string fullPath, IgnoreRules rules)
+	private static bool ShouldSkipDirectoryByName(
+		string name,
+		string fullPath,
+		IgnoreRules rules,
+		in IgnoreRules.GitIgnoreEvaluation gitIgnoreEvaluation)
 	{
-		if (rules.IsGitIgnored(fullPath, isDirectory: true, name))
+		if (gitIgnoreEvaluation.IsIgnored)
 		{
-			if (!rules.ShouldTraverseGitIgnoredDirectory(fullPath, name))
+			if (!gitIgnoreEvaluation.ShouldTraverseIgnoredDirectory)
 				return true;
 		}
 
@@ -279,9 +287,13 @@ public sealed class FileSystemScanner : IFileSystemScanner
 	/// Optimized version that avoids FileInfo allocation when possible.
 	/// Only checks attributes when necessary.
 	/// </summary>
-	private static bool ShouldSkipFileByName(string name, string fullPath, IgnoreRules rules)
+	private static bool ShouldSkipFileByName(
+		string name,
+		string fullPath,
+		IgnoreRules rules,
+		in IgnoreRules.GitIgnoreEvaluation gitIgnoreEvaluation)
 	{
-		if (rules.IsGitIgnored(fullPath, isDirectory: false, name))
+		if (gitIgnoreEvaluation.IsIgnored)
 			return true;
 
 		if (rules.ShouldApplySmartIgnore(fullPath) && rules.SmartIgnoredFiles.Contains(name))

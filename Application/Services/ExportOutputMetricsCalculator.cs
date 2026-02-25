@@ -41,6 +41,17 @@ public static class ExportOutputMetricsCalculator
 			return ExportOutputMetrics.Empty;
 
 		ordered.Sort(static (left, right) => PathComparer.Default.Compare(left.Path, right.Path));
+		return FromOrderedContentFiles(ordered);
+	}
+
+	/// <summary>
+	/// Calculates content metrics for an already de-duplicated, path-ordered sequence.
+	/// This avoids extra HashSet/List allocations on hot status-bar recalculations.
+	/// </summary>
+	public static ExportOutputMetrics FromOrderedContentFiles(IReadOnlyList<ContentFileMetrics> ordered)
+	{
+		if (ordered.Count == 0)
+			return ExportOutputMetrics.Empty;
 
 		// Status metrics use normalized line-break counting (CRLF/CR/LF => one character).
 		const int normalizedNewLineChars = 1;

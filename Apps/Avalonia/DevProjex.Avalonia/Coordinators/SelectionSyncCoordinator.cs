@@ -432,8 +432,16 @@ public sealed class SelectionSyncCoordinator(
 
         var selectedRoots = GetSelectedRootFolders();
         await PopulateIgnoreOptionsForRootSelectionAsync(selectedRoots, currentPath, cancellationToken);
+        var extensionlessBefore = _hasExtensionlessExtensionEntries;
+        var extensionlessCountBefore = _extensionlessExtensionEntriesCount;
         await PopulateExtensionsForRootSelectionAsync(currentPath, selectedRoots, cancellationToken);
-        await PopulateIgnoreOptionsForRootSelectionAsync(selectedRoots, currentPath, cancellationToken);
+
+        // Recompute ignore options only when extensionless availability changed after extension scan.
+        if (extensionlessBefore != _hasExtensionlessExtensionEntries ||
+            extensionlessCountBefore != _extensionlessExtensionEntriesCount)
+        {
+            await PopulateIgnoreOptionsForRootSelectionAsync(selectedRoots, currentPath, cancellationToken);
+        }
     }
 
     public async Task RefreshRootAndDependentsAsync(string currentPath, CancellationToken cancellationToken = default)
@@ -471,8 +479,16 @@ public sealed class SelectionSyncCoordinator(
             cancellationToken.ThrowIfCancellationRequested();
             var selectedRoots = GetSelectedRootFolders();
             await PopulateIgnoreOptionsForRootSelectionAsync(selectedRoots, currentPath, cancellationToken);
+            var extensionlessBefore = _hasExtensionlessExtensionEntries;
+            var extensionlessCountBefore = _extensionlessExtensionEntriesCount;
             await PopulateExtensionsForRootSelectionAsync(currentPath, selectedRoots, cancellationToken);
-            await PopulateIgnoreOptionsForRootSelectionAsync(selectedRoots, currentPath, cancellationToken);
+
+            // Avoid duplicate ignore refresh when extensionless option visibility did not change.
+            if (extensionlessBefore != _hasExtensionlessExtensionEntries ||
+                extensionlessCountBefore != _extensionlessExtensionEntriesCount)
+            {
+                await PopulateIgnoreOptionsForRootSelectionAsync(selectedRoots, currentPath, cancellationToken);
+            }
 
             // Consume prepared selection only after refresh for that exact path completes.
             if (HasPreparedSelectionForPath(currentPath))

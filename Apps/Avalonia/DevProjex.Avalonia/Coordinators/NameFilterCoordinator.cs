@@ -1,50 +1,65 @@
-using System.Timers;
-using Timer = System.Timers.Timer;
-
 namespace DevProjex.Avalonia.Coordinators;
 
 public sealed class NameFilterCoordinator : IDisposable
 {
     private readonly Action<CancellationToken> _applyFilterRealtime;
-    private readonly Timer _filterDebounceTimer;
+    private static readonly TimeSpan DebounceDelay = TimeSpan.FromMilliseconds(360);
+    private CancellationTokenSource? _debounceCts;
     private CancellationTokenSource? _filterCts;
     private readonly object _ctsLock = new();
+    private int _debounceVersion;
 
     public NameFilterCoordinator(Action<CancellationToken> applyFilterRealtime)
     {
         _applyFilterRealtime = applyFilterRealtime;
-        // Slightly longer debounce keeps typing smooth on the first filter input
-        // when tree rebuild path is still warming up.
-        _filterDebounceTimer = new Timer(360)
-        {
-            AutoReset = false
-        };
-        _filterDebounceTimer.Elapsed += OnFilterDebounceTimerElapsed;
     }
 
-    private void OnFilterDebounceTimerElapsed(object? sender, ElapsedEventArgs e)
+    private async Task RunDebounceAsync(int version, CancellationToken token)
     {
-        CancellationToken token;
+        try
+        {
+            // Keep first keystrokes smooth while avoiding background timer wakeups.
+            await Task.Delay(DebounceDelay, token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+
+        if (token.IsCancellationRequested || version != Volatile.Read(ref _debounceVersion))
+            return;
+
+        CancellationToken applyToken;
         lock (_ctsLock)
         {
-            // Cancel previous operation
             _filterCts?.Cancel();
             _filterCts?.Dispose();
             _filterCts = new CancellationTokenSource();
-            token = _filterCts.Token;
+            applyToken = _filterCts.Token;
         }
 
-        Dispatcher.UIThread.Post(() =>
+        await Dispatcher.UIThread.InvokeAsync(() =>
         {
-            if (!token.IsCancellationRequested)
-                _applyFilterRealtime(token);
-        });
+            if (!applyToken.IsCancellationRequested)
+                _applyFilterRealtime(applyToken);
+        }, DispatcherPriority.Background);
     }
 
     public void OnNameFilterChanged()
     {
-        _filterDebounceTimer.Stop();
-        _filterDebounceTimer.Start();
+        CancellationToken token;
+        int version;
+
+        lock (_ctsLock)
+        {
+            _debounceCts?.Cancel();
+            _debounceCts?.Dispose();
+            _debounceCts = new CancellationTokenSource();
+            token = _debounceCts.Token;
+            version = Interlocked.Increment(ref _debounceVersion);
+        }
+
+        _ = RunDebounceAsync(version, token);
     }
 
     /// <summary>
@@ -52,20 +67,20 @@ public sealed class NameFilterCoordinator : IDisposable
     /// </summary>
     public void CancelPending()
     {
-        _filterDebounceTimer.Stop();
         lock (_ctsLock)
         {
+            _debounceCts?.Cancel();
             _filterCts?.Cancel();
         }
     }
 
     public void Dispose()
     {
-        _filterDebounceTimer.Stop();
-        _filterDebounceTimer.Elapsed -= OnFilterDebounceTimerElapsed;
-        _filterDebounceTimer.Dispose();
         lock (_ctsLock)
         {
+            _debounceCts?.Cancel();
+            _debounceCts?.Dispose();
+            _debounceCts = null;
             _filterCts?.Cancel();
             _filterCts?.Dispose();
             _filterCts = null;
