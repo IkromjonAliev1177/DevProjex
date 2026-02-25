@@ -1,6 +1,3 @@
-using System.Timers;
-using Timer = System.Timers.Timer;
-
 namespace DevProjex.Avalonia.Coordinators;
 
 public sealed class TreeSearchCoordinator : IDisposable
@@ -23,8 +20,9 @@ public sealed class TreeSearchCoordinator : IDisposable
 
     private readonly MainWindowViewModel _viewModel;
     private readonly TreeView _treeView;
-    private readonly Timer _searchDebounceTimer;
+    private static readonly TimeSpan SearchDebounceDelay = TimeSpan.FromMilliseconds(120);
     private readonly object _searchCtsLock = new();
+    private CancellationTokenSource? _searchDebounceCts;
     private CancellationTokenSource? _searchCts;
     private readonly List<TreeNodeViewModel> _searchMatches = [];
     private readonly HashSet<TreeNodeViewModel> _activeHighlightNodes = [];
@@ -44,35 +42,47 @@ public sealed class TreeSearchCoordinator : IDisposable
     {
         _viewModel = viewModel;
         _treeView = treeView;
-        _searchDebounceTimer = new Timer(120)
-        {
-            AutoReset = false
-        };
-        _searchDebounceTimer.Elapsed += OnSearchDebounceTimerElapsed;
     }
 
-    private void OnSearchDebounceTimerElapsed(object? sender, ElapsedEventArgs e)
+    private async Task RunSearchDebounceAsync(CancellationToken debounceToken)
     {
-        CancellationToken token;
+        try
+        {
+            await Task.Delay(SearchDebounceDelay, debounceToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+
+        CancellationToken applyToken;
         lock (_searchCtsLock)
         {
             _searchCts?.Cancel();
             _searchCts?.Dispose();
             _searchCts = new CancellationTokenSource();
-            token = _searchCts.Token;
+            applyToken = _searchCts.Token;
         }
 
-        Dispatcher.UIThread.Post(() =>
+        await Dispatcher.UIThread.InvokeAsync(() =>
         {
-            if (!token.IsCancellationRequested)
+            if (!applyToken.IsCancellationRequested)
                 UpdateSearchMatches();
         }, DispatcherPriority.Background);
     }
 
     public void OnSearchQueryChanged()
     {
-        _searchDebounceTimer.Stop();
-        _searchDebounceTimer.Start();
+        CancellationToken token;
+        lock (_searchCtsLock)
+        {
+            _searchDebounceCts?.Cancel();
+            _searchDebounceCts?.Dispose();
+            _searchDebounceCts = new CancellationTokenSource();
+            token = _searchDebounceCts.Token;
+        }
+
+        _ = RunSearchDebounceAsync(token);
     }
 
     /// <summary>
@@ -80,9 +90,9 @@ public sealed class TreeSearchCoordinator : IDisposable
     /// </summary>
     public void CancelPending()
     {
-        _searchDebounceTimer.Stop();
         lock (_searchCtsLock)
         {
+            _searchDebounceCts?.Cancel();
             _searchCts?.Cancel();
         }
     }
@@ -157,11 +167,11 @@ public sealed class TreeSearchCoordinator : IDisposable
     public void Dispose()
     {
         Interlocked.Increment(ref _bringIntoViewVersion);
-        _searchDebounceTimer.Stop();
-        _searchDebounceTimer.Elapsed -= OnSearchDebounceTimerElapsed;
-        _searchDebounceTimer.Dispose();
         lock (_searchCtsLock)
         {
+            _searchDebounceCts?.Cancel();
+            _searchDebounceCts?.Dispose();
+            _searchDebounceCts = null;
             _searchCts?.Cancel();
             _searchCts?.Dispose();
             _searchCts = null;

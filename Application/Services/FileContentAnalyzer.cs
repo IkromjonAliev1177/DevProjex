@@ -121,13 +121,13 @@ public sealed class FileContentAnalyzer : IFileContentAnalyzer
 					IsEstimated: false,
 					CrLfPairCount: 0);
 
-			// Check if binary first (fast - only 512 bytes)
-			if (!CheckForNullBytes(path, cancellationToken))
-				return null;
-
-			// For very large files, estimate metrics without reading
+			// For very large files, keep fast binary probe before returning estimated metrics.
+			// Small/medium files use a single streaming pass that also detects null bytes.
 			if (sizeBytes > DefaultMaxSizeForFullRead)
 			{
+				if (!CheckForNullBytes(path, cancellationToken))
+					return null;
+
 				return new TextFileMetrics(
 					SizeBytes: sizeBytes,
 					LineCount: Math.Max(1, (int)(sizeBytes / EstimatedCharsPerLine)),
@@ -140,7 +140,8 @@ public sealed class FileContentAnalyzer : IFileContentAnalyzer
 					TrailingNewlineLineBreaks: 0);
 			}
 
-			// Stream through file counting metrics without loading content into memory
+			// Stream through file counting metrics without loading content into memory.
+			// Null byte detection is performed during the same pass.
 			return CountMetricsStreaming(path, sizeBytes, cancellationToken);
 		}
 		catch (OperationCanceledException)

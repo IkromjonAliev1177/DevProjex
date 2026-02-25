@@ -50,6 +50,19 @@ public partial class MainWindow : Window
         string Text,
         int LineCount);
 
+    private readonly record struct TreeMetricsCacheKey(
+        int TreeIdentity,
+        TreeTextFormat Format,
+        int SelectedCount,
+        int SelectedHash,
+        int PathPresentationIdentity);
+
+    private readonly record struct ContentMetricsCacheKey(
+        int TreeIdentity,
+        int SelectedCount,
+        int SelectedHash,
+        int PathMapperIdentity);
+
     private readonly record struct StatusOperationSnapshot(
         long OperationId,
         StatusOperationType OperationType,
@@ -113,6 +126,7 @@ public partial class MainWindow : Window
     private readonly SelectionSyncCoordinator _selectionCoordinator;
 
     private BuildTreeResult? _currentTree;
+    private BuildTreeResult? _filterBaseTree;
     private string? _currentPath;
     private string? _currentProjectDisplayName;
     private string? _currentRepositoryUrl;
@@ -208,6 +222,7 @@ public partial class MainWindow : Window
 
     // Real-time metrics calculation
     private readonly object _metricsLock = new();
+    private readonly object _metricsComputationCacheLock = new();
     private CancellationTokenSource? _metricsCalculationCts;
     private DispatcherTimer? _metricsDebounceTimer;
 
@@ -223,6 +238,14 @@ public partial class MainWindow : Window
     private int _lastStatusContentTokens;
     private bool _hasStatusMetricsSnapshot;
     private CancellationTokenSource? _recalculateMetricsCts;
+    private bool _hasTreeMetricsCache;
+    private TreeMetricsCacheKey _treeMetricsCacheKey;
+    private ExportOutputMetrics _treeMetricsCacheValue = ExportOutputMetrics.Empty;
+    private bool _hasContentMetricsCache;
+    private ContentMetricsCacheKey _contentMetricsCacheKey;
+    private ExportOutputMetrics _contentMetricsCacheValue = ExportOutputMetrics.Empty;
+    private int _allOrderedFilePathsTreeIdentity;
+    private IReadOnlyList<string>? _allOrderedFilePathsCache;
     private long _statusOperationSequence;
     private readonly object _statusOperationLock = new();
     private long _activeStatusOperationId;
@@ -551,7 +574,9 @@ public partial class MainWindow : Window
             node.ClearRecursive();
         _viewModel.TreeNodes.Clear();
         _currentTree = null;
+        _filterBaseTree = null;
         _filterExpansionSnapshot = null;
+        InvalidateComputedMetricsCaches();
 
         // Clear file metrics cache
         ClearFileMetricsCache(trimCapacity: true);
@@ -1686,6 +1711,22 @@ public partial class MainWindow : Window
     private void InvalidatePreviewCache()
     {
         _previewCacheEntry = null;
+    }
+
+    /// <summary>
+    /// Clears computed tree/content metrics caches that depend on current tree snapshot.
+    /// </summary>
+    private void InvalidateComputedMetricsCaches()
+    {
+        lock (_metricsComputationCacheLock)
+        {
+            _hasTreeMetricsCache = false;
+            _treeMetricsCacheValue = ExportOutputMetrics.Empty;
+            _hasContentMetricsCache = false;
+            _contentMetricsCacheValue = ExportOutputMetrics.Empty;
+            _allOrderedFilePathsCache = null;
+            _allOrderedFilePathsTreeIdentity = 0;
+        }
     }
 
     private static bool ShouldForcePreviewMemoryCleanup(int textLength, int lineCount)
@@ -4363,6 +4404,7 @@ public partial class MainWindow : Window
 
         // Clear current tree descriptor reference (this is the second copy of the tree)
         _currentTree = null;
+        _filterBaseTree = null;
         _hasCompleteMetricsBaseline = false;
         _viewModel.StatusMetricsVisible = false;
         _viewModel.StatusTreeStatsText = string.Empty;
@@ -4371,6 +4413,7 @@ public partial class MainWindow : Window
         _viewModel.PreviewLineCount = 1;
         _viewModel.IsPreviewLoading = false;
         InvalidatePreviewCache();
+        InvalidateComputedMetricsCaches();
 
         // Clear icon cache to release bitmaps
         _iconCache.Clear();
@@ -4390,6 +4433,78 @@ public partial class MainWindow : Window
             // Non-switching state reset (e.g. reload) — still force collection but skip compaction.
             GC.Collect(2, GCCollectionMode.Forced, blocking: true);
         }
+    }
+
+    private bool TryBuildInteractiveFilteredTreeResult(
+        string? nameFilter,
+        CancellationToken cancellationToken,
+        out BuildTreeResult result)
+    {
+        result = default!;
+        var baseTree = _filterBaseTree;
+        if (baseTree is null)
+            return false;
+
+        cancellationToken.ThrowIfCancellationRequested();
+        if (string.IsNullOrWhiteSpace(nameFilter))
+        {
+            result = baseTree;
+            return true;
+        }
+
+        // Reuse the latest unfiltered tree snapshot and apply only name filtering in-memory.
+        // This avoids repeated file-system rescans while preserving the visible tree behavior.
+        var filteredRoot = FilterTreeForNameQuery(baseTree.Root, nameFilter, cancellationToken);
+        result = new BuildTreeResult(
+            Root: filteredRoot,
+            RootAccessDenied: baseTree.RootAccessDenied,
+            HadAccessDenied: baseTree.HadAccessDenied);
+        return true;
+    }
+
+    private static TreeNodeDescriptor FilterTreeForNameQuery(
+        TreeNodeDescriptor root,
+        string query,
+        CancellationToken cancellationToken)
+    {
+        var filteredChildren = new List<TreeNodeDescriptor>(root.Children.Count);
+        foreach (var child in root.Children)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var filteredChild = FilterTreeNodeByName(child, query, cancellationToken);
+            if (filteredChild is not null)
+                filteredChildren.Add(filteredChild);
+        }
+
+        return root with { Children = filteredChildren };
+    }
+
+    private static TreeNodeDescriptor? FilterTreeNodeByName(
+        TreeNodeDescriptor node,
+        string query,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var selfMatches = node.DisplayName.Contains(query, StringComparison.OrdinalIgnoreCase);
+        if (node.Children.Count == 0)
+            return selfMatches ? node : null;
+
+        List<TreeNodeDescriptor>? filteredChildren = null;
+        foreach (var child in node.Children)
+        {
+            var filteredChild = FilterTreeNodeByName(child, query, cancellationToken);
+            if (filteredChild is null)
+                continue;
+
+            filteredChildren ??= new List<TreeNodeDescriptor>(Math.Min(node.Children.Count, 8));
+            filteredChildren.Add(filteredChild);
+        }
+
+        if (!selfMatches && filteredChildren is null)
+            return null;
+
+        return node with { Children = filteredChildren ?? [] };
     }
 
     private async Task RefreshTreeAsync(bool interactiveFilter = false, CancellationToken cancellationToken = default)
@@ -4428,13 +4543,22 @@ public partial class MainWindow : Window
         try
         {
             BuildTreeResult result;
+            var usedInMemoryFilter = false;
 
-            // Build the tree off the UI thread to keep the window responsive on large folders.
-            using (PerformanceMetrics.Measure("BuildTree"))
+            if (interactiveFilter && TryBuildInteractiveFilteredTreeResult(nameFilter, linkedToken, out var filteredResult))
             {
-                result = await Task.Run(
-                    () => _buildTree.Execute(new BuildTreeRequest(_currentPath, options), linkedToken),
-                    linkedToken);
+                result = filteredResult;
+                usedInMemoryFilter = true;
+            }
+            else
+            {
+                // Build the tree off the UI thread to keep the window responsive on large folders.
+                using (PerformanceMetrics.Measure("BuildTree"))
+                {
+                    result = await Task.Run(
+                        () => _buildTree.Execute(new BuildTreeRequest(_currentPath, options), linkedToken),
+                        linkedToken);
+                }
             }
 
             // Check if this operation was superseded by a newer one
@@ -4469,6 +4593,19 @@ public partial class MainWindow : Window
             _viewModel.TreeNodes.Clear();
 
             _currentTree = result;
+            InvalidateComputedMetricsCaches();
+
+            if (!interactiveFilter)
+            {
+                // Keep a baseline snapshot for low-latency in-memory filter updates.
+                _filterBaseTree = string.IsNullOrWhiteSpace(nameFilter) ? result : null;
+            }
+            else if (!usedInMemoryFilter && string.IsNullOrWhiteSpace(nameFilter))
+            {
+                // Recover baseline after fallback interactive rebuilds.
+                _filterBaseTree = result;
+            }
+
             _viewModel.TreeNodes.Add(root);
             root.IsExpanded = true;
 
@@ -4760,6 +4897,8 @@ public partial class MainWindow : Window
         _currentProjectDisplayName = snapshot.ProjectDisplayName;
         _currentRepositoryUrl = snapshot.RepositoryUrl;
         _currentTree = snapshot.Tree;
+        _filterBaseTree = snapshot.Tree;
+        InvalidateComputedMetricsCaches();
 
         _viewModel.IsProjectLoaded = true;
         _viewModel.SettingsVisible = snapshot.SettingsVisible;
@@ -4837,6 +4976,7 @@ public partial class MainWindow : Window
 
         _currentPath = null;
         _currentTree = null;
+        _filterBaseTree = null;
         _currentProjectDisplayName = null;
         _currentRepositoryUrl = null;
         _filterExpansionSnapshot = null;
@@ -5452,6 +5592,8 @@ public partial class MainWindow : Window
             if (trimCapacity)
                 _fileMetricsCache.TrimExcess();
         }
+
+        InvalidateComputedMetricsCaches();
     }
 
     /// <summary>
@@ -5490,9 +5632,36 @@ public partial class MainWindow : Window
         if (_currentTree is null || string.IsNullOrWhiteSpace(_currentPath))
             return ExportOutputMetrics.Empty;
 
-        var treeText = BuildTreeTextForSelection(selectedPaths, format);
+        var pathPresentation = CreateExportPathPresentation();
+        var pathPresentationIdentity = pathPresentation is null
+            ? 0
+            : HashCode.Combine(pathPresentation.DisplayRootPath, pathPresentation.DisplayRootName);
+        var selectedCount = hasSelection ? selectedPaths.Count : 0;
+        var selectedHash = hasSelection ? BuildPathSetHash(selectedPaths) : 0;
+        var cacheKey = new TreeMetricsCacheKey(
+            TreeIdentity: RuntimeHelpers.GetHashCode(_currentTree.Root),
+            Format: format,
+            SelectedCount: selectedCount,
+            SelectedHash: selectedHash,
+            PathPresentationIdentity: pathPresentationIdentity);
 
-        return ExportOutputMetricsCalculator.FromText(treeText);
+        lock (_metricsComputationCacheLock)
+        {
+            if (_hasTreeMetricsCache && _treeMetricsCacheKey == cacheKey)
+                return _treeMetricsCacheValue;
+        }
+
+        var treeText = BuildTreeTextForSelection(selectedPaths, format);
+        var metrics = ExportOutputMetricsCalculator.FromText(treeText);
+
+        lock (_metricsComputationCacheLock)
+        {
+            _hasTreeMetricsCache = true;
+            _treeMetricsCacheKey = cacheKey;
+            _treeMetricsCacheValue = metrics;
+        }
+
+        return metrics;
     }
 
     /// <summary>
@@ -5505,28 +5674,26 @@ public partial class MainWindow : Window
             return ExportOutputMetrics.Empty;
 
         var pathMapper = CreateExportPathPresentation()?.MapFilePath;
+        var selectedCount = hasSelection ? selectedPaths.Count : 0;
+        var selectedHash = hasSelection ? BuildPathSetHash(selectedPaths) : 0;
+        var cacheKey = new ContentMetricsCacheKey(
+            TreeIdentity: RuntimeHelpers.GetHashCode(_currentTree.Root),
+            SelectedCount: selectedCount,
+            SelectedHash: selectedHash,
+            PathMapperIdentity: pathMapper is null ? 0 : RuntimeHelpers.GetHashCode(pathMapper));
 
-        var uniquePaths = new HashSet<string>(PathComparer.Default);
-        if (hasSelection)
+        lock (_metricsComputationCacheLock)
         {
-            foreach (var path in selectedPaths)
-            {
-                if (File.Exists(path))
-                    uniquePaths.Add(path);
-            }
-        }
-        else
-        {
-            foreach (var path in EnumerateFilePaths(_currentTree.Root))
-                uniquePaths.Add(path);
+            if (_hasContentMetricsCache && _contentMetricsCacheKey == cacheKey)
+                return _contentMetricsCacheValue;
         }
 
-        if (uniquePaths.Count == 0)
+        var orderedPaths = hasSelection
+            ? BuildOrderedSelectedFilePaths(selectedPaths)
+            : GetOrBuildAllOrderedFilePaths(_currentTree.Root);
+
+        if (orderedPaths.Count == 0)
             return ExportOutputMetrics.Empty;
-
-        var orderedPaths = new List<string>(uniquePaths.Count);
-        orderedPaths.AddRange(uniquePaths);
-        orderedPaths.Sort(PathComparer.Default);
 
         var metricsInputs = new List<ContentFileMetrics>(orderedPaths.Count);
         lock (_metricsLock)
@@ -5551,7 +5718,58 @@ public partial class MainWindow : Window
             }
         }
 
-        return ExportOutputMetricsCalculator.FromContentFiles(metricsInputs);
+        var computed = ExportOutputMetricsCalculator.FromOrderedContentFiles(metricsInputs);
+        lock (_metricsComputationCacheLock)
+        {
+            _hasContentMetricsCache = true;
+            _contentMetricsCacheKey = cacheKey;
+            _contentMetricsCacheValue = computed;
+        }
+
+        return computed;
+    }
+
+    private IReadOnlyList<string> GetOrBuildAllOrderedFilePaths(TreeNodeDescriptor treeRoot)
+    {
+        var treeIdentity = RuntimeHelpers.GetHashCode(treeRoot);
+        lock (_metricsComputationCacheLock)
+        {
+            if (_allOrderedFilePathsCache is not null &&
+                _allOrderedFilePathsTreeIdentity == treeIdentity)
+            {
+                return _allOrderedFilePathsCache;
+            }
+        }
+
+        var uniquePaths = new HashSet<string>(PathComparer.Default);
+        foreach (var path in EnumerateFilePaths(treeRoot))
+            uniquePaths.Add(path);
+
+        var orderedPaths = new List<string>(uniquePaths.Count);
+        orderedPaths.AddRange(uniquePaths);
+        orderedPaths.Sort(PathComparer.Default);
+
+        lock (_metricsComputationCacheLock)
+        {
+            _allOrderedFilePathsTreeIdentity = treeIdentity;
+            _allOrderedFilePathsCache = orderedPaths;
+            return _allOrderedFilePathsCache;
+        }
+    }
+
+    private static List<string> BuildOrderedSelectedFilePaths(IReadOnlySet<string> selectedPaths)
+    {
+        var uniquePaths = new HashSet<string>(PathComparer.Default);
+        foreach (var path in selectedPaths)
+        {
+            if (File.Exists(path))
+                uniquePaths.Add(path);
+        }
+
+        var orderedPaths = new List<string>(uniquePaths.Count);
+        orderedPaths.AddRange(uniquePaths);
+        orderedPaths.Sort(PathComparer.Default);
+        return orderedPaths;
     }
 
     /// <summary>

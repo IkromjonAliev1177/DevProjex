@@ -55,7 +55,8 @@ public sealed class TreeExportService
 		string? displayRootPath = null,
 		string? displayRootName = null)
 	{
-		if (!HasSelectedDescendantOrSelf(root, selectedPaths))
+		var includedPaths = new HashSet<string>(PathComparer.Default);
+		if (!CollectIncludedPaths(root, selectedPaths, includedPaths))
 			return string.Empty;
 
 		var outputRootPath = string.IsNullOrWhiteSpace(displayRootPath) ? rootPath : displayRootPath;
@@ -66,7 +67,7 @@ public sealed class TreeExportService
 				rootPath,
 				ResolveJsonRootPath(rootPath, displayRootPath),
 				root,
-				selectedPaths,
+				includedPaths,
 				outputRootName);
 
 		var sb = new StringBuilder();
@@ -74,7 +75,7 @@ public sealed class TreeExportService
 		sb.AppendLine();
 
 		sb.Append("├── ").AppendLine(outputRootName);
-		AppendSelectedAscii(root, selectedPaths, "│   ", sb);
+		AppendSelectedAscii(root, includedPaths, "│   ", sb);
 
 		return sb.ToString();
 	}
@@ -122,14 +123,14 @@ public sealed class TreeExportService
 		int visibleCount = 0;
 		foreach (var child in node.Children)
 		{
-			if (HasSelectedDescendantOrSelf(child, selectedPaths))
+			if (selectedPaths.Contains(child.FullPath))
 				visibleCount++;
 		}
 
 		int currentIndex = 0;
 		foreach (var child in node.Children)
 		{
-			if (!HasSelectedDescendantOrSelf(child, selectedPaths))
+			if (!selectedPaths.Contains(child.FullPath))
 				continue;
 
 			currentIndex++;
@@ -169,11 +170,11 @@ public sealed class TreeExportService
 		string localRootPath,
 		string displayRootPath,
 		TreeNodeDescriptor root,
-		IReadOnlySet<string> selectedPaths,
+		IReadOnlySet<string> includedPaths,
 		string rootDisplayName)
 	{
 		var normalizedRootPath = Path.GetFullPath(localRootPath);
-		var selectedRoot = BuildSelectedJsonNode(normalizedRootPath, root, selectedPaths, rootDisplayName);
+		var selectedRoot = BuildSelectedJsonNode(normalizedRootPath, root, includedPaths, rootDisplayName);
 		if (selectedRoot is null)
 			return string.Empty;
 
@@ -222,10 +223,10 @@ public sealed class TreeExportService
 	private static TreeJsonNode? BuildSelectedJsonNode(
 		string rootPath,
 		TreeNodeDescriptor node,
-		IReadOnlySet<string> selectedPaths,
+		IReadOnlySet<string> includedPaths,
 		string? rootDisplayName = null)
 	{
-		var includeSelf = selectedPaths.Contains(node.FullPath);
+		var includeSelf = includedPaths.Contains(node.FullPath);
 		var selectedDirectories = new List<TreeJsonNode>();
 		var selectedFiles = new List<string>();
 
@@ -233,11 +234,11 @@ public sealed class TreeExportService
 		{
 			if (child.IsDirectory)
 			{
-				var selectedChild = BuildSelectedJsonNode(rootPath, child, selectedPaths);
+				var selectedChild = BuildSelectedJsonNode(rootPath, child, includedPaths);
 				if (selectedChild is not null)
 					selectedDirectories.Add(selectedChild);
 			}
-			else if (selectedPaths.Contains(child.FullPath))
+			else if (includedPaths.Contains(child.FullPath))
 			{
 				selectedFiles.Add(child.DisplayName);
 			}
@@ -256,6 +257,27 @@ public sealed class TreeExportService
 
 	private static string ResolveRootDisplayName(TreeNodeDescriptor root, string? displayRootName)
 		=> string.IsNullOrWhiteSpace(displayRootName) ? root.DisplayName : displayRootName;
+
+	private static bool CollectIncludedPaths(
+		TreeNodeDescriptor node,
+		IReadOnlySet<string> selectedPaths,
+		HashSet<string> includedPaths)
+	{
+		var includeSelf = selectedPaths.Contains(node.FullPath);
+		var includeByChildren = false;
+
+		foreach (var child in node.Children)
+		{
+			if (CollectIncludedPaths(child, selectedPaths, includedPaths))
+				includeByChildren = true;
+		}
+
+		if (!includeSelf && !includeByChildren)
+			return false;
+
+		includedPaths.Add(node.FullPath);
+		return true;
+	}
 
 	private static string ToRelativeJsonPath(string rootPath, string fullPath)
 	{
