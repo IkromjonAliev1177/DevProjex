@@ -6,6 +6,8 @@ public static class ExportOutputMetricsCalculator
 	private const string NoContentMarker = "[No Content, 0 bytes]";
 	private const string WhitespaceMarkerPrefix = "[Whitespace, ";
 	private const string WhitespaceMarkerSuffix = " bytes]";
+	private static readonly System.Buffers.SearchValues<char> LineBreakCharacters =
+		System.Buffers.SearchValues.Create("\r\n");
 
 	public static ExportOutputMetrics FromText(string text)
 	{
@@ -97,35 +99,36 @@ public static class ExportOutputMetricsCalculator
 	}
 
 	private static int EstimateTokens(int chars) =>
-		(int)Math.Ceiling(chars / 4.0);
+		chars <= 0 ? 0 : (chars + 3) / 4;
 
 	private static NormalizedTextStats GetNormalizedTextStats(ReadOnlySpan<char> text)
 	{
 		var normalizedChars = 0;
 		var lineBreaks = 0;
+		var index = 0;
 
-		for (var i = 0; i < text.Length; i++)
+		// Scan non-line-break segments in bulk to reduce per-char branching on hot paths.
+		while (index < text.Length)
 		{
-			var c = text[i];
-			if (c == '\r')
+			var remaining = text[index..];
+			var breakOffset = remaining.IndexOfAny(LineBreakCharacters);
+			if (breakOffset < 0)
 			{
-				// Treat CRLF as a single line-break character in normalized metrics.
-				if (i + 1 < text.Length && text[i + 1] == '\n')
-					i++;
-
-				normalizedChars++;
-				lineBreaks++;
-				continue;
+				normalizedChars += remaining.Length;
+				break;
 			}
 
-			if (c == '\n')
+			normalizedChars += breakOffset + 1;
+			index += breakOffset;
+
+			if (text[index] == '\r' && index + 1 < text.Length && text[index + 1] == '\n')
 			{
-				normalizedChars++;
-				lineBreaks++;
-				continue;
+				// CRLF contributes a single normalized line-break character.
+				index++;
 			}
 
-			normalizedChars++;
+			lineBreaks++;
+			index++;
 		}
 
 		return new NormalizedTextStats(normalizedChars, lineBreaks);
