@@ -84,10 +84,10 @@ public sealed class ExportFormatRulesWiringIntegrationTests
 
         Assert.Contains("DefaultExtension = useJsonDefaultExtension ? \"json\" : \"txt\"", body, StringComparison.Ordinal);
         Assert.Contains("FileTypeChoices = allowBothExtensions", body, StringComparison.Ordinal);
-        Assert.Contains("? new[] { jsonFileType, textFileType }", body, StringComparison.Ordinal);
         Assert.Contains(": useJsonDefaultExtension", body, StringComparison.Ordinal);
-        Assert.Contains("? new[] { jsonFileType }", body, StringComparison.Ordinal);
-        Assert.Contains(": new[] { textFileType }", body, StringComparison.Ordinal);
+        Assert.Matches(@"(?s)\?\s*(?:new\[\]\s*\{\s*jsonFileType\s*,\s*textFileType\s*\}|\[\s*jsonFileType\s*,\s*textFileType\s*\])", body);
+        Assert.Matches(@"(?s)\?\s*(?:new\[\]\s*\{\s*jsonFileType\s*\}|\[\s*jsonFileType\s*\])", body);
+        Assert.Matches(@"(?s):\s*(?:new\[\]\s*\{\s*textFileType\s*\}|\[\s*textFileType\s*\])", body);
     }
 
     [Fact]
@@ -98,7 +98,7 @@ public sealed class ExportFormatRulesWiringIntegrationTests
         var pickerBody = Slice(content, "private async Task<bool> TryExportTextToFileAsync(", "private string BuildSuggestedExportFileName(");
 
         Assert.Contains("allowBothExtensions: saveAsJson", treeBody, StringComparison.Ordinal);
-        Assert.Contains("new[] { jsonFileType, textFileType }", pickerBody, StringComparison.Ordinal);
+        Assert.Matches(@"(?:new\[\]\s*\{\s*jsonFileType\s*,\s*textFileType\s*\}|\[\s*jsonFileType\s*,\s*textFileType\s*\])", pickerBody);
     }
 
     [Fact]
@@ -108,11 +108,11 @@ public sealed class ExportFormatRulesWiringIntegrationTests
         var body = Slice(content, "private async Task<bool> TryExportTextToFileAsync(", "private string BuildSuggestedExportFileName(");
 
         Assert.Contains("new FilePickerFileType(\"JSON\")", body, StringComparison.Ordinal);
-        Assert.Contains("Patterns = new[] { \"*.json\" }", body, StringComparison.Ordinal);
-        Assert.Contains("MimeTypes = new[] { \"application/json\" }", body, StringComparison.Ordinal);
+        Assert.Matches(@"Patterns\s*=\s*(?:new\[\]\s*\{\s*""\*\.json""\s*\}|\[\s*""\*\.json""\s*\])", body);
+        Assert.Matches(@"MimeTypes\s*=\s*(?:new\[\]\s*\{\s*""application/json""\s*\}|\[\s*""application/json""\s*\])", body);
         Assert.Contains("new FilePickerFileType(\"Text\")", body, StringComparison.Ordinal);
-        Assert.Contains("Patterns = new[] { \"*.txt\" }", body, StringComparison.Ordinal);
-        Assert.Contains("MimeTypes = new[] { \"text/plain\" }", body, StringComparison.Ordinal);
+        Assert.Matches(@"Patterns\s*=\s*(?:new\[\]\s*\{\s*""\*\.txt""\s*\}|\[\s*""\*\.txt""\s*\])", body);
+        Assert.Matches(@"MimeTypes\s*=\s*(?:new\[\]\s*\{\s*""text/plain""\s*\}|\[\s*""text/plain""\s*\])", body);
     }
 
     [Fact]
