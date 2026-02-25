@@ -169,7 +169,10 @@ public sealed class SelectionSyncCoordinatorExtensionlessIgnoreRegressionTests
 			{
 				IgnoreExtensionlessFiles = selectedOptions.Contains(IgnoreOptionId.ExtensionlessFiles)
 			},
-			(_, _) => new IgnoreOptionsAvailability(IncludeGitIgnore: false, IncludeSmartIgnore: false),
+			(_, _) => new IgnoreOptionsAvailability(
+				IncludeGitIgnore: false,
+				IncludeSmartIgnore: false,
+				ShowAdvancedCounts: true),
 			_ => false,
 			() => currentPath);
 	}

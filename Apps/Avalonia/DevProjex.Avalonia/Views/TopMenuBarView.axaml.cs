@@ -25,6 +25,7 @@ public partial class TopMenuBarView : UserControl
     public event EventHandler<RoutedEventArgs>? ZoomResetRequested;
     public event EventHandler<RoutedEventArgs>? ToggleCompactModeRequested;
     public event EventHandler<RoutedEventArgs>? ToggleTreeAnimationRequested;
+    public event EventHandler<RoutedEventArgs>? ToggleAdvancedCountsRequested;
     public event EventHandler<RoutedEventArgs>? ToggleSearchRequested;
     public event EventHandler<RoutedEventArgs>? ToggleSettingsRequested;
     public event EventHandler<RoutedEventArgs>? TogglePreviewRequested;
@@ -139,6 +140,9 @@ public partial class TopMenuBarView : UserControl
 
     private void OnToggleTreeAnimation(object? sender, RoutedEventArgs e)
         => ToggleTreeAnimationRequested?.Invoke(sender, e);
+
+    private void OnToggleAdvancedCounts(object? sender, RoutedEventArgs e)
+        => ToggleAdvancedCountsRequested?.Invoke(sender, e);
 
     private void OnToggleSettings(object? sender, RoutedEventArgs e) => ToggleSettingsRequested?.Invoke(sender, e);
 

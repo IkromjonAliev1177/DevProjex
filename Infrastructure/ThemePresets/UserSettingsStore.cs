@@ -124,6 +124,7 @@ public sealed class UserSettingsStore
             {
                 IsCompactMode = false,
                 IsTreeAnimationEnabled = false,
+                IsAdvancedIgnoreCountsEnabled = false,
                 PreferredLanguage = null
             }
         };

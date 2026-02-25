@@ -378,6 +378,17 @@ public sealed class SelectionSyncCoordinator(
         ApplyIgnoreOptions(options, previousSelections, hasPreviousSelections);
     }
 
+    public void RefreshIgnoreOptionsForCurrentSelection(string? currentPath = null)
+    {
+        var path = string.IsNullOrWhiteSpace(currentPath) ? currentPathProvider() : currentPath;
+        var selectedRoots = GetSelectedRootFolders();
+        var previousSelections = new HashSet<IgnoreOptionId>(_ignoreSelectionCache);
+        var hasPreviousSelections = _ignoreSelectionInitialized;
+        var availability = ResolveIgnoreOptionsAvailability(path, selectedRoots);
+        var options = ignoreOptionsService.GetOptions(availability);
+        ApplyIgnoreOptions(options, previousSelections, hasPreviousSelections);
+    }
+
     public IReadOnlyCollection<string> GetSelectedRootFolders()
     {
         var selected = new List<string>(viewModel.RootFolders.Count);

@@ -12,4 +12,5 @@ public sealed record IgnoreOptionsAvailability(
 	bool IncludeDotFiles = true,
 	int DotFilesCount = 0,
 	bool IncludeExtensionlessFiles = false,
-	int ExtensionlessFilesCount = 0);
+	int ExtensionlessFilesCount = 0,
+	bool ShowAdvancedCounts = false);

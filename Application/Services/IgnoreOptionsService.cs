@@ -25,7 +25,7 @@ public sealed class IgnoreOptionsService(LocalizationService localization)
 		{
 			options.Add(new IgnoreOptionDescriptor(
 				IgnoreOptionId.HiddenFolders,
-				FormatLabelWithCount(localization["Settings.Ignore.HiddenFolders"], availability.HiddenFoldersCount),
+				FormatLabelWithCount(localization["Settings.Ignore.HiddenFolders"], availability.HiddenFoldersCount, availability.ShowAdvancedCounts),
 				true));
 		}
 
@@ -33,7 +33,7 @@ public sealed class IgnoreOptionsService(LocalizationService localization)
 		{
 			options.Add(new IgnoreOptionDescriptor(
 				IgnoreOptionId.HiddenFiles,
-				FormatLabelWithCount(localization["Settings.Ignore.HiddenFiles"], availability.HiddenFilesCount),
+				FormatLabelWithCount(localization["Settings.Ignore.HiddenFiles"], availability.HiddenFilesCount, availability.ShowAdvancedCounts),
 				true));
 		}
 
@@ -41,7 +41,7 @@ public sealed class IgnoreOptionsService(LocalizationService localization)
 		{
 			options.Add(new IgnoreOptionDescriptor(
 				IgnoreOptionId.DotFolders,
-				FormatLabelWithCount(localization["Settings.Ignore.DotFolders"], availability.DotFoldersCount),
+				FormatLabelWithCount(localization["Settings.Ignore.DotFolders"], availability.DotFoldersCount, availability.ShowAdvancedCounts),
 				true));
 		}
 
@@ -49,7 +49,7 @@ public sealed class IgnoreOptionsService(LocalizationService localization)
 		{
 			options.Add(new IgnoreOptionDescriptor(
 				IgnoreOptionId.DotFiles,
-				FormatLabelWithCount(localization["Settings.Ignore.DotFiles"], availability.DotFilesCount),
+				FormatLabelWithCount(localization["Settings.Ignore.DotFiles"], availability.DotFilesCount, availability.ShowAdvancedCounts),
 				true));
 		}
 
@@ -57,7 +57,7 @@ public sealed class IgnoreOptionsService(LocalizationService localization)
 		{
 			options.Add(new IgnoreOptionDescriptor(
 				IgnoreOptionId.ExtensionlessFiles,
-				FormatLabelWithCount(localization["Settings.Ignore.ExtensionlessFiles"], availability.ExtensionlessFilesCount),
+				FormatLabelWithCount(localization["Settings.Ignore.ExtensionlessFiles"], availability.ExtensionlessFilesCount, availability.ShowAdvancedCounts),
 				false));
 		}
 
@@ -78,9 +78,9 @@ public sealed class IgnoreOptionsService(LocalizationService localization)
 			IncludeSmartIgnore: false));
 	}
 
-	private static string FormatLabelWithCount(string baseLabel, int count)
+	private static string FormatLabelWithCount(string baseLabel, int count, bool showAdvancedCounts)
 	{
-		return count > 0
+		return showAdvancedCounts && count > 0
 			? $"{baseLabel} ({count})"
 			: baseLabel;
 	}

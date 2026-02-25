@@ -131,6 +131,7 @@ public partial class MainWindow : Window
     private string? _currentPath;
     private string? _currentProjectDisplayName;
     private string? _currentRepositoryUrl;
+    private bool _isAdvancedIgnoreCountsEnabled;
     private string? _cachedPathPresentationProjectPath;
     private string? _cachedPathPresentationRepositoryUrl;
     private ExportPathPresentation? _cachedPathPresentation;
@@ -832,8 +833,10 @@ public partial class MainWindow : Window
 
     private void ApplyViewSettings(AppViewSettings settings)
     {
+        _isAdvancedIgnoreCountsEnabled = settings.IsAdvancedIgnoreCountsEnabled;
         _viewModel.IsCompactMode = settings.IsCompactMode;
         _viewModel.IsTreeAnimationEnabled = settings.IsTreeAnimationEnabled;
+        _viewModel.IsAdvancedIgnoreCountsEnabled = _isAdvancedIgnoreCountsEnabled;
 
         if (_viewModel.IsCompactMode)
             Classes.Add("compact-mode");
@@ -893,6 +896,7 @@ public partial class MainWindow : Window
         {
             IsCompactMode = _viewModel.IsCompactMode,
             IsTreeAnimationEnabled = _viewModel.IsTreeAnimationEnabled,
+            IsAdvancedIgnoreCountsEnabled = _isAdvancedIgnoreCountsEnabled,
             PreferredLanguage = _userSettingsDb.ViewSettings?.PreferredLanguage
         };
 
@@ -2624,6 +2628,14 @@ public partial class MainWindow : Window
             Classes.Remove("tree-animation");
 
         SaveCurrentViewSettings();
+    }
+
+    private void OnToggleAdvancedIgnoreCounts(object? sender, RoutedEventArgs e)
+    {
+        _isAdvancedIgnoreCountsEnabled = !_isAdvancedIgnoreCountsEnabled;
+        _viewModel.IsAdvancedIgnoreCountsEnabled = _isAdvancedIgnoreCountsEnabled;
+        SaveCurrentViewSettings();
+        _selectionCoordinator.RefreshIgnoreOptionsForCurrentSelection(_currentPath);
     }
 
     private void OnThemeMenuClick(object? sender, RoutedEventArgs e)
@@ -4767,7 +4779,11 @@ public partial class MainWindow : Window
         string rootPath,
         IReadOnlyCollection<string> selectedRootFolders)
     {
-        return _ignoreRulesService.GetIgnoreOptionsAvailability(rootPath, selectedRootFolders);
+        var availability = _ignoreRulesService.GetIgnoreOptionsAvailability(rootPath, selectedRootFolders);
+        return availability with
+        {
+            ShowAdvancedCounts = _isAdvancedIgnoreCountsEnabled
+        };
     }
 
     private IgnoreRules BuildIgnoreRules(string rootPath)

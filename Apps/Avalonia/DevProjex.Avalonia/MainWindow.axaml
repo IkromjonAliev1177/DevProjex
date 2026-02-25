@@ -205,6 +205,7 @@
                           ZoomResetRequested="OnZoomReset"
                           ToggleCompactModeRequested="OnToggleCompactMode"
                           ToggleTreeAnimationRequested="OnToggleTreeAnimation"
+                          ToggleAdvancedCountsRequested="OnToggleAdvancedIgnoreCounts"
                           ToggleSearchRequested="OnToggleSearch"
                           ToggleSettingsRequested="OnToggleSettings"
                           TogglePreviewRequested="OnTogglePreview"
