@@ -18,7 +18,7 @@ public sealed class FilterOptionSelectionServiceAdditionalTests
 	{
 		var service = new FilterOptionSelectionService();
 		var options = service.BuildExtensionOptions(
-			new[] { ".txt", ".csproj", ".cs", ".sln", ".designer", ".md", ".json", ".png", ".yaml", ".xml" },
+			[".txt", ".csproj", ".cs", ".sln", ".designer", ".md", ".json", ".png", ".yaml", ".xml"],
 			new HashSet<string>(StringComparer.OrdinalIgnoreCase));
 
 		var target = options.Single(option => option.Name.Equals(extension, StringComparison.OrdinalIgnoreCase));
@@ -45,7 +45,7 @@ public sealed class FilterOptionSelectionServiceAdditionalTests
 		var service = new FilterOptionSelectionService();
 		var previous = previousSelections.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 		var options = service.BuildExtensionOptions(
-			new[] { ".txt", ".csproj", ".cs", ".sln", ".designer", ".md", ".xml" },
+			[".txt", ".csproj", ".cs", ".sln", ".designer", ".md", ".xml"],
 			new HashSet<string>(previous, StringComparer.OrdinalIgnoreCase));
 
 		var target = options.Single(option => option.Name.Equals(extension, StringComparison.OrdinalIgnoreCase));
@@ -59,7 +59,7 @@ public sealed class FilterOptionSelectionServiceAdditionalTests
 	{
 		var service = new FilterOptionSelectionService();
 		var options = service.BuildExtensionOptions(
-			new[] { ".b", ".A", ".c", ".aa" },
+			[".b", ".A", ".c", ".aa"],
 			new HashSet<string>(StringComparer.OrdinalIgnoreCase));
 
 		var ordered = options.Select(option => option.Name).ToList();
@@ -90,7 +90,7 @@ public sealed class FilterOptionSelectionServiceAdditionalTests
 			SmartIgnoredFiles: new HashSet<string>(StringComparer.OrdinalIgnoreCase));
 
 		var options = service.BuildRootFolderOptions(
-			new[] { "bin", "obj", ".git", "node_modules", "src", "docs", "build", "Assets", ".idea", ".vscode" },
+			["bin", "obj", ".git", "node_modules", "src", "docs", "build", "Assets", ".idea", ".vscode"],
 			new HashSet<string>(StringComparer.OrdinalIgnoreCase),
 			rules);
 
@@ -120,7 +120,7 @@ public sealed class FilterOptionSelectionServiceAdditionalTests
 			SmartIgnoredFiles: new HashSet<string>(StringComparer.OrdinalIgnoreCase));
 
 		var options = service.BuildRootFolderOptions(
-			new[] { "bin", "obj", ".git", "node_modules", "src", "docs" },
+			["bin", "obj", ".git", "node_modules", "src", "docs"],
 			new HashSet<string>(
 				previousSelections.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
 				StringComparer.OrdinalIgnoreCase),

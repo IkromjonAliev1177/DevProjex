@@ -2,12 +2,7 @@ namespace DevProjex.Infrastructure.ResourceStore;
 
 public sealed class EmbeddedIconStore : IIconStore
 {
-	private readonly Lazy<IconPack> _pack;
-
-	public EmbeddedIconStore()
-	{
-		_pack = new Lazy<IconPack>(LoadPack);
-	}
+	private readonly Lazy<IconPack> _pack = new(LoadPack);
 
 	public IReadOnlyCollection<string> Keys => _pack.Value.IconMap.Keys;
 

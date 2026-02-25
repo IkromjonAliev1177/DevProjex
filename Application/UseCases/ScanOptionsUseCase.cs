@@ -1,16 +1,9 @@
 namespace DevProjex.Application.UseCases;
 
-public sealed class ScanOptionsUseCase
+public sealed class ScanOptionsUseCase(IFileSystemScanner scanner)
 {
-	private readonly IFileSystemScanner _scanner;
-
 	// Optimal parallelism for modern multi-core CPUs (targeting developers with NVMe SSDs)
 	private static readonly int MaxParallelism = Math.Max(4, Environment.ProcessorCount);
-
-	public ScanOptionsUseCase(IFileSystemScanner scanner)
-	{
-		_scanner = scanner;
-	}
 
 	public ScanOptionsResult Execute(ScanOptionsRequest request, CancellationToken cancellationToken = default)
 	{
@@ -25,8 +18,8 @@ public sealed class ScanOptionsUseCase
 				MaxDegreeOfParallelism = 2,
 				CancellationToken = cancellationToken
 			},
-			() => extensions = _scanner.GetExtensions(request.RootPath, request.IgnoreRules, cancellationToken),
-			() => rootFolders = _scanner.GetRootFolderNames(request.RootPath, request.IgnoreRules, cancellationToken));
+			() => extensions = scanner.GetExtensions(request.RootPath, request.IgnoreRules, cancellationToken),
+			() => rootFolders = scanner.GetRootFolderNames(request.RootPath, request.IgnoreRules, cancellationToken));
 
 		if (extensions is null || rootFolders is null)
 			throw new InvalidOperationException("Scan results were not produced.");
@@ -60,7 +53,7 @@ public sealed class ScanOptionsUseCase
 
 		// Always scan root-level files, even when no subfolders are selected.
 		// This ensures folders containing only files (no subdirectories) work correctly.
-		var rootFiles = _scanner.GetRootFileExtensions(rootPath, ignoreRules, cancellationToken);
+		var rootFiles = scanner.GetRootFileExtensions(rootPath, ignoreRules, cancellationToken);
 		foreach (var ext in rootFiles.Value)
 			extensions.Add(ext);
 
@@ -85,7 +78,7 @@ public sealed class ScanOptionsUseCase
 					cancellationToken.ThrowIfCancellationRequested();
 
 					var folderPath = Path.Combine(rootPath, folder);
-					var result = _scanner.GetExtensions(folderPath, ignoreRules, cancellationToken);
+					var result = scanner.GetExtensions(folderPath, ignoreRules, cancellationToken);
 
 					foreach (var ext in result.Value)
 						localExtensions.Add(ext);
@@ -110,5 +103,5 @@ public sealed class ScanOptionsUseCase
 		return new ScanResult<HashSet<string>>(extensions, rootAccessDenied == 1, hadAccessDenied == 1);
 	}
 
-	public bool CanReadRoot(string rootPath) => _scanner.CanReadRoot(rootPath);
+	public bool CanReadRoot(string rootPath) => scanner.CanReadRoot(rootPath);
 }

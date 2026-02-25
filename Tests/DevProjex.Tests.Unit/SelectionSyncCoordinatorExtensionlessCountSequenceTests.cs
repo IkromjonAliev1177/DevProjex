@@ -18,7 +18,7 @@ public sealed class SelectionSyncCoordinatorExtensionlessCountSequenceTests
 		{
 			coordinator.ApplyExtensionScan(scans[i]);
 			viewModel.AllIgnoreChecked = false;
-			coordinator.PopulateIgnoreOptionsForRootSelection(Array.Empty<string>(), projectPath);
+			coordinator.PopulateIgnoreOptionsForRootSelection([], projectPath);
 
 			AssertExtensionlessOptionState(viewModel, expectedCounts[i], expectChecked: false);
 		}
@@ -36,16 +36,16 @@ public sealed class SelectionSyncCoordinatorExtensionlessCountSequenceTests
 		var viewModel = CreateViewModel();
 		var coordinator = CreateCoordinator(viewModel, () => projectPath);
 		var profile = new ProjectSelectionProfile(
-			SelectedRootFolders: Array.Empty<string>(),
-			SelectedExtensions: Array.Empty<string>(),
-			SelectedIgnoreOptions: new[] { IgnoreOptionId.ExtensionlessFiles });
+			SelectedRootFolders: [],
+			SelectedExtensions: [],
+			SelectedIgnoreOptions: [IgnoreOptionId.ExtensionlessFiles]);
 
 		coordinator.ApplyProjectProfileSelections(projectPath, profile);
 
 		for (var i = 0; i < scans.Length; i++)
 		{
 			coordinator.ApplyExtensionScan(scans[i]);
-			coordinator.PopulateIgnoreOptionsForRootSelection(Array.Empty<string>(), projectPath);
+			coordinator.PopulateIgnoreOptionsForRootSelection([], projectPath);
 
 			AssertExtensionlessOptionState(viewModel, expectedCounts[i], expectChecked: expectedCounts[i] > 0);
 		}
@@ -78,7 +78,7 @@ public sealed class SelectionSyncCoordinatorExtensionlessCountSequenceTests
 					new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "LICENSE", ".cs" },
 					false,
 					false),
-				_ => new ScanResult<HashSet<string>>(new HashSet<string>(), false, false)
+				_ => new ScanResult<HashSet<string>>([], false, false)
 			}
 		};
 
@@ -86,22 +86,22 @@ public sealed class SelectionSyncCoordinatorExtensionlessCountSequenceTests
 		var coordinator = CreateCoordinator(viewModel, () => projectPath, scanner);
 		var scanOptions = new ScanOptionsUseCase(scanner);
 
-		var rootOnlyScan = scanOptions.GetExtensionsForRootFolders(projectPath, Array.Empty<string>(), ignoreRules);
+		var rootOnlyScan = scanOptions.GetExtensionsForRootFolders(projectPath, [], ignoreRules);
 		coordinator.ApplyExtensionScan(rootOnlyScan.Value);
 		viewModel.AllIgnoreChecked = false;
-		coordinator.PopulateIgnoreOptionsForRootSelection(Array.Empty<string>(), projectPath);
+		coordinator.PopulateIgnoreOptionsForRootSelection([], projectPath);
 		AssertExtensionlessOptionState(viewModel, expectedCount: 1, expectChecked: false);
 
-		var srcScan = scanOptions.GetExtensionsForRootFolders(projectPath, new[] { "src" }, ignoreRules);
+		var srcScan = scanOptions.GetExtensionsForRootFolders(projectPath, ["src"], ignoreRules);
 		coordinator.ApplyExtensionScan(srcScan.Value);
 		viewModel.AllIgnoreChecked = false;
-		coordinator.PopulateIgnoreOptionsForRootSelection(new[] { "src" }, projectPath);
+		coordinator.PopulateIgnoreOptionsForRootSelection(["src"], projectPath);
 		AssertExtensionlessOptionState(viewModel, expectedCount: 2, expectChecked: false);
 
-		var srcAndTestsScan = scanOptions.GetExtensionsForRootFolders(projectPath, new[] { "src", "tests" }, ignoreRules);
+		var srcAndTestsScan = scanOptions.GetExtensionsForRootFolders(projectPath, ["src", "tests"], ignoreRules);
 		coordinator.ApplyExtensionScan(srcAndTestsScan.Value);
 		viewModel.AllIgnoreChecked = false;
-		coordinator.PopulateIgnoreOptionsForRootSelection(new[] { "src", "tests" }, projectPath);
+		coordinator.PopulateIgnoreOptionsForRootSelection(["src", "tests"], projectPath);
 		AssertExtensionlessOptionState(viewModel, expectedCount: 3, expectChecked: false);
 	}
 
@@ -109,14 +109,14 @@ public sealed class SelectionSyncCoordinatorExtensionlessCountSequenceTests
 	{
 		var patterns = new Dictionary<int, (string[] Scan, int Count)>
 		{
-			[0] = (new[] { ".cs", ".json", ".md" }, 0),
-			[1] = (new[] { "Dockerfile", ".cs" }, 1),
-			[2] = (new[] { "Dockerfile", "Makefile", ".cs" }, 2),
-			[3] = (new[] { ".env", ".gitignore", ".dockerignore" }, 0),
-			[4] = (new[] { "file.", ".txt" }, 1),
-			[5] = (new[] { "Dockerfile", "LICENSE", "WORKSPACE" }, 3),
-			[6] = (new[] { "archive.tar.gz", ".yaml" }, 0),
-			[7] = (new[] { "Taskfile", ".log" }, 1)
+			[0] = ([".cs", ".json", ".md"], 0),
+			[1] = (["Dockerfile", ".cs"], 1),
+			[2] = (["Dockerfile", "Makefile", ".cs"], 2),
+			[3] = ([".env", ".gitignore", ".dockerignore"], 0),
+			[4] = (["file.", ".txt"], 1),
+			[5] = (["Dockerfile", "LICENSE", "WORKSPACE"], 3),
+			[6] = (["archive.tar.gz", ".yaml"], 0),
+			[7] = (["Taskfile", ".log"], 1)
 		};
 
 		var sequences = new[]
@@ -148,7 +148,7 @@ public sealed class SelectionSyncCoordinatorExtensionlessCountSequenceTests
 		{
 			var scans = sequence.Select(id => patterns[id].Scan).ToArray();
 			var counts = sequence.Select(id => patterns[id].Count).ToArray();
-			yield return new object[] { caseId++, scans, counts };
+			yield return [ caseId++, scans, counts ];
 		}
 	}
 

@@ -15,7 +15,7 @@ public sealed class GitIgnoreMatcher
     // Pre-compiled search values for SIMD-optimized character lookup
     private static readonly SearchValues<char> GlobSpecialChars = SearchValues.Create("*?[");
 
-    public static GitIgnoreMatcher Empty { get; } = new(string.Empty, Array.Empty<Rule>(), false);
+    public static GitIgnoreMatcher Empty { get; } = new(string.Empty, [], false);
 
     private GitIgnoreMatcher(string normalizedRootPath, IReadOnlyList<Rule> rules, bool hasNegationRules)
     {
@@ -28,6 +28,8 @@ public sealed class GitIgnoreMatcher
     }
 
     public bool HasNegationRules => _hasNegationRules;
+
+    public readonly record struct IgnoreEvaluation(bool HasMatch, bool IsIgnored);
 
     public static GitIgnoreMatcher Build(string rootPath, IEnumerable<string> lines)
     {
@@ -110,14 +112,15 @@ public sealed class GitIgnoreMatcher
         return new GitIgnoreMatcher(normalizedRoot, rules, hasNegation);
     }
 
-    public bool IsIgnored(string fullPath, bool isDirectory, string name)
+    public IgnoreEvaluation Evaluate(string fullPath, bool isDirectory, string name)
     {
         var relativePath = GetRelativePath(fullPath);
         if (relativePath is null)
-            return false;
+            return default;
 
         var normalizedName = string.IsNullOrEmpty(name) ? Path.GetFileName(relativePath) : name;
         var ignored = false;
+        var hasMatch = false;
 
         foreach (var rule in _rules)
         {
@@ -130,6 +133,7 @@ public sealed class GitIgnoreMatcher
                 continue;
 
             ignored = !rule.IsNegation;
+            hasMatch = true;
         }
 
         // For directories: if not directly ignored, check if all contents would be ignored
@@ -147,12 +151,18 @@ public sealed class GitIgnoreMatcher
                 if (rule.Pattern.IsMatch(testChildPath))
                 {
                     ignored = true;
+                    hasMatch = true;
                     break;
                 }
             }
         }
 
-        return ignored;
+        return new IgnoreEvaluation(hasMatch, ignored);
+    }
+
+    public bool IsIgnored(string fullPath, bool isDirectory, string name)
+    {
+        return Evaluate(fullPath, isDirectory, name).IsIgnored;
     }
 
     public bool ShouldTraverseIgnoredDirectory(string fullPath, string name)

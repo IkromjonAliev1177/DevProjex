@@ -187,7 +187,7 @@ public sealed class FileSystemScannerTests
 		temp.CreateFile("build/keep.txt", "keep");
 		temp.CreateFile("build/drop.log", "drop");
 
-		var matcher = GitIgnoreMatcher.Build(temp.Path, new[] { "build/", "!build/keep.txt" });
+		var matcher = GitIgnoreMatcher.Build(temp.Path, ["build/", "!build/keep.txt"]);
 		var rules = new IgnoreRules(false, false, false, false, new HashSet<string>(), new HashSet<string>())
 		{
 			UseGitIgnore = true,
@@ -213,10 +213,9 @@ public sealed class FileSystemScannerTests
 		temp.CreateFile("Documents/Visual Studio 2019/America/America/bin/Debug/America.exe", "binary");
 		temp.CreateFile("Documents/Visual Studio 2019/America/America/obj/Debug/cache.txt", "cache");
 
-		var smartService = new SmartIgnoreService(new ISmartIgnoreRule[]
-		{
+		var smartService = new SmartIgnoreService([
 			new DotNetArtifactsIgnoreRule()
-		});
+		]);
 		var rulesService = new IgnoreRulesService(smartService);
 		var selectedOptions = useSmartIgnore
 			? new[] { IgnoreOptionId.SmartIgnore }
@@ -224,7 +223,7 @@ public sealed class FileSystemScannerTests
 		var rules = rulesService.Build(
 			temp.Path,
 			selectedOptions,
-			selectedRootFolders: new[] { "Documents" });
+			selectedRootFolders: ["Documents"]);
 
 		var scanner = new FileSystemScanner();
 		var result = scanner.GetExtensions(Path.Combine(temp.Path, "Documents"), rules);
@@ -244,15 +243,14 @@ public sealed class FileSystemScannerTests
 		temp.CreateFile("Documents/Visual Studio 2019/America/America/bin/Debug/America.exe", "binary");
 		temp.CreateFile("Documents/Visual Studio 2019/America/America/obj/Debug/cache.txt", "cache");
 
-		var smartService = new SmartIgnoreService(new ISmartIgnoreRule[]
-		{
+		var smartService = new SmartIgnoreService([
 			new DotNetArtifactsIgnoreRule()
-		});
+		]);
 		var rulesService = new IgnoreRulesService(smartService);
 		var rules = rulesService.Build(
 			temp.Path,
-			new[] { IgnoreOptionId.UseGitIgnore },
-			selectedRootFolders: new[] { "Documents" });
+			[IgnoreOptionId.UseGitIgnore],
+			selectedRootFolders: ["Documents"]);
 
 		var scanner = new FileSystemScanner();
 		var result = scanner.GetExtensions(Path.Combine(temp.Path, "Documents"), rules);

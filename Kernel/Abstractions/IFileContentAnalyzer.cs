@@ -57,12 +57,16 @@ public interface IFileContentAnalyzer
 /// <param name="CharCount">Number of characters in the file.</param>
 /// <param name="IsEmpty">True if file has zero bytes.</param>
 /// <param name="IsWhitespaceOnly">True if file contains only whitespace characters.</param>
+/// <param name="IsEstimated">True if metrics are estimated (content not fully read).</param>
+/// <param name="CrLfPairCount">Number of CRLF pairs detected in content.</param>
 public sealed record TextFileMetrics(
 	long SizeBytes,
 	int LineCount,
 	int CharCount,
 	bool IsEmpty,
 	bool IsWhitespaceOnly,
+	bool IsEstimated = false,
+	int CrLfPairCount = 0,
 	int TrailingNewlineChars = 0,
 	int TrailingNewlineLineBreaks = 0);
 

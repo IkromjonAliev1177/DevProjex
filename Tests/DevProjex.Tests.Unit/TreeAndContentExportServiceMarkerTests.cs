@@ -46,7 +46,7 @@ public sealed class TreeAndContentExportServiceMarkerTests
 	public void Build_Selected_SkipsBinaryContent()
 	{
 		using var temp = new TemporaryDirectory();
-		var binary = temp.CreateBinaryFile("image.bin", new byte[] { 1, 2, 0, 3 });
+		var binary = temp.CreateBinaryFile("image.bin", [1, 2, 0, 3]);
 
 		var root = BuildTree(temp.Path, binary);
 		var service = new TreeAndContentExportService(new TreeExportService(), new SelectedContentExportService(new FileContentAnalyzer()));

@@ -4,19 +4,12 @@ namespace DevProjex.Application.Services;
 /// Builds clipboard-friendly text export from selected file contents.
 /// Uses IFileContentAnalyzer as the single source of truth for text detection.
 /// </summary>
-public sealed class SelectedContentExportService
+public sealed class SelectedContentExportService(IFileContentAnalyzer contentAnalyzer)
 {
 	private const string ClipboardBlankLine = "\u00A0"; // NBSP: looks empty but won't collapse on paste
 	private const string NoContentMarker = "[No Content, 0 bytes]";
 	private const string WhitespaceMarkerPrefix = "[Whitespace, ";
 	private const string WhitespaceMarkerSuffix = " bytes]";
-
-	private readonly IFileContentAnalyzer _contentAnalyzer;
-
-	public SelectedContentExportService(IFileContentAnalyzer contentAnalyzer)
-	{
-		_contentAnalyzer = contentAnalyzer;
-	}
 
 	public string Build(IEnumerable<string> filePaths) =>
 		Build(filePaths, displayPathMapper: null);
@@ -54,7 +47,7 @@ public sealed class SelectedContentExportService
 		{
 			cancellationToken.ThrowIfCancellationRequested();
 
-			var content = await _contentAnalyzer.TryReadAsTextAsync(file, cancellationToken).ConfigureAwait(false);
+			var content = await contentAnalyzer.TryReadAsTextAsync(file, cancellationToken).ConfigureAwait(false);
 
 			// Skip binary files (null result)
 			if (content is null)

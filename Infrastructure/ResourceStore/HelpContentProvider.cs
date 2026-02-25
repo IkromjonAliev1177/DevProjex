@@ -2,12 +2,7 @@ namespace DevProjex.Infrastructure.ResourceStore;
 
 public sealed class HelpContentProvider
 {
-    private readonly Lazy<IReadOnlyDictionary<AppLanguage, string>> _cache;
-
-    public HelpContentProvider()
-    {
-        _cache = new Lazy<IReadOnlyDictionary<AppLanguage, string>>(LoadAll);
-    }
+    private readonly Lazy<IReadOnlyDictionary<AppLanguage, string>> _cache = new(LoadAll);
 
     public string GetHelpBody(AppLanguage language)
     {

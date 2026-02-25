@@ -7,14 +7,14 @@ public sealed class GitIgnoreMatcherTests
 	[Fact]
 	public void Empty_ReturnsEmptyMatcherForNullRoot()
 	{
-		var matcher = GitIgnoreMatcher.Build(null!, Array.Empty<string>());
+		var matcher = GitIgnoreMatcher.Build(null!, []);
 		Assert.Same(GitIgnoreMatcher.Empty, matcher);
 	}
 
 	[Fact]
 	public void Empty_ReturnsEmptyMatcherForEmptyRoot()
 	{
-		var matcher = GitIgnoreMatcher.Build("", Array.Empty<string>());
+		var matcher = GitIgnoreMatcher.Build("", []);
 		Assert.Same(GitIgnoreMatcher.Empty, matcher);
 	}
 
@@ -28,14 +28,14 @@ public sealed class GitIgnoreMatcherTests
 	[Fact]
 	public void Build_SkipsEmptyLines()
 	{
-		var matcher = GitIgnoreMatcher.Build("/repo", new[] { "", "  ", "*.log", "" });
+		var matcher = GitIgnoreMatcher.Build("/repo", ["", "  ", "*.log", ""]);
 		Assert.True(matcher.IsIgnored("/repo/test.log", false, "test.log"));
 	}
 
 	[Fact]
 	public void Build_SkipsCommentLines()
 	{
-		var matcher = GitIgnoreMatcher.Build("/repo", new[] { "# comment", "*.log", "# another comment" });
+		var matcher = GitIgnoreMatcher.Build("/repo", ["# comment", "*.log", "# another comment"]);
 		Assert.True(matcher.IsIgnored("/repo/test.log", false, "test.log"));
 		Assert.False(matcher.IsIgnored("/repo/# comment", false, "# comment"));
 	}
@@ -43,14 +43,14 @@ public sealed class GitIgnoreMatcherTests
 	[Fact]
 	public void Build_HandlesEscapedHash()
 	{
-		var matcher = GitIgnoreMatcher.Build("/repo", new[] { @"\#important" });
+		var matcher = GitIgnoreMatcher.Build("/repo", [@"\#important"]);
 		Assert.True(matcher.IsIgnored("/repo/#important", false, "#important"));
 	}
 
 	[Fact]
 	public void Build_HandlesEscapedExclamation()
 	{
-		var matcher = GitIgnoreMatcher.Build("/repo", new[] { @"\!important" });
+		var matcher = GitIgnoreMatcher.Build("/repo", [@"\!important"]);
 		Assert.True(matcher.IsIgnored("/repo/!important", false, "!important"));
 	}
 
@@ -66,7 +66,7 @@ public sealed class GitIgnoreMatcherTests
 	[InlineData("*.txt", "/repo/deep/nested/file.txt", true)]
 	public void IsIgnored_SimpleWildcard_MatchesExtension(string pattern, string path, bool expected)
 	{
-		var matcher = GitIgnoreMatcher.Build("/repo", new[] { pattern });
+		var matcher = GitIgnoreMatcher.Build("/repo", [pattern]);
 		var name = Path.GetFileName(path);
 		Assert.Equal(expected, matcher.IsIgnored(path, false, name));
 	}
@@ -79,7 +79,7 @@ public sealed class GitIgnoreMatcherTests
 	[InlineData("README.md", "/repo/docs/README.md", true)]
 	public void IsIgnored_ExactFileName_MatchesAnywhere(string pattern, string path, bool expected)
 	{
-		var matcher = GitIgnoreMatcher.Build("/repo", new[] { pattern });
+		var matcher = GitIgnoreMatcher.Build("/repo", [pattern]);
 		var name = Path.GetFileName(path);
 		Assert.Equal(expected, matcher.IsIgnored(path, false, name));
 	}
@@ -87,7 +87,7 @@ public sealed class GitIgnoreMatcherTests
 	[Fact]
 	public void IsIgnored_DirectoryPattern_MatchesOnlyDirectories()
 	{
-		var matcher = GitIgnoreMatcher.Build("/repo", new[] { "logs/" });
+		var matcher = GitIgnoreMatcher.Build("/repo", ["logs/"]);
 
 		Assert.True(matcher.IsIgnored("/repo/logs", true, "logs"));
 		Assert.True(matcher.IsIgnored("/repo/src/logs", true, "logs"));
@@ -98,7 +98,7 @@ public sealed class GitIgnoreMatcherTests
 	[Fact]
 	public void IsIgnored_AnchoredPattern_MatchesOnlyAtRoot()
 	{
-		var matcher = GitIgnoreMatcher.Build("/repo", new[] { "/build" });
+		var matcher = GitIgnoreMatcher.Build("/repo", ["/build"]);
 
 		Assert.True(matcher.IsIgnored("/repo/build", true, "build"));
 		Assert.False(matcher.IsIgnored("/repo/src/build", true, "build"));
@@ -107,7 +107,7 @@ public sealed class GitIgnoreMatcherTests
 	[Fact]
 	public void IsIgnored_AnchoredDirectoryPattern_MatchesOnlyAtRoot()
 	{
-		var matcher = GitIgnoreMatcher.Build("/repo", new[] { "/dist/" });
+		var matcher = GitIgnoreMatcher.Build("/repo", ["/dist/"]);
 
 		Assert.True(matcher.IsIgnored("/repo/dist", true, "dist"));
 		Assert.False(matcher.IsIgnored("/repo/packages/dist", true, "dist"));
@@ -128,7 +128,7 @@ public sealed class GitIgnoreMatcherTests
 	[InlineData("[Rr]elease/", "/repo/Release", true)]
 	public void IsIgnored_CharacterClass_MatchesBothCases(string pattern, string path, bool expected)
 	{
-		var matcher = GitIgnoreMatcher.Build("/repo", new[] { pattern });
+		var matcher = GitIgnoreMatcher.Build("/repo", [pattern]);
 		var name = Path.GetFileName(path);
 		Assert.Equal(expected, matcher.IsIgnored(path, true, name));
 	}
@@ -138,7 +138,7 @@ public sealed class GitIgnoreMatcherTests
 	{
 		// On Windows/macOS, matching is case-insensitive, so [Oo]bj matches OBJ
 		// On Linux, matching is case-sensitive, so [Oo]bj does NOT match OBJ
-		var matcher = GitIgnoreMatcher.Build("/repo", new[] { "[Oo]bj/" });
+		var matcher = GitIgnoreMatcher.Build("/repo", ["[Oo]bj/"]);
 		var result = matcher.IsIgnored("/repo/OBJ", true, "OBJ");
 
 		if (OperatingSystem.IsLinux())
@@ -158,7 +158,7 @@ public sealed class GitIgnoreMatcherTests
 	[InlineData("[a-z]", "/repo/M", false)] // Case sensitive within class
 	public void IsIgnored_CharacterClassRanges_MatchesCorrectly(string pattern, string path, bool expected)
 	{
-		var matcher = GitIgnoreMatcher.Build("/repo", new[] { pattern });
+		var matcher = GitIgnoreMatcher.Build("/repo", [pattern]);
 		var name = Path.GetFileName(path);
 		// On Windows, the matcher is case-insensitive, so adjust expectations
 		if (OperatingSystem.IsWindows() && pattern == "[a-z]" && path == "/repo/M")
@@ -169,7 +169,7 @@ public sealed class GitIgnoreMatcherTests
 	[Fact]
 	public void IsIgnored_CharacterClassWithSpecialChars_HandlesCorrectly()
 	{
-		var matcher = GitIgnoreMatcher.Build("/repo", new[] { "[.-]file" });
+		var matcher = GitIgnoreMatcher.Build("/repo", ["[.-]file"]);
 		Assert.True(matcher.IsIgnored("/repo/.file", false, ".file"));
 		Assert.True(matcher.IsIgnored("/repo/-file", false, "-file"));
 	}
@@ -178,7 +178,7 @@ public sealed class GitIgnoreMatcherTests
 	public void IsIgnored_NestedCharacterClasses_NotSupported()
 	{
 		// Nested brackets aren't standard gitignore - just ensure no crash
-		var matcher = GitIgnoreMatcher.Build("/repo", new[] { "[[abc]]" });
+		var matcher = GitIgnoreMatcher.Build("/repo", ["[[abc]]"]);
 		Assert.NotNull(matcher);
 	}
 
@@ -189,7 +189,7 @@ public sealed class GitIgnoreMatcherTests
 	[Fact]
 	public void IsIgnored_DoubleAsteriskPrefix_MatchesAnyDepth()
 	{
-		var matcher = GitIgnoreMatcher.Build("/repo", new[] { "**/logs" });
+		var matcher = GitIgnoreMatcher.Build("/repo", ["**/logs"]);
 
 		Assert.True(matcher.IsIgnored("/repo/logs", true, "logs"));
 		Assert.True(matcher.IsIgnored("/repo/src/logs", true, "logs"));
@@ -199,7 +199,7 @@ public sealed class GitIgnoreMatcherTests
 	[Fact]
 	public void IsIgnored_DoubleAsteriskMiddle_MatchesAnyDepth()
 	{
-		var matcher = GitIgnoreMatcher.Build("/repo", new[] { "a/**/z" });
+		var matcher = GitIgnoreMatcher.Build("/repo", ["a/**/z"]);
 
 		Assert.True(matcher.IsIgnored("/repo/a/z", false, "z"));
 		Assert.True(matcher.IsIgnored("/repo/a/b/z", false, "z"));
@@ -210,7 +210,7 @@ public sealed class GitIgnoreMatcherTests
 	[Fact]
 	public void IsIgnored_DoubleAsteriskSuffix_MatchesEverythingInside()
 	{
-		var matcher = GitIgnoreMatcher.Build("/repo", new[] { "build/**" });
+		var matcher = GitIgnoreMatcher.Build("/repo", ["build/**"]);
 
 		Assert.True(matcher.IsIgnored("/repo/build/output.dll", false, "output.dll"));
 		Assert.True(matcher.IsIgnored("/repo/build/sub/file.txt", false, "file.txt"));
@@ -224,7 +224,7 @@ public sealed class GitIgnoreMatcherTests
 	[InlineData("**/obj/*", "/repo/src/Project/obj/Release", true)]
 	public void IsIgnored_DoubleAsteriskWithCharClass_MatchesBuildOutputs(string pattern, string path, bool expected)
 	{
-		var matcher = GitIgnoreMatcher.Build("/repo", new[] { pattern });
+		var matcher = GitIgnoreMatcher.Build("/repo", [pattern]);
 		var name = Path.GetFileName(path);
 		Assert.Equal(expected, matcher.IsIgnored(path, true, name));
 	}
@@ -232,7 +232,7 @@ public sealed class GitIgnoreMatcherTests
 	[Fact]
 	public void IsIgnored_DoubleAsteriskAtEnd_MatchesAllDescendants()
 	{
-		var matcher = GitIgnoreMatcher.Build("/repo", new[] { "vendor/**" });
+		var matcher = GitIgnoreMatcher.Build("/repo", ["vendor/**"]);
 
 		Assert.True(matcher.IsIgnored("/repo/vendor/package/file.go", false, "file.go"));
 		Assert.True(matcher.IsIgnored("/repo/vendor/a/b/c/d.txt", false, "d.txt"));
@@ -245,21 +245,21 @@ public sealed class GitIgnoreMatcherTests
 	[Fact]
 	public void HasNegationRules_ReturnsTrueWhenNegationPresent()
 	{
-		var matcher = GitIgnoreMatcher.Build("/repo", new[] { "*.log", "!important.log" });
+		var matcher = GitIgnoreMatcher.Build("/repo", ["*.log", "!important.log"]);
 		Assert.True(matcher.HasNegationRules);
 	}
 
 	[Fact]
 	public void HasNegationRules_ReturnsFalseWhenNoNegation()
 	{
-		var matcher = GitIgnoreMatcher.Build("/repo", new[] { "*.log", "build/" });
+		var matcher = GitIgnoreMatcher.Build("/repo", ["*.log", "build/"]);
 		Assert.False(matcher.HasNegationRules);
 	}
 
 	[Fact]
 	public void IsIgnored_NegationPattern_UnignoresFile()
 	{
-		var matcher = GitIgnoreMatcher.Build("/repo", new[] { "*.log", "!important.log" });
+		var matcher = GitIgnoreMatcher.Build("/repo", ["*.log", "!important.log"]);
 
 		Assert.True(matcher.IsIgnored("/repo/debug.log", false, "debug.log"));
 		Assert.False(matcher.IsIgnored("/repo/important.log", false, "important.log"));
@@ -268,7 +268,7 @@ public sealed class GitIgnoreMatcherTests
 	[Fact]
 	public void IsIgnored_NegationInDirectory_UnignoresSpecificPath()
 	{
-		var matcher = GitIgnoreMatcher.Build("/repo", new[] { "logs/", "!logs/keep/" });
+		var matcher = GitIgnoreMatcher.Build("/repo", ["logs/", "!logs/keep/"]);
 
 		Assert.True(matcher.IsIgnored("/repo/logs", true, "logs"));
 		// Note: negation of directories can be complex in gitignore
@@ -277,7 +277,7 @@ public sealed class GitIgnoreMatcherTests
 	[Fact]
 	public void ShouldTraverseIgnoredDirectory_ReturnsFalseWhenNoNegationRules()
 	{
-		var matcher = GitIgnoreMatcher.Build("/repo", new[] { "build/" });
+		var matcher = GitIgnoreMatcher.Build("/repo", ["build/"]);
 
 		Assert.False(matcher.HasNegationRules);
 		Assert.False(matcher.ShouldTraverseIgnoredDirectory("/repo/build", "build"));
@@ -286,7 +286,7 @@ public sealed class GitIgnoreMatcherTests
 	[Fact]
 	public void ShouldTraverseIgnoredDirectory_ReturnsFalseForNameOnlyNegationWhenDirectoryIgnoredByExplicitRule()
 	{
-		var matcher = GitIgnoreMatcher.Build("/repo", new[] { "build/", "!keep.txt" });
+		var matcher = GitIgnoreMatcher.Build("/repo", ["build/", "!keep.txt"]);
 
 		Assert.True(matcher.HasNegationRules);
 		Assert.False(matcher.ShouldTraverseIgnoredDirectory("/repo/build", "build"));
@@ -295,7 +295,7 @@ public sealed class GitIgnoreMatcherTests
 	[Fact]
 	public void ShouldTraverseIgnoredDirectory_ReturnsTrueForNameOnlyNegationWhenIgnoredByContentPattern()
 	{
-		var matcher = GitIgnoreMatcher.Build("/repo", new[] { "**/build/*", "!keep.txt" });
+		var matcher = GitIgnoreMatcher.Build("/repo", ["**/build/*", "!keep.txt"]);
 
 		Assert.True(matcher.HasNegationRules);
 		Assert.True(matcher.ShouldTraverseIgnoredDirectory("/repo/build", "build"));
@@ -304,7 +304,7 @@ public sealed class GitIgnoreMatcherTests
 	[Fact]
 	public void ShouldTraverseIgnoredDirectory_ReturnsTrueWhenNegationTargetsDescendantPath()
 	{
-		var matcher = GitIgnoreMatcher.Build("/repo", new[] { "build/", "!build/keep.txt" });
+		var matcher = GitIgnoreMatcher.Build("/repo", ["build/", "!build/keep.txt"]);
 
 		Assert.True(matcher.ShouldTraverseIgnoredDirectory("/repo/build", "build"));
 		Assert.False(matcher.ShouldTraverseIgnoredDirectory("/repo/other", "other"));
@@ -313,7 +313,7 @@ public sealed class GitIgnoreMatcherTests
 	[Fact]
 	public void ShouldTraverseIgnoredDirectory_ReturnsFalseForDirectoryRuleWithNameOnlyNegation()
 	{
-		var matcher = GitIgnoreMatcher.Build("/repo", new[] { "[Bb]in/", "!Directory.Build.rsp" });
+		var matcher = GitIgnoreMatcher.Build("/repo", ["[Bb]in/", "!Directory.Build.rsp"]);
 
 		Assert.False(matcher.ShouldTraverseIgnoredDirectory("/repo/src/bin", "bin"));
 	}
@@ -331,7 +331,7 @@ public sealed class GitIgnoreMatcherTests
 	[InlineData("???.log", "/repo/ab.log", false)]
 	public void IsIgnored_QuestionMark_MatchesSingleCharacter(string pattern, string path, bool expected)
 	{
-		var matcher = GitIgnoreMatcher.Build("/repo", new[] { pattern });
+		var matcher = GitIgnoreMatcher.Build("/repo", [pattern]);
 		var name = Path.GetFileName(path);
 		Assert.Equal(expected, matcher.IsIgnored(path, false, name));
 	}
@@ -343,7 +343,7 @@ public sealed class GitIgnoreMatcherTests
 	[Fact]
 	public void IsIgnored_WindowsStylePaths_NormalizedCorrectly()
 	{
-		var matcher = GitIgnoreMatcher.Build(@"C:\repo", new[] { "bin/", "*.log" });
+		var matcher = GitIgnoreMatcher.Build(@"C:\repo", ["bin/", "*.log"]);
 
 		Assert.True(matcher.IsIgnored(@"C:\repo\bin", true, "bin"));
 		Assert.True(matcher.IsIgnored(@"C:\repo\src\bin", true, "bin"));
@@ -353,7 +353,7 @@ public sealed class GitIgnoreMatcherTests
 	[Fact]
 	public void IsIgnored_MixedSlashes_HandledCorrectly()
 	{
-		var matcher = GitIgnoreMatcher.Build("/repo", new[] { "src/build/" });
+		var matcher = GitIgnoreMatcher.Build("/repo", ["src/build/"]);
 
 		Assert.True(matcher.IsIgnored("/repo/src/build", true, "build"));
 	}
@@ -361,7 +361,7 @@ public sealed class GitIgnoreMatcherTests
 	[Fact]
 	public void IsIgnored_UnixStylePaths_WorkCorrectly()
 	{
-		var matcher = GitIgnoreMatcher.Build("/home/user/project", new[] { "node_modules/", "*.pyc" });
+		var matcher = GitIgnoreMatcher.Build("/home/user/project", ["node_modules/", "*.pyc"]);
 
 		Assert.True(matcher.IsIgnored("/home/user/project/node_modules", true, "node_modules"));
 		Assert.True(matcher.IsIgnored("/home/user/project/src/cache.pyc", false, "cache.pyc"));
@@ -370,7 +370,7 @@ public sealed class GitIgnoreMatcherTests
 	[Fact]
 	public void IsIgnored_PathOutsideRoot_ReturnsAlwaysFalse()
 	{
-		var matcher = GitIgnoreMatcher.Build("/repo", new[] { "*.log" });
+		var matcher = GitIgnoreMatcher.Build("/repo", ["*.log"]);
 
 		Assert.False(matcher.IsIgnored("/other/debug.log", false, "debug.log"));
 		Assert.False(matcher.IsIgnored("/different/repo/file.log", false, "file.log"));
@@ -684,7 +684,7 @@ public sealed class GitIgnoreMatcherTests
 	[Fact]
 	public void IsIgnored_PatternWithSpaces_HandlesCorrectly()
 	{
-		var matcher = GitIgnoreMatcher.Build("/repo", new[] { "my folder/", "file name.txt" });
+		var matcher = GitIgnoreMatcher.Build("/repo", ["my folder/", "file name.txt"]);
 
 		Assert.True(matcher.IsIgnored("/repo/my folder", true, "my folder"));
 		Assert.True(matcher.IsIgnored("/repo/file name.txt", false, "file name.txt"));
@@ -693,7 +693,7 @@ public sealed class GitIgnoreMatcherTests
 	[Fact]
 	public void IsIgnored_TrailingWhitespace_Trimmed()
 	{
-		var matcher = GitIgnoreMatcher.Build("/repo", new[] { "*.log   ", "build/  " });
+		var matcher = GitIgnoreMatcher.Build("/repo", ["*.log   ", "build/  "]);
 
 		Assert.True(matcher.IsIgnored("/repo/debug.log", false, "debug.log"));
 		Assert.True(matcher.IsIgnored("/repo/build", true, "build"));
@@ -702,7 +702,7 @@ public sealed class GitIgnoreMatcherTests
 	[Fact]
 	public void IsIgnored_PatternWithDots_EscapedCorrectly()
 	{
-		var matcher = GitIgnoreMatcher.Build("/repo", new[] { "file.config.txt", ".env.local" });
+		var matcher = GitIgnoreMatcher.Build("/repo", ["file.config.txt", ".env.local"]);
 
 		Assert.True(matcher.IsIgnored("/repo/file.config.txt", false, "file.config.txt"));
 		Assert.False(matcher.IsIgnored("/repo/fileXconfigXtxt", false, "fileXconfigXtxt"));
@@ -712,7 +712,7 @@ public sealed class GitIgnoreMatcherTests
 	[Fact]
 	public void IsIgnored_VeryDeepPath_HandlesCorrectly()
 	{
-		var matcher = GitIgnoreMatcher.Build("/repo", new[] { "**/deep.txt" });
+		var matcher = GitIgnoreMatcher.Build("/repo", ["**/deep.txt"]);
 
 		var deepPath = "/repo" + string.Concat(Enumerable.Repeat("/a", 50)) + "/deep.txt";
 		Assert.True(matcher.IsIgnored(deepPath, false, "deep.txt"));
@@ -721,7 +721,7 @@ public sealed class GitIgnoreMatcherTests
 	[Fact]
 	public void IsIgnored_EmptyFileName_HandlesCorrectly()
 	{
-		var matcher = GitIgnoreMatcher.Build("/repo", new[] { "*.txt" });
+		var matcher = GitIgnoreMatcher.Build("/repo", ["*.txt"]);
 
 		// Should not crash with empty name
 		Assert.False(matcher.IsIgnored("/repo/", true, ""));
@@ -730,7 +730,7 @@ public sealed class GitIgnoreMatcherTests
 	[Fact]
 	public void IsIgnored_SpecialRegexChars_EscapedCorrectly()
 	{
-		var matcher = GitIgnoreMatcher.Build("/repo", new[] { "file(1).txt", "test+plus.log", "dollar$sign" });
+		var matcher = GitIgnoreMatcher.Build("/repo", ["file(1).txt", "test+plus.log", "dollar$sign"]);
 
 		Assert.True(matcher.IsIgnored("/repo/file(1).txt", false, "file(1).txt"));
 		Assert.True(matcher.IsIgnored("/repo/test+plus.log", false, "test+plus.log"));
@@ -741,14 +741,14 @@ public sealed class GitIgnoreMatcherTests
 	public void IsIgnored_PatternOnlySlash_HandlesCorrectly()
 	{
 		// Edge case: pattern is just "/"
-		var matcher = GitIgnoreMatcher.Build("/repo", new[] { "/" });
+		var matcher = GitIgnoreMatcher.Build("/repo", ["/"]);
 		Assert.NotNull(matcher);
 	}
 
 	[Fact]
 	public void IsIgnored_MultipleConsecutiveSlashes_Normalized()
 	{
-		var matcher = GitIgnoreMatcher.Build("/repo", new[] { "src//build/" });
+		var matcher = GitIgnoreMatcher.Build("/repo", ["src//build/"]);
 
 		// The pattern might not match due to normalization, but shouldn't crash
 		Assert.NotNull(matcher);
@@ -757,7 +757,7 @@ public sealed class GitIgnoreMatcherTests
 	[Fact]
 	public void IsIgnored_UnicodeCharacters_HandledCorrectly()
 	{
-		var matcher = GitIgnoreMatcher.Build("/repo", new[] { "файл.txt", "文件.log" });
+		var matcher = GitIgnoreMatcher.Build("/repo", ["файл.txt", "文件.log"]);
 
 		Assert.True(matcher.IsIgnored("/repo/файл.txt", false, "файл.txt"));
 		Assert.True(matcher.IsIgnored("/repo/文件.log", false, "文件.log"));
@@ -767,7 +767,7 @@ public sealed class GitIgnoreMatcherTests
 	public void IsIgnored_LongPattern_HandlesCorrectly()
 	{
 		var longPattern = new string('a', 500) + ".txt";
-		var matcher = GitIgnoreMatcher.Build("/repo", new[] { longPattern });
+		var matcher = GitIgnoreMatcher.Build("/repo", [longPattern]);
 
 		Assert.True(matcher.IsIgnored("/repo/" + longPattern, false, longPattern));
 	}
@@ -779,11 +779,11 @@ public sealed class GitIgnoreMatcherTests
 	[Fact]
 	public void IsIgnored_LastMatchWins()
 	{
-		var matcher = GitIgnoreMatcher.Build("/repo", new[] {
+		var matcher = GitIgnoreMatcher.Build("/repo", [
 			"*.log",
 			"!important.log",
 			"important.log" // Re-ignore
-		});
+		]);
 
 		Assert.True(matcher.IsIgnored("/repo/important.log", false, "important.log"));
 	}
@@ -791,10 +791,10 @@ public sealed class GitIgnoreMatcherTests
 	[Fact]
 	public void IsIgnored_OrderMatters_FirstIgnoreThenUnignore()
 	{
-		var matcher = GitIgnoreMatcher.Build("/repo", new[] {
+		var matcher = GitIgnoreMatcher.Build("/repo", [
 			"logs/",
 			"!logs/keep.log"
-		});
+		]);
 
 		Assert.True(matcher.IsIgnored("/repo/logs", true, "logs"));
 		Assert.False(matcher.IsIgnored("/repo/logs/keep.log", false, "keep.log"));
@@ -803,14 +803,14 @@ public sealed class GitIgnoreMatcherTests
 	[Fact]
 	public void IsIgnored_ComplexCombination_WorksCorrectly()
 	{
-		var matcher = GitIgnoreMatcher.Build("/repo", new[] {
+		var matcher = GitIgnoreMatcher.Build("/repo", [
 			"**/node_modules/",
 			"**/dist/",
 			"*.log",
 			"!error.log",
 			"build/",
 			"!build/important.dll"
-		});
+		]);
 
 		Assert.True(matcher.IsIgnored("/repo/node_modules", true, "node_modules"));
 		Assert.True(matcher.IsIgnored("/repo/packages/app/node_modules", true, "node_modules"));
@@ -829,7 +829,7 @@ public sealed class GitIgnoreMatcherTests
 	public void IsIgnored_ContentPatternIgnoresDirectory_WhenAllContentsIgnored()
 	{
 		// Pattern **/bin/* ignores all contents of bin, so bin directory itself should be ignored
-		var matcher = GitIgnoreMatcher.Build("/repo", new[] { "**/bin/*" });
+		var matcher = GitIgnoreMatcher.Build("/repo", ["**/bin/*"]);
 
 		Assert.True(matcher.IsIgnored("/repo/bin", true, "bin"));
 		Assert.True(matcher.IsIgnored("/repo/src/Project/bin", true, "bin"));
@@ -838,7 +838,7 @@ public sealed class GitIgnoreMatcherTests
 	[Fact]
 	public void IsIgnored_ContentPatternIgnoresDirectory_ObjFolder()
 	{
-		var matcher = GitIgnoreMatcher.Build("/repo", new[] { "**/obj/*" });
+		var matcher = GitIgnoreMatcher.Build("/repo", ["**/obj/*"]);
 
 		Assert.True(matcher.IsIgnored("/repo/obj", true, "obj"));
 		Assert.True(matcher.IsIgnored("/repo/src/Project/obj", true, "obj"));
@@ -847,7 +847,7 @@ public sealed class GitIgnoreMatcherTests
 	[Fact]
 	public void IsIgnored_ContentPatternIgnoresDirectory_NodeModules()
 	{
-		var matcher = GitIgnoreMatcher.Build("/repo", new[] { "**/node_modules/*" });
+		var matcher = GitIgnoreMatcher.Build("/repo", ["**/node_modules/*"]);
 
 		Assert.True(matcher.IsIgnored("/repo/node_modules", true, "node_modules"));
 		Assert.True(matcher.IsIgnored("/repo/packages/app/node_modules", true, "node_modules"));
@@ -856,7 +856,7 @@ public sealed class GitIgnoreMatcherTests
 	[Fact]
 	public void IsIgnored_ContentPatternIgnoresDirectory_DistFolder()
 	{
-		var matcher = GitIgnoreMatcher.Build("/repo", new[] { "**/dist/*" });
+		var matcher = GitIgnoreMatcher.Build("/repo", ["**/dist/*"]);
 
 		Assert.True(matcher.IsIgnored("/repo/dist", true, "dist"));
 		Assert.True(matcher.IsIgnored("/repo/packages/ui/dist", true, "dist"));
@@ -865,7 +865,7 @@ public sealed class GitIgnoreMatcherTests
 	[Fact]
 	public void IsIgnored_ContentPatternIgnoresDirectory_TargetFolder()
 	{
-		var matcher = GitIgnoreMatcher.Build("/repo", new[] { "**/target/*" });
+		var matcher = GitIgnoreMatcher.Build("/repo", ["**/target/*"]);
 
 		Assert.True(matcher.IsIgnored("/repo/target", true, "target"));
 		Assert.True(matcher.IsIgnored("/repo/module/target", true, "target"));
@@ -874,7 +874,7 @@ public sealed class GitIgnoreMatcherTests
 	[Fact]
 	public void IsIgnored_ContentPatternIgnoresDirectory_VendorFolder()
 	{
-		var matcher = GitIgnoreMatcher.Build("/repo", new[] { "**/vendor/*" });
+		var matcher = GitIgnoreMatcher.Build("/repo", ["**/vendor/*"]);
 
 		Assert.True(matcher.IsIgnored("/repo/vendor", true, "vendor"));
 	}
@@ -882,7 +882,7 @@ public sealed class GitIgnoreMatcherTests
 	[Fact]
 	public void IsIgnored_ContentPatternIgnoresDirectory_CacheFolder()
 	{
-		var matcher = GitIgnoreMatcher.Build("/repo", new[] { "**/.cache/*" });
+		var matcher = GitIgnoreMatcher.Build("/repo", ["**/.cache/*"]);
 
 		Assert.True(matcher.IsIgnored("/repo/.cache", true, ".cache"));
 		Assert.True(matcher.IsIgnored("/repo/project/.cache", true, ".cache"));
@@ -891,7 +891,7 @@ public sealed class GitIgnoreMatcherTests
 	[Fact]
 	public void IsIgnored_ContentPattern_DoesNotIgnoreUnrelatedDirectory()
 	{
-		var matcher = GitIgnoreMatcher.Build("/repo", new[] { "**/bin/*" });
+		var matcher = GitIgnoreMatcher.Build("/repo", ["**/bin/*"]);
 
 		Assert.False(matcher.IsIgnored("/repo/src", true, "src"));
 		Assert.False(matcher.IsIgnored("/repo/lib", true, "lib"));
@@ -900,7 +900,7 @@ public sealed class GitIgnoreMatcherTests
 	[Fact]
 	public void IsIgnored_ContentPattern_DoesNotIgnoreFiles()
 	{
-		var matcher = GitIgnoreMatcher.Build("/repo", new[] { "**/bin/*" });
+		var matcher = GitIgnoreMatcher.Build("/repo", ["**/bin/*"]);
 
 		// Files named "bin" should not be ignored by this pattern
 		Assert.False(matcher.IsIgnored("/repo/bin", false, "bin"));
@@ -911,7 +911,7 @@ public sealed class GitIgnoreMatcherTests
 	{
 		// When negation rules exist, we should be conservative and NOT hide the directory
 		// because some contents might be un-ignored
-		var matcher = GitIgnoreMatcher.Build("/repo", new[] { "**/bin/*", "!**/bin/keep.dll" });
+		var matcher = GitIgnoreMatcher.Build("/repo", ["**/bin/*", "!**/bin/keep.dll"]);
 
 		// With negation rules, directory should NOT be hidden (conservative approach)
 		Assert.False(matcher.IsIgnored("/repo/bin", true, "bin"));
@@ -920,7 +920,7 @@ public sealed class GitIgnoreMatcherTests
 	[Fact]
 	public void IsIgnored_ContentPattern_CharacterClass()
 	{
-		var matcher = GitIgnoreMatcher.Build("/repo", new[] { "**/[Bb]in/*" });
+		var matcher = GitIgnoreMatcher.Build("/repo", ["**/[Bb]in/*"]);
 
 		Assert.True(matcher.IsIgnored("/repo/bin", true, "bin"));
 		Assert.True(matcher.IsIgnored("/repo/Bin", true, "Bin"));
@@ -931,7 +931,7 @@ public sealed class GitIgnoreMatcherTests
 	public void IsIgnored_DirectPatternStillWorks()
 	{
 		// Direct directory patterns should still work
-		var matcher = GitIgnoreMatcher.Build("/repo", new[] { "bin/" });
+		var matcher = GitIgnoreMatcher.Build("/repo", ["bin/"]);
 
 		Assert.True(matcher.IsIgnored("/repo/bin", true, "bin"));
 		Assert.True(matcher.IsIgnored("/repo/src/bin", true, "bin"));
@@ -941,7 +941,7 @@ public sealed class GitIgnoreMatcherTests
 	public void IsIgnored_BothDirectAndContentPatterns()
 	{
 		// Both bin/ and **/bin/* should work together
-		var matcher = GitIgnoreMatcher.Build("/repo", new[] { "[Oo]bj/", "**/[Bb]in/*" });
+		var matcher = GitIgnoreMatcher.Build("/repo", ["[Oo]bj/", "**/[Bb]in/*"]);
 
 		Assert.True(matcher.IsIgnored("/repo/obj", true, "obj"));
 		Assert.True(matcher.IsIgnored("/repo/Obj", true, "Obj"));
@@ -955,7 +955,7 @@ public sealed class GitIgnoreMatcherTests
 	public void IsIgnored_SpecificFilePattern_DoesNotIgnoreDirectory()
 	{
 		// Pattern *.log should NOT cause directories to be ignored
-		var matcher = GitIgnoreMatcher.Build("/repo", new[] { "*.log" });
+		var matcher = GitIgnoreMatcher.Build("/repo", ["*.log"]);
 
 		Assert.False(matcher.IsIgnored("/repo/logs", true, "logs"));
 	}
@@ -965,7 +965,7 @@ public sealed class GitIgnoreMatcherTests
 	{
 		// Pattern logs/*.log only ignores .log files in logs, not all contents
 		// So logs directory should NOT be hidden
-		var matcher = GitIgnoreMatcher.Build("/repo", new[] { "logs/*.log" });
+		var matcher = GitIgnoreMatcher.Build("/repo", ["logs/*.log"]);
 
 		Assert.False(matcher.IsIgnored("/repo/logs", true, "logs"));
 	}

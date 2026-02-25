@@ -1,16 +1,10 @@
 namespace DevProjex.Avalonia.ViewModels;
 
-public sealed class SelectionOptionViewModel : ViewModelBase
+public sealed class SelectionOptionViewModel(string name, bool isChecked) : ViewModelBase
 {
-    private bool _isChecked;
+    private bool _isChecked = isChecked;
 
-    public SelectionOptionViewModel(string name, bool isChecked)
-    {
-        Name = name;
-        _isChecked = isChecked;
-    }
-
-    public string Name { get; }
+    public string Name { get; } = name;
 
     public bool IsChecked
     {

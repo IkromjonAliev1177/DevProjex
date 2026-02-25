@@ -1,13 +1,8 @@
 namespace DevProjex.Application.Services;
 
-public sealed class SmartIgnoreService
+public sealed class SmartIgnoreService(IEnumerable<ISmartIgnoreRule> rules)
 {
-	private readonly IReadOnlyList<ISmartIgnoreRule> _rules;
-
-	public SmartIgnoreService(IEnumerable<ISmartIgnoreRule> rules)
-	{
-		_rules = rules.ToList();
-	}
+	private readonly IReadOnlyList<ISmartIgnoreRule> _rules = rules.ToList();
 
 	public SmartIgnoreResult Build(string rootPath)
 	{

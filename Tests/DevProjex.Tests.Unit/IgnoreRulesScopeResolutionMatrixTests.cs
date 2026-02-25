@@ -19,7 +19,7 @@ public sealed class IgnoreRulesScopeResolutionMatrixTests
 		bool ExpectedSmart);
 
 	private static readonly PathCase[] Cases =
-	{
+	[
 		new("root-dir", "src", false, true, ExpectedScope.Root, false),
 		new("root-file", "README.md", false, false, ExpectedScope.Root, false),
 		new("project-dir", Path.Combine("project"), false, true, ExpectedScope.Project, true),
@@ -32,7 +32,7 @@ public sealed class IgnoreRulesScopeResolutionMatrixTests
 		new("tools-file", Path.Combine("tools", "build.sh"), false, false, ExpectedScope.Root, true),
 		new("outside-dir", "foreign", true, true, ExpectedScope.Empty, false),
 		new("outside-file", Path.Combine("foreign", "x.txt"), true, false, ExpectedScope.Empty, false)
-	};
+	];
 
 	public static IEnumerable<object[]> ResolveGitIgnoreCases()
 	{
@@ -44,8 +44,8 @@ public sealed class IgnoreRulesScopeResolutionMatrixTests
 				{
 					foreach (var appendDirectorySeparator in new[] { false, true })
 					{
-						yield return new object[]
-						{
+						yield return
+						[
 							pathCase.Key,
 							pathCase.RelativePath,
 							pathCase.IsOutsideRoot,
@@ -54,7 +54,7 @@ public sealed class IgnoreRulesScopeResolutionMatrixTests
 							useGitIgnore,
 							useUpperCase,
 							appendDirectorySeparator
-						};
+						];
 					}
 				}
 			}
@@ -78,9 +78,9 @@ public sealed class IgnoreRulesScopeResolutionMatrixTests
 		var projectPath = Path.Combine(rootPath, "project");
 		var modulePath = Path.Combine(projectPath, "module");
 
-		var rootMatcher = GitIgnoreMatcher.Build(rootPath, new[] { "root-ignore/" });
-		var projectMatcher = GitIgnoreMatcher.Build(projectPath, new[] { "project-ignore/" });
-		var moduleMatcher = GitIgnoreMatcher.Build(modulePath, new[] { "module-ignore/" });
+		var rootMatcher = GitIgnoreMatcher.Build(rootPath, ["root-ignore/"]);
+		var projectMatcher = GitIgnoreMatcher.Build(projectPath, ["project-ignore/"]);
+		var moduleMatcher = GitIgnoreMatcher.Build(modulePath, ["module-ignore/"]);
 
 		var rules = new IgnoreRules(
 			IgnoreHiddenFolders: false,
@@ -91,12 +91,12 @@ public sealed class IgnoreRulesScopeResolutionMatrixTests
 			SmartIgnoredFiles: new HashSet<string>(StringComparer.OrdinalIgnoreCase))
 		{
 			UseGitIgnore = useGitIgnore,
-			ScopedGitIgnoreMatchers = new[]
-			{
+			ScopedGitIgnoreMatchers =
+			[
 				new ScopedGitIgnoreMatcher(rootPath, rootMatcher),
 				new ScopedGitIgnoreMatcher(projectPath, projectMatcher),
 				new ScopedGitIgnoreMatcher(modulePath, moduleMatcher)
-			}
+			]
 		};
 
 		var basePath = isOutsideRoot
@@ -132,8 +132,8 @@ public sealed class IgnoreRulesScopeResolutionMatrixTests
 				{
 					foreach (var appendDirectorySeparator in new[] { false, true })
 					{
-						yield return new object[]
-						{
+						yield return
+						[
 							pathCase.Key,
 							pathCase.RelativePath,
 							pathCase.IsOutsideRoot,
@@ -142,7 +142,7 @@ public sealed class IgnoreRulesScopeResolutionMatrixTests
 							useSmartIgnore,
 							useUpperCase,
 							appendDirectorySeparator
-						};
+						];
 					}
 				}
 			}
@@ -175,7 +175,7 @@ public sealed class IgnoreRulesScopeResolutionMatrixTests
 			SmartIgnoredFiles: new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Thumbs.db" })
 		{
 			UseSmartIgnore = useSmartIgnore,
-			SmartIgnoreScopeRoots = new[] { projectPath, toolsPath }
+			SmartIgnoreScopeRoots = [projectPath, toolsPath]
 		};
 
 		var basePath = isOutsideRoot

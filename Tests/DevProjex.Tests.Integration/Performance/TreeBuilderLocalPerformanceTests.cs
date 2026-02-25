@@ -2,16 +2,9 @@ namespace DevProjex.Tests.Integration.Performance;
 
 [Collection("LocalPerformance")]
 [Trait("Category", "LocalPerformance")]
-public sealed class TreeBuilderLocalPerformanceTests
+public sealed class TreeBuilderLocalPerformanceTests(ITestOutputHelper output)
 {
-    private readonly ITestOutputHelper _output;
-    private readonly PerfBaselineStore _baselineStore;
-
-    public TreeBuilderLocalPerformanceTests(ITestOutputHelper output)
-    {
-        _output = output;
-        _baselineStore = new PerfBaselineStore(LocalPerformanceSettings.BaselineFilePath);
-    }
+    private readonly PerfBaselineStore _baselineStore = new(LocalPerformanceSettings.BaselineFilePath);
 
     public static IEnumerable<object[]> BuildCases()
     {
@@ -29,7 +22,7 @@ public sealed class TreeBuilderLocalPerformanceTests
         foreach (var branchFactor in branchFactors)
         foreach (var fileCount in filesPerDirectory)
         foreach (var profile in ignoreProfiles)
-            yield return new object[] { new FileSystemPerfCase(depth, branchFactor, fileCount, profile) };
+            yield return [ new FileSystemPerfCase(depth, branchFactor, fileCount, profile) ];
     }
 
     [LocalPerformanceTheory]
@@ -58,7 +51,7 @@ public sealed class TreeBuilderLocalPerformanceTests
 
         var scenarioId = $"tree-builder.build.{perfCase}";
         var verdict = _baselineStore.Evaluate(scenarioId, measurement);
-        _output.WriteLine(verdict.Message);
+        output.WriteLine(verdict.Message);
 
         if (LocalPerformanceSettings.ShouldEnforceBaselineRegression)
         {
@@ -66,7 +59,7 @@ public sealed class TreeBuilderLocalPerformanceTests
         }
         else if (verdict.IsRegression)
         {
-            _output.WriteLine($"[regression-detected-nonblocking] {scenarioId}");
+            output.WriteLine($"[regression-detected-nonblocking] {scenarioId}");
         }
 
         Assert.True(measurement.MedianMilliseconds < 8000,

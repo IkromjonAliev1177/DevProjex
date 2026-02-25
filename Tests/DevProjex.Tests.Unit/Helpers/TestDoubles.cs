@@ -1,30 +1,25 @@
 namespace DevProjex.Tests.Unit.Helpers;
 
-internal sealed class StubLocalizationCatalog : ILocalizationCatalog
+internal sealed class StubLocalizationCatalog(
+	IReadOnlyDictionary<AppLanguage, IReadOnlyDictionary<string, string>> data)
+	: ILocalizationCatalog
 {
-	private readonly IReadOnlyDictionary<AppLanguage, IReadOnlyDictionary<string, string>> _data;
-
-	public StubLocalizationCatalog(IReadOnlyDictionary<AppLanguage, IReadOnlyDictionary<string, string>> data)
-	{
-		_data = data;
-	}
-
 	public IReadOnlyDictionary<string, string> Get(AppLanguage language)
 	{
-		return _data.TryGetValue(language, out var dict) ? dict : _data[AppLanguage.En];
+		return data.TryGetValue(language, out var dict) ? dict : data[AppLanguage.En];
 	}
 }
 
 internal sealed class StubFileSystemScanner : IFileSystemScanner
 {
 	public Func<string, IgnoreRules, ScanResult<HashSet<string>>> GetExtensionsHandler { get; set; } =
-		(_, _) => new ScanResult<HashSet<string>>(new HashSet<string>(), false, false);
+		(_, _) => new ScanResult<HashSet<string>>([], false, false);
 
 	public Func<string, IgnoreRules, ScanResult<HashSet<string>>> GetRootFileExtensionsHandler { get; set; } =
-		(_, _) => new ScanResult<HashSet<string>>(new HashSet<string>(), false, false);
+		(_, _) => new ScanResult<HashSet<string>>([], false, false);
 
 	public Func<string, IgnoreRules, ScanResult<List<string>>> GetRootFolderNamesHandler { get; set; } =
-		(_, _) => new ScanResult<List<string>>(new List<string>(), false, false);
+		(_, _) => new ScanResult<List<string>>([], false, false);
 
 	public Func<string, bool> CanReadRootHandler { get; set; } = _ => true;
 
@@ -56,14 +51,7 @@ internal sealed class StubIconMapper : IIconMapper
 	public string GetIconKey(FileSystemNode node) => IconKey;
 }
 
-internal sealed class StubSmartIgnoreRule : ISmartIgnoreRule
+internal sealed class StubSmartIgnoreRule(SmartIgnoreResult result) : ISmartIgnoreRule
 {
-	private readonly SmartIgnoreResult _result;
-
-	public StubSmartIgnoreRule(SmartIgnoreResult result)
-	{
-		_result = result;
-	}
-
-	public SmartIgnoreResult Evaluate(string rootPath) => _result;
+	public SmartIgnoreResult Evaluate(string rootPath) => result;
 }

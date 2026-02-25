@@ -747,17 +747,12 @@ public sealed class GitRepositoryService : IGitRepositoryService
         return false;
     }
 
-    private sealed class BoundedLineBuffer
+    private sealed class BoundedLineBuffer(int maxChars)
     {
-        private readonly int _maxChars;
+        private readonly int _maxChars = Math.Max(1024, maxChars);
         private readonly Queue<string> _lines = new();
         private readonly object _sync = new();
         private int _charCount;
-
-        public BoundedLineBuffer(int maxChars)
-        {
-            _maxChars = Math.Max(1024, maxChars);
-        }
 
         public void Add(string line)
         {

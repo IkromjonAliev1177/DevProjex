@@ -43,13 +43,13 @@ public sealed class ExtensionlessRootSelectionCountMatrixIntegrationTests
 		{
 			foreach (var ignoreExtensionlessFiles in new[] { false, true })
 			{
-				yield return new object[]
-				{
+				yield return
+				[
 					caseId++,
 					rootMode,
 					ignoreExtensionlessFiles,
 					ignoreExtensionlessFiles ? 0 : expectedByRootMode[rootMode]
-				};
+				];
 			}
 		}
 	}

@@ -521,15 +521,8 @@ public class ZipDownloadAdvancedTests : IAsyncLifetime
 
     #endregion
 
-    private sealed class ImmediateProgress : IProgress<string>
+    private sealed class ImmediateProgress(Action<string> onReport) : IProgress<string>
     {
-        private readonly Action<string> _onReport;
-
-        public ImmediateProgress(Action<string> onReport)
-        {
-            _onReport = onReport;
-        }
-
-        public void Report(string value) => _onReport(value);
+        public void Report(string value) => onReport(value);
     }
 }

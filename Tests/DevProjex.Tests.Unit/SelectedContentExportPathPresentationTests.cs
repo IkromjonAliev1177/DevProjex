@@ -9,7 +9,7 @@ public sealed class SelectedContentExportPathPresentationTests
 		var file = temp.CreateFile("note.txt", "hello");
 		var service = new SelectedContentExportService(new FileContentAnalyzer());
 
-		var result = service.Build(new[] { file }, _ => "https://github.com/user/repo/note.txt");
+		var result = service.Build([file], _ => "https://github.com/user/repo/note.txt");
 
 		Assert.Contains("https://github.com/user/repo/note.txt:", result, StringComparison.Ordinal);
 		Assert.DoesNotContain($"{file}:", result, StringComparison.Ordinal);
@@ -22,7 +22,7 @@ public sealed class SelectedContentExportPathPresentationTests
 		var file = temp.CreateFile("note.txt", "hello");
 		var service = new SelectedContentExportService(new FileContentAnalyzer());
 
-		var result = service.Build(new[] { file }, _ => string.Empty);
+		var result = service.Build([file], _ => string.Empty);
 
 		Assert.Contains($"{file}:", result, StringComparison.Ordinal);
 	}
@@ -34,7 +34,7 @@ public sealed class SelectedContentExportPathPresentationTests
 		var file = temp.CreateFile("note.txt", "hello");
 		var service = new SelectedContentExportService(new FileContentAnalyzer());
 
-		var result = service.Build(new[] { file }, _ => throw new InvalidOperationException("mapper failed"));
+		var result = service.Build([file], _ => throw new InvalidOperationException("mapper failed"));
 
 		Assert.Contains($"{file}:", result, StringComparison.Ordinal);
 	}

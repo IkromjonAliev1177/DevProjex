@@ -1,17 +1,10 @@
 namespace DevProjex.Avalonia.ViewModels;
 
-public sealed class ToastMessageViewModel : ViewModelBase
+public sealed class ToastMessageViewModel(string message) : ViewModelBase
 {
-	private string _message;
-	private double _opacity;
-	private double _offsetY;
-
-	public ToastMessageViewModel(string message)
-	{
-		_message = message;
-		_opacity = 0;
-		_offsetY = 12;
-	}
+	private string _message = message;
+	private double _opacity = 0;
+	private double _offsetY = 12;
 
 	public string Message
 	{

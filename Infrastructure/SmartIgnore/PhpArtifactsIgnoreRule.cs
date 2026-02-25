@@ -7,9 +7,9 @@ namespace DevProjex.Infrastructure.SmartIgnore;
 public sealed class PhpArtifactsIgnoreRule : ISmartIgnoreRule
 {
 	private static readonly string[] FolderNames =
-	{
+	[
 		"vendor"
-	};
+	];
 
 	public SmartIgnoreResult Evaluate(string rootPath)
 	{

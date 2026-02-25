@@ -13,10 +13,11 @@ public sealed class IgnoreRulesServiceTests
 		var smartResult = new SmartIgnoreResult(
 			new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "cache" },
 			new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "thumbs.db" });
-		var smart = new SmartIgnoreService(new[] { new StubSmartIgnoreRule(smartResult) });
+		var smart = new SmartIgnoreService([new StubSmartIgnoreRule(smartResult)]);
 		var service = new IgnoreRulesService(smart);
 
-		var rules = service.Build(temp.Path, new[] { IgnoreOptionId.UseGitIgnore, IgnoreOptionId.HiddenFolders, IgnoreOptionId.DotFiles });
+		var rules = service.Build(temp.Path, [IgnoreOptionId.UseGitIgnore, IgnoreOptionId.HiddenFolders, IgnoreOptionId.DotFiles
+		]);
 
 		Assert.True(rules.IgnoreHiddenFolders);
 		Assert.True(rules.IgnoreDotFiles);
@@ -32,7 +33,7 @@ public sealed class IgnoreRulesServiceTests
 		var smart = new SmartIgnoreService(new ISmartIgnoreRule[0]);
 		var service = new IgnoreRulesService(smart);
 
-		var rules = service.Build("/root", Array.Empty<IgnoreOptionId>());
+		var rules = service.Build("/root", []);
 
 		Assert.False(rules.IgnoreHiddenFolders);
 		Assert.False(rules.IgnoreHiddenFiles);
@@ -53,10 +54,10 @@ public sealed class IgnoreRulesServiceTests
 		var smartResult = new SmartIgnoreResult(
 			new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Cache" },
 			new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Thumbs.DB" });
-		var smart = new SmartIgnoreService(new[] { new StubSmartIgnoreRule(smartResult) });
+		var smart = new SmartIgnoreService([new StubSmartIgnoreRule(smartResult)]);
 		var service = new IgnoreRulesService(smart);
 
-		var rules = service.Build(temp.Path, new[] { IgnoreOptionId.UseGitIgnore });
+		var rules = service.Build(temp.Path, [IgnoreOptionId.UseGitIgnore]);
 
 		Assert.Contains("cache", rules.SmartIgnoredFolders);
 		Assert.Contains("thumbs.db", rules.SmartIgnoredFiles);
@@ -69,15 +70,14 @@ public sealed class IgnoreRulesServiceTests
 		var smart = new SmartIgnoreService(new ISmartIgnoreRule[0]);
 		var service = new IgnoreRulesService(smart);
 
-		var rules = service.Build("/root", new[]
-		{
+		var rules = service.Build("/root", [
 			IgnoreOptionId.HiddenFolders,
 			IgnoreOptionId.HiddenFiles,
 			IgnoreOptionId.HiddenFolders,
 			IgnoreOptionId.HiddenFiles,
 			IgnoreOptionId.DotFolders,
 			IgnoreOptionId.DotFiles
-		});
+		]);
 
 		Assert.True(rules.IgnoreHiddenFolders);
 		Assert.True(rules.IgnoreHiddenFiles);
@@ -95,10 +95,10 @@ public sealed class IgnoreRulesServiceTests
 		var smartResult = new SmartIgnoreResult(
 			new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "cache" },
 			new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "thumbs.db" });
-		var smart = new SmartIgnoreService(new[] { new StubSmartIgnoreRule(smartResult) });
+		var smart = new SmartIgnoreService([new StubSmartIgnoreRule(smartResult)]);
 		var service = new IgnoreRulesService(smart);
 
-		var rules = service.Build("/root", Array.Empty<IgnoreOptionId>());
+		var rules = service.Build("/root", []);
 
 		// SmartIgnore should be empty when UseGitIgnore is not selected
 		Assert.Empty(rules.SmartIgnoredFolders);
@@ -115,10 +115,10 @@ public sealed class IgnoreRulesServiceTests
 		var smartResult = new SmartIgnoreResult(
 			new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "cache" },
 			new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "thumbs.db" });
-		var smart = new SmartIgnoreService(new[] { new StubSmartIgnoreRule(smartResult) });
+		var smart = new SmartIgnoreService([new StubSmartIgnoreRule(smartResult)]);
 		var service = new IgnoreRulesService(smart);
 
-		var rules = service.Build(temp.Path, new[] { IgnoreOptionId.UseGitIgnore });
+		var rules = service.Build(temp.Path, [IgnoreOptionId.UseGitIgnore]);
 
 		Assert.Contains("cache", rules.SmartIgnoredFolders);
 		Assert.Contains("thumbs.db", rules.SmartIgnoredFiles);

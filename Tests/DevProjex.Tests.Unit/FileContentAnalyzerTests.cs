@@ -35,7 +35,7 @@ public sealed class FileContentAnalyzerTests
 	public async Task IsTextFileAsync_BinaryFile_ReturnsFalse()
 	{
 		using var temp = new TemporaryDirectory();
-		var file = temp.CreateBinaryFile("binary.bin", new byte[] { 0x00, 0x01, 0x02 });
+		var file = temp.CreateBinaryFile("binary.bin", [0x00, 0x01, 0x02]);
 
 		var result = await _analyzer.IsTextFileAsync(file);
 
@@ -46,7 +46,7 @@ public sealed class FileContentAnalyzerTests
 	public async Task IsTextFileAsync_BinaryFileWithNullInMiddle_ReturnsFalse()
 	{
 		using var temp = new TemporaryDirectory();
-		var file = temp.CreateBinaryFile("mixed.bin", new byte[] { 0x48, 0x65, 0x00, 0x6C, 0x6C, 0x6F }); // "He\0llo"
+		var file = temp.CreateBinaryFile("mixed.bin", [0x48, 0x65, 0x00, 0x6C, 0x6C, 0x6F]); // "He\0llo"
 
 		var result = await _analyzer.IsTextFileAsync(file);
 
@@ -175,7 +175,7 @@ public sealed class FileContentAnalyzerTests
 	public async Task TryReadAsTextAsync_BinaryFile_ReturnsNull()
 	{
 		using var temp = new TemporaryDirectory();
-		var file = temp.CreateBinaryFile("binary.bin", new byte[] { 0x00, 0x01, 0x02 });
+		var file = temp.CreateBinaryFile("binary.bin", [0x00, 0x01, 0x02]);
 
 		var result = await _analyzer.TryReadAsTextAsync(file);
 

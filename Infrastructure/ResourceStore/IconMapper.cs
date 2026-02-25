@@ -2,12 +2,7 @@ namespace DevProjex.Infrastructure.ResourceStore;
 
 public sealed class IconMapper : IIconMapper
 {
-	private readonly Lazy<IconMapping> _mapping;
-
-	public IconMapper()
-	{
-		_mapping = new Lazy<IconMapping>(LoadMapping);
-	}
+	private readonly Lazy<IconMapping> _mapping = new(LoadMapping);
 
 	public string GetIconKey(FileSystemNode node)
 	{

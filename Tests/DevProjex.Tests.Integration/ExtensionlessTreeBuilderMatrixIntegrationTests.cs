@@ -63,15 +63,15 @@ public sealed class ExtensionlessTreeBuilderMatrixIntegrationTests
 			                       (filterMode is FilterMode.None or FilterMode.DockerOnly);
 			var expectTxt = allowTxtExtension && filterMode == FilterMode.None;
 
-			yield return new object[]
-			{
+			yield return
+			[
 				ignoreExtensionlessFiles,
 				allowTxtExtension,
 				filterMode,
 				nestedLocation,
 				expectDockerfile,
 				expectTxt
-			};
+			];
 		}
 	}
 

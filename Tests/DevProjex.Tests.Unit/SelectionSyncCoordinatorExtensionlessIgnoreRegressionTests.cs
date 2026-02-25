@@ -29,7 +29,7 @@ public sealed class SelectionSyncCoordinatorExtensionlessIgnoreRegressionTests
 		var coordinator = CreateCoordinator(viewModel, scanner, projectPath);
 		var profile = new ProjectSelectionProfile(
 			SelectedRootFolders: selectedRoots,
-			SelectedExtensions: Array.Empty<string>(),
+			SelectedExtensions: [],
 			SelectedIgnoreOptions: selectedIgnoreOptions);
 
 		coordinator.ApplyProjectProfileSelections(projectPath, profile);
@@ -57,8 +57,8 @@ public sealed class SelectionSyncCoordinatorExtensionlessIgnoreRegressionTests
 			? new[] { IgnoreOptionId.ExtensionlessFiles }
 			: Array.Empty<IgnoreOptionId>();
 		var profile = new ProjectSelectionProfile(
-			SelectedRootFolders: Array.Empty<string>(),
-			SelectedExtensions: Array.Empty<string>(),
+			SelectedRootFolders: [],
+			SelectedExtensions: [],
 			SelectedIgnoreOptions: selectedIgnoreOptions);
 
 		coordinator.ApplyProjectProfileSelections(projectPath, profile);
@@ -66,7 +66,7 @@ public sealed class SelectionSyncCoordinatorExtensionlessIgnoreRegressionTests
 		for (var i = 0; i < scanSequence.Length; i++)
 		{
 			coordinator.ApplyExtensionScan(scanSequence[i]);
-			coordinator.PopulateIgnoreOptionsForRootSelection(Array.Empty<string>(), projectPath);
+			coordinator.PopulateIgnoreOptionsForRootSelection([], projectPath);
 
 			var expectedChecked = extensionlessSelectedInProfile && expectedCounts[i] > 0;
 			AssertExtensionlessOption(viewModel, expectedCounts[i], expectedChecked);
@@ -78,8 +78,8 @@ public sealed class SelectionSyncCoordinatorExtensionlessIgnoreRegressionTests
 		var rootCases = new[]
 		{
 			Array.Empty<string>(),
-			new[] { "src" },
-			new[] { "tests" },
+			["src"],
+			["tests"],
 			new[] { "src", "tests" },
 			new[] { "docs" },
 			new[] { "missing-root" }
@@ -88,7 +88,7 @@ public sealed class SelectionSyncCoordinatorExtensionlessIgnoreRegressionTests
 		var ignoreCases = new[]
 		{
 			Array.Empty<IgnoreOptionId>(),
-			new[] { IgnoreOptionId.ExtensionlessFiles },
+			[IgnoreOptionId.ExtensionlessFiles],
 			new[] { IgnoreOptionId.ExtensionlessFiles, IgnoreOptionId.HiddenFiles },
 			new[] { IgnoreOptionId.ExtensionlessFiles, IgnoreOptionId.DotFiles, IgnoreOptionId.DotFolders },
 			new[] { IgnoreOptionId.HiddenFolders, IgnoreOptionId.HiddenFiles },
@@ -100,7 +100,7 @@ public sealed class SelectionSyncCoordinatorExtensionlessIgnoreRegressionTests
 		{
 			foreach (var selectedIgnoreOptions in ignoreCases)
 			{
-				yield return new object[] { caseId++, selectedIgnoreOptions, selectedRoots };
+				yield return [ caseId++, selectedIgnoreOptions, selectedRoots ];
 			}
 		}
 	}
@@ -109,18 +109,18 @@ public sealed class SelectionSyncCoordinatorExtensionlessIgnoreRegressionTests
 	{
 		var patterns = new Dictionary<int, (string[] Entries, int Count)>
 		{
-			[0] = (new[] { ".cs", ".json" }, 0),
-			[1] = (new[] { "Dockerfile", ".cs" }, 1),
-			[2] = (new[] { "Dockerfile", "Makefile", ".cs" }, 2),
-			[3] = (new[] { ".env", ".gitignore", ".editorconfig" }, 0),
-			[4] = (new[] { "LICENSE", ".md", ".txt" }, 1),
-			[5] = (new[] { "Taskfile", "WORKSPACE", ".yml" }, 2),
-			[6] = (new[] { "README", "file.", ".props" }, 2)
+			[0] = ([".cs", ".json"], 0),
+			[1] = (["Dockerfile", ".cs"], 1),
+			[2] = (["Dockerfile", "Makefile", ".cs"], 2),
+			[3] = ([".env", ".gitignore", ".editorconfig"], 0),
+			[4] = (["LICENSE", ".md", ".txt"], 1),
+			[5] = (["Taskfile", "WORKSPACE", ".yml"], 2),
+			[6] = (["README", "file.", ".props"], 2)
 		};
 
 		var sequences = new[]
 		{
-			new[] { 0, 1, 0 },
+			[0, 1, 0],
 			new[] { 1, 2, 1 },
 			new[] { 2, 0, 2 },
 			new[] { 3, 4, 3 },
@@ -139,7 +139,7 @@ public sealed class SelectionSyncCoordinatorExtensionlessIgnoreRegressionTests
 			{
 				var scanSequence = sequence.Select(index => patterns[index].Entries).ToArray();
 				var expectedCounts = sequence.Select(index => patterns[index].Count).ToArray();
-				yield return new object[] { caseId++, extensionlessSelectedInProfile, scanSequence, expectedCounts };
+				yield return [ caseId++, extensionlessSelectedInProfile, scanSequence, expectedCounts ];
 			}
 		}
 	}

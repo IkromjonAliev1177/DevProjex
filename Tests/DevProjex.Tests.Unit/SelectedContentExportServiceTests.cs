@@ -12,7 +12,7 @@ public sealed class SelectedContentExportServiceTests
 		var missing = Path.Combine(temp.Path, "missing.txt");
 
 		var service = new SelectedContentExportService(new FileContentAnalyzer());
-		var result = service.Build(new[] { missing, empty, valid });
+		var result = service.Build([missing, empty, valid]);
 
 		Assert.Contains("note.txt:", result);
 		Assert.Contains("empty.txt:", result);
@@ -25,10 +25,10 @@ public sealed class SelectedContentExportServiceTests
 	public void Build_SkipsBinaryFiles()
 	{
 		using var temp = new TemporaryDirectory();
-		var binary = temp.CreateBinaryFile("bin.dat", new byte[] { 0, 1, 2, 3 });
+		var binary = temp.CreateBinaryFile("bin.dat", [0, 1, 2, 3]);
 
 		var service = new SelectedContentExportService(new FileContentAnalyzer());
-		var result = service.Build(new[] { binary });
+		var result = service.Build([binary]);
 
 		Assert.Equal(string.Empty, result);
 	}
@@ -42,7 +42,7 @@ public sealed class SelectedContentExportServiceTests
 		var fileA = temp.CreateFile("a.txt", "a");
 
 		var service = new SelectedContentExportService(new FileContentAnalyzer());
-		var result = service.Build(new[] { fileB, fileA });
+		var result = service.Build([fileB, fileA]);
 
 		var firstIndex = result.IndexOf("a.txt:", StringComparison.Ordinal);
 		var secondIndex = result.IndexOf("b.txt:", StringComparison.Ordinal);
@@ -57,7 +57,7 @@ public sealed class SelectedContentExportServiceTests
 		var whitespace = temp.CreateFile("space.txt", "   ");
 
 		var service = new SelectedContentExportService(new FileContentAnalyzer());
-		var result = service.Build(new[] { whitespace });
+		var result = service.Build([whitespace]);
 
 		Assert.Contains("space.txt:", result);
 		Assert.Contains("[Whitespace, 3 bytes]", result);
@@ -71,7 +71,7 @@ public sealed class SelectedContentExportServiceTests
 		var file = temp.CreateFile("dup.txt", "content");
 
 		var service = new SelectedContentExportService(new FileContentAnalyzer());
-		var result = service.Build(new[] { file, file });
+		var result = service.Build([file, file]);
 
 		Assert.Equal(1, result.Split("dup.txt:").Length - 1);
 	}
@@ -81,7 +81,7 @@ public sealed class SelectedContentExportServiceTests
 	public void Build_ReturnsEmptyForWhitespacePaths()
 	{
 		var service = new SelectedContentExportService(new FileContentAnalyzer());
-		var result = service.Build(new[] { " ", "\t", string.Empty });
+		var result = service.Build([" ", "\t", string.Empty]);
 
 		Assert.Equal(string.Empty, result);
 	}
@@ -94,7 +94,7 @@ public sealed class SelectedContentExportServiceTests
 		var file = temp.CreateFile("trim.txt", "line\n\n");
 
 		var service = new SelectedContentExportService(new FileContentAnalyzer());
-		var result = service.Build(new[] { file });
+		var result = service.Build([file]);
 
 		Assert.EndsWith("line", result, StringComparison.Ordinal);
 	}
@@ -109,7 +109,7 @@ public sealed class SelectedContentExportServiceTests
 
 
 		var service = new SelectedContentExportService(new FileContentAnalyzer());
-		var result = service.Build(new[] { fileA, fileB });
+		var result = service.Build([fileA, fileB]);
 
 
 		var nl = Environment.NewLine;
@@ -121,10 +121,10 @@ public sealed class SelectedContentExportServiceTests
 	public void Build_SkipsFilesWithNullBytes()
 	{
 		using var temp = new TemporaryDirectory();
-		var file = temp.CreateBinaryFile("mixed.txt", new byte[] { 1, 2, 0, 3 });
+		var file = temp.CreateBinaryFile("mixed.txt", [1, 2, 0, 3]);
 
 		var service = new SelectedContentExportService(new FileContentAnalyzer());
-		var result = service.Build(new[] { file });
+		var result = service.Build([file]);
 
 		Assert.Equal(string.Empty, result);
 	}
@@ -137,7 +137,7 @@ public sealed class SelectedContentExportServiceTests
 		var file = temp.CreateFile("header.txt", "Header");
 
 		var service = new SelectedContentExportService(new FileContentAnalyzer());
-		var result = service.Build(new[] { file });
+		var result = service.Build([file]);
 
 		Assert.Contains("header.txt:", result);
 	}
@@ -161,7 +161,7 @@ public sealed class SelectedContentExportServiceTests
 		var fileA = temp.CreateFile("a.txt", "A");
 
 		var service = new SelectedContentExportService(new FileContentAnalyzer());
-		var result = service.Build(new[] { fileB, fileA });
+		var result = service.Build([fileB, fileA]);
 
 		var comparison = OperatingSystem.IsWindows()
 			? StringComparison.OrdinalIgnoreCase
@@ -179,7 +179,7 @@ public sealed class SelectedContentExportServiceTests
 		var file = temp.CreateFile("single.txt", "One");
 
 		var service = new SelectedContentExportService(new FileContentAnalyzer());
-		var result = service.Build(new[] { file });
+		var result = service.Build([file]);
 
 		var nl = Environment.NewLine;
 		Assert.DoesNotContain($"\u00A0{nl}\u00A0{nl}", result);

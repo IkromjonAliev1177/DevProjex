@@ -19,9 +19,9 @@ public sealed class ProjectProfilePersistenceClearMatrixIntegrationTests
 			Directory.CreateDirectory(canonicalPath);
 			projectPaths.Add(canonicalPath);
 			var profile = new ProjectSelectionProfile(
-				SelectedRootFolders: new[] { $"src{i}", $"tests{i}" },
-				SelectedExtensions: new[] { ".cs", ".json", $".x{i}" },
-				SelectedIgnoreOptions: new[] { IgnoreOptionId.HiddenFolders, IgnoreOptionId.DotFiles });
+				SelectedRootFolders: [$"src{i}", $"tests{i}"],
+				SelectedExtensions: [".cs", ".json", $".x{i}"],
+				SelectedIgnoreOptions: [IgnoreOptionId.HiddenFolders, IgnoreOptionId.DotFiles]);
 			store.SaveProfile(BuildPathByMode(canonicalPath, pathMode), profile);
 		}
 
@@ -44,7 +44,7 @@ public sealed class ProjectProfilePersistenceClearMatrixIntegrationTests
 		foreach (var mode in pathModes)
 		{
 			foreach (var count in projectCounts)
-				yield return new object[] { caseId++, mode, count };
+				yield return [ caseId++, mode, count ];
 		}
 	}
 

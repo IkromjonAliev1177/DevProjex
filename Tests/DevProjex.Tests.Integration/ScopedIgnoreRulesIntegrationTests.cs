@@ -13,10 +13,9 @@ public sealed class ScopedIgnoreRulesIntegrationTests
 		temp.CreateFile("src/app.cs", "class App {}");
 		temp.CreateFile("bin/output.txt", "artifact");
 
-		var smartService = new SmartIgnoreService(new ISmartIgnoreRule[]
-		{
-			new FixedSmartIgnoreRule(new[] { "bin" }, Array.Empty<string>())
-		});
+		var smartService = new SmartIgnoreService([
+			new FixedSmartIgnoreRule(["bin"], [])
+		]);
 		var ignoreRulesService = new IgnoreRulesService(smartService);
 		var selected = new List<IgnoreOptionId> { IgnoreOptionId.SmartIgnore };
 		if (useGitIgnore)
@@ -47,19 +46,18 @@ public sealed class ScopedIgnoreRulesIntegrationTests
 		temp.CreateFile("Visual Studio 2019/America/America/bin/Debug/America.exe", "binary");
 		temp.CreateFile("Visual Studio 2019/America/America/obj/Debug/cache.txt", "cache");
 
-		var smartService = new SmartIgnoreService(new ISmartIgnoreRule[]
-		{
+		var smartService = new SmartIgnoreService([
 			new DotNetArtifactsIgnoreRule()
-		});
+		]);
 		var rulesService = new IgnoreRulesService(smartService);
 
-		var availability = rulesService.GetIgnoreOptionsAvailability(temp.Path, new[] { "Visual Studio 2019" });
+		var availability = rulesService.GetIgnoreOptionsAvailability(temp.Path, ["Visual Studio 2019"]);
 		Assert.True(availability.IncludeSmartIgnore);
 
 		var rules = rulesService.Build(
 			temp.Path,
-			new[] { IgnoreOptionId.SmartIgnore },
-			selectedRootFolders: new[] { "Visual Studio 2019" });
+			[IgnoreOptionId.SmartIgnore],
+			selectedRootFolders: ["Visual Studio 2019"]);
 
 		Assert.True(rules.UseSmartIgnore);
 		Assert.Contains("bin", rules.SmartIgnoredFolders);
@@ -92,10 +90,9 @@ public sealed class ScopedIgnoreRulesIntegrationTests
 		temp.CreateFile("Documents/Visual Studio 2019/America/America/bin/Debug/America.exe", "binary");
 		temp.CreateFile("Documents/Visual Studio 2019/America/America/obj/Debug/cache.txt", "cache");
 
-		var smartService = new SmartIgnoreService(new ISmartIgnoreRule[]
-		{
+		var smartService = new SmartIgnoreService([
 			new DotNetArtifactsIgnoreRule()
-		});
+		]);
 		var rulesService = new IgnoreRulesService(smartService);
 		var selectedOptions = useSmartIgnore
 			? new[] { IgnoreOptionId.SmartIgnore }
@@ -104,7 +101,7 @@ public sealed class ScopedIgnoreRulesIntegrationTests
 		var rules = rulesService.Build(
 			temp.Path,
 			selectedOptions,
-			selectedRootFolders: new[] { "Documents" });
+			selectedRootFolders: ["Documents"]);
 
 		Assert.Equal(useSmartIgnore, rules.UseSmartIgnore);
 
@@ -141,10 +138,9 @@ public sealed class ScopedIgnoreRulesIntegrationTests
 		temp.CreateFile("Documents/Visual Studio 2019/America/America/obj/Debug/cache.txt", "cache");
 
 		var (openedRootPath, selectedRootFolders, pathChain) = ResolveRootMode(temp.Path, rootMode);
-		var smartService = new SmartIgnoreService(new ISmartIgnoreRule[]
-		{
+		var smartService = new SmartIgnoreService([
 			new DotNetArtifactsIgnoreRule()
-		});
+		]);
 		var rulesService = new IgnoreRulesService(smartService);
 		var selectedOptions = useSmartIgnore
 			? new[] { IgnoreOptionId.SmartIgnore }
@@ -173,15 +169,14 @@ public sealed class ScopedIgnoreRulesIntegrationTests
 		temp.CreateFile("Documents/Visual Studio 2019/America/America/bin/Debug/America.exe", "binary");
 		temp.CreateFile("Documents/Visual Studio 2019/America/America/obj/Debug/cache.txt", "cache");
 
-		var smartService = new SmartIgnoreService(new ISmartIgnoreRule[]
-		{
+		var smartService = new SmartIgnoreService([
 			new DotNetArtifactsIgnoreRule()
-		});
+		]);
 		var rulesService = new IgnoreRulesService(smartService);
 		var rules = rulesService.Build(
 			temp.Path,
-			new[] { IgnoreOptionId.UseGitIgnore },
-			selectedRootFolders: new[] { "Documents" });
+			[IgnoreOptionId.UseGitIgnore],
+			selectedRootFolders: ["Documents"]);
 
 		Assert.True(rules.UseGitIgnore);
 		Assert.False(rules.UseSmartIgnore);
@@ -216,14 +211,13 @@ public sealed class ScopedIgnoreRulesIntegrationTests
 		temp.CreateFile("Documents/Visual Studio 2019/America/America/obj/Debug/cache.txt", "cache");
 
 		var (openedRootPath, selectedRootFolders, pathChain) = ResolveRootMode(temp.Path, rootMode);
-		var smartService = new SmartIgnoreService(new ISmartIgnoreRule[]
-		{
+		var smartService = new SmartIgnoreService([
 			new DotNetArtifactsIgnoreRule()
-		});
+		]);
 		var rulesService = new IgnoreRulesService(smartService);
 		var rules = rulesService.Build(
 			openedRootPath,
-			new[] { IgnoreOptionId.UseGitIgnore },
+			[IgnoreOptionId.UseGitIgnore],
 			selectedRootFolders: selectedRootFolders);
 
 		Assert.True(rules.UseGitIgnore);
@@ -257,10 +251,9 @@ public sealed class ScopedIgnoreRulesIntegrationTests
 		temp.CreateFile("proj-no-git/smart_only/data.txt", "smart ignored");
 		temp.CreateFile("proj-no-git/keep/data.txt", "keep");
 
-		var smartService = new SmartIgnoreService(new ISmartIgnoreRule[]
-		{
-			new FixedSmartIgnoreRule(new[] { "smart_only" }, Array.Empty<string>())
-		});
+		var smartService = new SmartIgnoreService([
+			new FixedSmartIgnoreRule(["smart_only"], [])
+		]);
 		var ignoreRulesService = new IgnoreRulesService(smartService);
 		var selected = new List<IgnoreOptionId>();
 		if (useGitIgnore)
@@ -292,22 +285,14 @@ public sealed class ScopedIgnoreRulesIntegrationTests
 			Assert.Contains(projNoGit.Children, child => child.Name == "smart_only");
 	}
 
-	private sealed class FixedSmartIgnoreRule : ISmartIgnoreRule
+	private sealed class FixedSmartIgnoreRule(IReadOnlyCollection<string> folders, IReadOnlyCollection<string> files)
+		: ISmartIgnoreRule
 	{
-		private readonly IReadOnlyCollection<string> _folders;
-		private readonly IReadOnlyCollection<string> _files;
-
-		public FixedSmartIgnoreRule(IReadOnlyCollection<string> folders, IReadOnlyCollection<string> files)
-		{
-			_folders = folders;
-			_files = files;
-		}
-
 		public SmartIgnoreResult Evaluate(string rootPath)
 		{
 			return new SmartIgnoreResult(
-				new HashSet<string>(_folders, StringComparer.OrdinalIgnoreCase),
-				new HashSet<string>(_files, StringComparer.OrdinalIgnoreCase));
+				new HashSet<string>(folders, StringComparer.OrdinalIgnoreCase),
+				new HashSet<string>(files, StringComparer.OrdinalIgnoreCase));
 		}
 	}
 
@@ -318,12 +303,12 @@ public sealed class ScopedIgnoreRulesIntegrationTests
 		{
 			0 => (
 				OpenedRootPath: tempPath,
-				SelectedRootFolders: new[] { "Documents" },
-				ProjectPathChain: new[] { "Documents", "Visual Studio 2019", "America", "America" }),
+				SelectedRootFolders: ["Documents"],
+				ProjectPathChain: ["Documents", "Visual Studio 2019", "America", "America"]),
 			1 => (
 				OpenedRootPath: Path.Combine(tempPath, "Documents"),
-				SelectedRootFolders: new[] { "Visual Studio 2019" },
-				ProjectPathChain: new[] { "Visual Studio 2019", "America", "America" }),
+				SelectedRootFolders: ["Visual Studio 2019"],
+				ProjectPathChain: ["Visual Studio 2019", "America", "America"]),
 			2 => (
 				OpenedRootPath: Path.Combine(tempPath, "Documents", "Visual Studio 2019"),
 				SelectedRootFolders: new[] { "America" },

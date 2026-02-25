@@ -114,7 +114,7 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         ToastItems.CollectionChanged += OnToastItemsCollectionChanged;
     }
 
-    private ObservableCollection<TreeNodeViewModel> _treeNodes = new();
+    private ObservableCollection<TreeNodeViewModel> _treeNodes = [];
 
     public ObservableCollection<TreeNodeViewModel> TreeNodes
     {
@@ -126,14 +126,14 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
             RaisePropertyChanged();
         }
     }
-    public ObservableCollection<SelectionOptionViewModel> RootFolders { get; } = new();
-    public ObservableCollection<SelectionOptionViewModel> Extensions { get; } = new();
-    public ObservableCollection<IgnoreOptionViewModel> IgnoreOptions { get; } = new();
-    public ObservableCollection<FontFamily> FontFamilies { get; } = new();
+    public ObservableCollection<SelectionOptionViewModel> RootFolders { get; } = [];
+    public ObservableCollection<SelectionOptionViewModel> Extensions { get; } = [];
+    public ObservableCollection<IgnoreOptionViewModel> IgnoreOptions { get; } = [];
+    public ObservableCollection<FontFamily> FontFamilies { get; } = [];
 
     public void ResetTreeNodes()
     {
-        TreeNodes = new ObservableCollection<TreeNodeViewModel>();
+        TreeNodes = [];
     }
 
     public string StatusTreeStatsText
@@ -624,7 +624,7 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         }
     }
 
-    public ObservableCollection<GitBranch> GitBranches { get; } = new();
+    public ObservableCollection<GitBranch> GitBranches { get; } = [];
 
     public string GitCloneUrl
     {
@@ -894,7 +894,7 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
     public string MenuCopyTree { get; private set; } = string.Empty;
     public string MenuCopyContent { get; private set; } = string.Empty;
     public string MenuCopyTreeAndContent { get; private set; } = string.Empty;
-    public ObservableCollection<ToastMessageViewModel> ToastItems { get; private set; } = new();
+    public ObservableCollection<ToastMessageViewModel> ToastItems { get; private set; } = [];
     public bool HasToastItems => ToastItems.Count > 0;
     public string MenuView { get; private set; } = string.Empty;
     public string MenuViewExpandAll { get; private set; } = string.Empty;

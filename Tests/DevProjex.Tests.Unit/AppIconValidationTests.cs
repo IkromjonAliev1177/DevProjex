@@ -69,7 +69,7 @@ public sealed class AppIconValidationTests
     [Fact]
     public void PngSignature_IsCorrect()
     {
-        byte[] expectedSignature = { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A };
+        byte[] expectedSignature = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
 
         // "PNG" should be at positions 1-3
         Assert.Equal((byte)'P', expectedSignature[1]);
@@ -84,7 +84,7 @@ public sealed class AppIconValidationTests
     [InlineData(new byte[] { 0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 0x00, 0x00 }, false)] // GIF
     public void PngHeader_ValidatesCorrectly(byte[] header, bool expectedValid)
     {
-        byte[] pngSignature = { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A };
+        byte[] pngSignature = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
         var isValid = header.Length >= 8 && header.Take(8).SequenceEqual(pngSignature);
         Assert.Equal(expectedValid, isValid);
     }

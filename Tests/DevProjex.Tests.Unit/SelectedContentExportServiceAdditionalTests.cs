@@ -8,7 +8,7 @@ public sealed class SelectedContentExportServiceAdditionalTests
 	{
 		var service = new SelectedContentExportService(new FileContentAnalyzer());
 
-		var output = service.Build(Array.Empty<string>());
+		var output = service.Build([]);
 
 		Assert.Equal(string.Empty, output);
 	}
@@ -19,7 +19,7 @@ public sealed class SelectedContentExportServiceAdditionalTests
 	{
 		var service = new SelectedContentExportService(new FileContentAnalyzer());
 
-		var output = service.Build(new[] { " ", "\t", "\n" });
+		var output = service.Build([" ", "\t", "\n"]);
 
 		Assert.Equal(string.Empty, output);
 	}
@@ -38,7 +38,7 @@ public sealed class SelectedContentExportServiceAdditionalTests
 		var file = temp.CreateFile("sample.txt", content);
 		var service = new SelectedContentExportService(new FileContentAnalyzer());
 
-		var output = service.Build(new[] { file });
+		var output = service.Build([file]);
 
 		Assert.Contains($"{file}:", output);
 
@@ -64,7 +64,7 @@ public sealed class SelectedContentExportServiceAdditionalTests
 		var file = temp.CreateFile("sample.txt", content);
 		var service = new SelectedContentExportService(new FileContentAnalyzer());
 
-		var output = service.Build(new[] { file });
+		var output = service.Build([file]);
 
 		Assert.Equal(string.Empty, output);
 	}
@@ -87,7 +87,7 @@ public sealed class SelectedContentExportServiceAdditionalTests
 		var file = temp.CreateFile("sample.txt", content);
 		var service = new SelectedContentExportService(new FileContentAnalyzer());
 
-		var output = service.Build(new[] { file });
+		var output = service.Build([file]);
 
 		Assert.Contains($"{file}:", output);
 		Assert.Contains(content.TrimEnd('\r', '\n'), output);
@@ -106,7 +106,7 @@ public sealed class SelectedContentExportServiceAdditionalTests
 		var service = new SelectedContentExportService(new FileContentAnalyzer());
 		var missing = Path.Combine(temp.Path, relativePath);
 
-		var output = service.Build(new[] { missing });
+		var output = service.Build([missing]);
 
 		Assert.Equal(string.Empty, output);
 	}
@@ -130,7 +130,7 @@ public sealed class SelectedContentExportServiceAdditionalTests
 		var fileB = temp.CreateFile(second, "B");
 		var service = new SelectedContentExportService(new FileContentAnalyzer());
 
-		var output = service.Build(new[] { fileA, fileB, fileA });
+		var output = service.Build([fileA, fileB, fileA]);
 
 		var comparison = OperatingSystem.IsWindows()
 			? StringComparison.OrdinalIgnoreCase

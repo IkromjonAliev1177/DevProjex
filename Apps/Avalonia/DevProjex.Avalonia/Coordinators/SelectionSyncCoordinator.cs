@@ -3,7 +3,16 @@ using DevProjex.Kernel;
 
 namespace DevProjex.Avalonia.Coordinators;
 
-public sealed class SelectionSyncCoordinator : IDisposable
+public sealed class SelectionSyncCoordinator(
+    MainWindowViewModel viewModel,
+    ScanOptionsUseCase scanOptions,
+    FilterOptionSelectionService filterSelectionService,
+    IgnoreOptionsService ignoreOptionsService,
+    Func<string, IReadOnlyCollection<IgnoreOptionId>, IReadOnlyCollection<string>?, IgnoreRules> buildIgnoreRules,
+    Func<string, IReadOnlyCollection<string>, IgnoreOptionsAvailability> getIgnoreOptionsAvailability,
+    Func<string, bool> tryElevateAndRestart,
+    Func<string?> currentPathProvider)
+    : IDisposable
 {
     private enum PreparedSelectionMode
     {
@@ -11,8 +20,6 @@ public sealed class SelectionSyncCoordinator : IDisposable
         Defaults = 1,
         Profile = 2
     }
-
-    private readonly MainWindowViewModel _viewModel;
 
     // Store collection references for proper cleanup
     private ObservableCollection<SelectionOptionViewModel>? _hookedRootFolders;
@@ -25,17 +32,10 @@ public sealed class SelectionSyncCoordinator : IDisposable
     private NotifyCollectionChangedEventHandler? _ignoreOptionsCollectionChangedHandler;
 
     private bool _disposed;
-    private readonly ScanOptionsUseCase _scanOptions;
-    private readonly FilterOptionSelectionService _filterSelectionService;
-    private readonly IgnoreOptionsService _ignoreOptionsService;
-    private readonly Func<string, IReadOnlyCollection<IgnoreOptionId>, IReadOnlyCollection<string>?, IgnoreRules> _buildIgnoreRules;
-    private readonly Func<string, IReadOnlyCollection<string>, IgnoreOptionsAvailability> _getIgnoreOptionsAvailability;
-    private readonly Func<string, bool> _tryElevateAndRestart;
-    private readonly Func<string?> _currentPathProvider;
     private static readonly HashSet<string> EmptyStringSet = new(StringComparer.OrdinalIgnoreCase);
 
-    private IReadOnlyList<IgnoreOptionDescriptor> _ignoreOptions = Array.Empty<IgnoreOptionDescriptor>();
-    private HashSet<IgnoreOptionId> _ignoreSelectionCache = new();
+    private IReadOnlyList<IgnoreOptionDescriptor> _ignoreOptions = [];
+    private HashSet<IgnoreOptionId> _ignoreSelectionCache = [];
     private bool _ignoreSelectionInitialized;
     private HashSet<string> _rootSelectionCache = new(StringComparer.OrdinalIgnoreCase);
     private bool _rootSelectionInitialized;
@@ -57,26 +57,6 @@ public sealed class SelectionSyncCoordinator : IDisposable
     private int _extensionScanVersion;
     private int _ignoreOptionsVersion;
     private readonly SemaphoreSlim _refreshLock = new(1, 1);
-
-    public SelectionSyncCoordinator(
-        MainWindowViewModel viewModel,
-        ScanOptionsUseCase scanOptions,
-        FilterOptionSelectionService filterSelectionService,
-        IgnoreOptionsService ignoreOptionsService,
-        Func<string, IReadOnlyCollection<IgnoreOptionId>, IReadOnlyCollection<string>?, IgnoreRules> buildIgnoreRules,
-        Func<string, IReadOnlyCollection<string>, IgnoreOptionsAvailability> getIgnoreOptionsAvailability,
-        Func<string, bool> tryElevateAndRestart,
-        Func<string?> currentPathProvider)
-    {
-        _viewModel = viewModel;
-        _scanOptions = scanOptions;
-        _filterSelectionService = filterSelectionService;
-        _ignoreOptionsService = ignoreOptionsService;
-        _buildIgnoreRules = buildIgnoreRules;
-        _getIgnoreOptionsAvailability = getIgnoreOptionsAvailability;
-        _tryElevateAndRestart = tryElevateAndRestart;
-        _currentPathProvider = currentPathProvider;
-    }
 
     public SelectionSyncCoordinator(
         MainWindowViewModel viewModel,
@@ -201,10 +181,10 @@ public sealed class SelectionSyncCoordinator : IDisposable
 
         _rootSelectionInitialized = true;
         _suppressRootAllCheck = true;
-        _viewModel.AllRootFoldersChecked = isChecked;
+        viewModel.AllRootFoldersChecked = isChecked;
         _suppressRootAllCheck = false;
 
-        SetAllChecked(_viewModel.RootFolders, isChecked, ref _suppressRootItemCheck);
+        SetAllChecked(viewModel.RootFolders, isChecked, ref _suppressRootItemCheck);
         UpdateRootSelectionCache();
         FireAndForgetSafe(UpdateLiveOptionsFromRootSelectionAsync(currentPath));
     }
@@ -215,10 +195,10 @@ public sealed class SelectionSyncCoordinator : IDisposable
 
         _extensionsSelectionInitialized = true;
         _suppressExtensionAllCheck = true;
-        _viewModel.AllExtensionsChecked = isChecked;
+        viewModel.AllExtensionsChecked = isChecked;
         _suppressExtensionAllCheck = false;
 
-        SetAllChecked(_viewModel.Extensions, isChecked, ref _suppressExtensionItemCheck);
+        SetAllChecked(viewModel.Extensions, isChecked, ref _suppressExtensionItemCheck);
         UpdateExtensionsSelectionCache();
     }
 
@@ -229,10 +209,10 @@ public sealed class SelectionSyncCoordinator : IDisposable
         _ignoreSelectionInitialized = true;
 
         _suppressIgnoreAllCheck = true;
-        _viewModel.AllIgnoreChecked = isChecked;
+        viewModel.AllIgnoreChecked = isChecked;
         _suppressIgnoreAllCheck = false;
 
-        SetAllChecked(_viewModel.IgnoreOptions, isChecked, ref _suppressIgnoreItemCheck);
+        SetAllChecked(viewModel.IgnoreOptions, isChecked, ref _suppressIgnoreItemCheck);
         UpdateIgnoreSelectionCache();
         if (!string.IsNullOrEmpty(currentPath))
         {
@@ -256,7 +236,7 @@ public sealed class SelectionSyncCoordinator : IDisposable
         // Always scan extensions, even when rootFolders.Count == 0.
         // ScanOptionsUseCase.GetExtensionsForRootFolders will include root-level files.
         var selectedIgnoreOptions = GetSelectedIgnoreOptionIds();
-        var ignoreRules = _buildIgnoreRules(path, selectedIgnoreOptions, rootFolders);
+        var ignoreRules = buildIgnoreRules(path, selectedIgnoreOptions, rootFolders);
         var extensionScanRules = BuildExtensionAvailabilityScanRules(ignoreRules);
         return Task.Run(async () =>
         {
@@ -264,18 +244,18 @@ public sealed class SelectionSyncCoordinator : IDisposable
             if (IsStalePathRequest(path)) return;
 
             // Scan extensions off the UI thread to avoid freezing on large folders.
-            var scan = _scanOptions.GetExtensionsForRootFolders(path, rootFolders, extensionScanRules, cancellationToken);
+            var scan = scanOptions.GetExtensionsForRootFolders(path, rootFolders, extensionScanRules, cancellationToken);
             if (scan.RootAccessDenied)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                var elevated = await Dispatcher.UIThread.InvokeAsync(() => _tryElevateAndRestart(path));
+                var elevated = await Dispatcher.UIThread.InvokeAsync(() => tryElevateAndRestart(path));
                 if (elevated) return;
             }
 
             cancellationToken.ThrowIfCancellationRequested();
             var visibleExtensions = new List<string>(scan.Value.Count);
             var extensionlessEntriesCount = SplitExtensions(scan.Value, visibleExtensions);
-            var options = _filterSelectionService.BuildExtensionOptions(visibleExtensions, prev);
+            var options = filterSelectionService.BuildExtensionOptions(visibleExtensions, prev);
             options = ApplyMissingProfileSelectionsFallbackToExtensions(options);
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
@@ -299,23 +279,23 @@ public sealed class SelectionSyncCoordinator : IDisposable
             : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         var selectedIgnoreOptions = GetSelectedIgnoreOptionIds();
-        var ignoreRules = _buildIgnoreRules(path, selectedIgnoreOptions, null);
+        var ignoreRules = buildIgnoreRules(path, selectedIgnoreOptions, null);
         return Task.Run(async () =>
         {
             cancellationToken.ThrowIfCancellationRequested();
             if (IsStalePathRequest(path)) return;
 
             // Scan root folders off the UI thread to keep the window responsive.
-            var scan = _scanOptions.Execute(new ScanOptionsRequest(path, ignoreRules), cancellationToken);
+            var scan = scanOptions.Execute(new ScanOptionsRequest(path, ignoreRules), cancellationToken);
             if (scan.RootAccessDenied)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                var elevated = await Dispatcher.UIThread.InvokeAsync(() => _tryElevateAndRestart(path));
+                var elevated = await Dispatcher.UIThread.InvokeAsync(() => tryElevateAndRestart(path));
                 if (elevated) return;
             }
 
             cancellationToken.ThrowIfCancellationRequested();
-            var options = _filterSelectionService.BuildRootFolderOptions(
+            var options = filterSelectionService.BuildRootFolderOptions(
                 scan.RootFolders,
                 prev,
                 ignoreRules,
@@ -326,18 +306,18 @@ public sealed class SelectionSyncCoordinator : IDisposable
                 cancellationToken.ThrowIfCancellationRequested();
                 if (version != _rootScanVersion) return;
                 if (IsStalePathRequest(path)) return;
-                _viewModel.RootFolders.Clear();
+                viewModel.RootFolders.Clear();
 
                 _suppressRootItemCheck = true;
                 foreach (var option in options)
-                    _viewModel.RootFolders.Add(new SelectionOptionViewModel(option.Name, option.IsChecked));
+                    viewModel.RootFolders.Add(new SelectionOptionViewModel(option.Name, option.IsChecked));
                 _suppressRootItemCheck = false;
 
-                if (!ShouldSuppressAllTogglesOverride() && _viewModel.AllRootFoldersChecked)
-                    SetAllChecked(_viewModel.RootFolders, true, ref _suppressRootItemCheck);
+                if (!ShouldSuppressAllTogglesOverride() && viewModel.AllRootFoldersChecked)
+                    SetAllChecked(viewModel.RootFolders, true, ref _suppressRootItemCheck);
 
-                SyncAllCheckbox(_viewModel.RootFolders, ref _suppressRootAllCheck,
-                    value => _viewModel.AllRootFoldersChecked = value);
+                SyncAllCheckbox(viewModel.RootFolders, ref _suppressRootAllCheck,
+                    value => viewModel.AllRootFoldersChecked = value);
                 UpdateRootSelectionCache();
                 _rootSelectionInitialized = true;
             });
@@ -351,7 +331,7 @@ public sealed class SelectionSyncCoordinator : IDisposable
     {
         var previousSelections = new HashSet<IgnoreOptionId>(_ignoreSelectionCache);
         var hasPreviousSelections = _ignoreSelectionInitialized;
-        var path = string.IsNullOrWhiteSpace(currentPath) ? _currentPathProvider() : currentPath;
+        var path = string.IsNullOrWhiteSpace(currentPath) ? currentPathProvider() : currentPath;
         if (!string.IsNullOrWhiteSpace(path) && IsStalePathRequest(path))
             return;
         var version = Interlocked.Increment(ref _ignoreOptionsVersion);
@@ -359,7 +339,7 @@ public sealed class SelectionSyncCoordinator : IDisposable
         var availability = await Task.Run(() => ResolveIgnoreOptionsAvailability(path, rootFolders), cancellationToken)
             .ConfigureAwait(false);
         cancellationToken.ThrowIfCancellationRequested();
-        var options = _ignoreOptionsService.GetOptions(availability);
+        var options = ignoreOptionsService.GetOptions(availability);
 
         await Dispatcher.UIThread.InvokeAsync(() =>
         {
@@ -379,19 +359,19 @@ public sealed class SelectionSyncCoordinator : IDisposable
     {
         var previousSelections = new HashSet<IgnoreOptionId>(_ignoreSelectionCache);
         var hasPreviousSelections = _ignoreSelectionInitialized;
-        var path = string.IsNullOrWhiteSpace(currentPath) ? _currentPathProvider() : currentPath;
+        var path = string.IsNullOrWhiteSpace(currentPath) ? currentPathProvider() : currentPath;
         if (!string.IsNullOrWhiteSpace(path) && IsStalePathRequest(path))
             return;
         var availability = ResolveIgnoreOptionsAvailability(path, rootFolders);
-        var options = _ignoreOptionsService.GetOptions(availability);
+        var options = ignoreOptionsService.GetOptions(availability);
 
         ApplyIgnoreOptions(options, previousSelections, hasPreviousSelections);
     }
 
     public IReadOnlyCollection<string> GetSelectedRootFolders()
     {
-        var selected = new List<string>(_viewModel.RootFolders.Count);
-        foreach (var option in _viewModel.RootFolders)
+        var selected = new List<string>(viewModel.RootFolders.Count);
+        foreach (var option in viewModel.RootFolders)
         {
             if (option.IsChecked)
                 selected.Add(option.Name);
@@ -425,9 +405,9 @@ public sealed class SelectionSyncCoordinator : IDisposable
         _preparedSelectionMode = PreparedSelectionMode.Defaults;
 
         // Restore defaults for projects without a saved profile.
-        _viewModel.AllRootFoldersChecked = true;
-        _viewModel.AllExtensionsChecked = true;
-        _viewModel.AllIgnoreChecked = true;
+        viewModel.AllRootFoldersChecked = true;
+        viewModel.AllExtensionsChecked = true;
+        viewModel.AllIgnoreChecked = true;
 
         _rootSelectionInitialized = false;
         _rootSelectionCache.Clear();
@@ -484,7 +464,7 @@ public sealed class SelectionSyncCoordinator : IDisposable
 
             // Warm ignore options first so root/extension scans use the latest ignore selection
             // without blocking UI on initial availability discovery.
-            await PopulateIgnoreOptionsForRootSelectionAsync(Array.Empty<string>(), currentPath, cancellationToken);
+            await PopulateIgnoreOptionsForRootSelectionAsync([], currentPath, cancellationToken);
 
             // Run in order so root folders are ready before extensions/ignore lists refresh.
             await PopulateRootFoldersAsync(currentPath, cancellationToken);
@@ -539,7 +519,7 @@ public sealed class SelectionSyncCoordinator : IDisposable
         _ignoreSelectionInitialized = false;
 
         // Clear ignore options
-        _ignoreOptions = Array.Empty<IgnoreOptionDescriptor>();
+        _ignoreOptions = [];
     }
 
     /// <summary>
@@ -547,23 +527,23 @@ public sealed class SelectionSyncCoordinator : IDisposable
     /// </summary>
     private void UnsubscribeFromOptionItems()
     {
-        foreach (var item in _viewModel.RootFolders)
+        foreach (var item in viewModel.RootFolders)
             item.CheckedChanged -= OnOptionCheckedChanged;
 
-        foreach (var item in _viewModel.Extensions)
+        foreach (var item in viewModel.Extensions)
             item.CheckedChanged -= OnOptionCheckedChanged;
 
-        foreach (var item in _viewModel.IgnoreOptions)
+        foreach (var item in viewModel.IgnoreOptions)
             item.CheckedChanged -= OnIgnoreCheckedChanged;
     }
 
     public IReadOnlyCollection<IgnoreOptionId> GetSelectedIgnoreOptionIds()
     {
         EnsureIgnoreSelectionCache();
-        if (_ignoreOptions.Count == 0 || _viewModel.IgnoreOptions.Count == 0)
+        if (_ignoreOptions.Count == 0 || viewModel.IgnoreOptions.Count == 0)
             return _ignoreSelectionCache;
 
-        var selected = CollectCheckedIgnoreIds(_viewModel.IgnoreOptions);
+        var selected = CollectCheckedIgnoreIds(viewModel.IgnoreOptions);
 
         _ignoreSelectionCache = selected;
         return selected;
@@ -574,10 +554,10 @@ public sealed class SelectionSyncCoordinator : IDisposable
         if (_ignoreSelectionInitialized || _ignoreSelectionCache.Count > 0)
             return;
 
-        var path = _currentPathProvider() ?? _lastLoadedPath;
+        var path = currentPathProvider() ?? _lastLoadedPath;
         var selectedRoots = GetSelectedRootFolders();
         var availability = ResolveIgnoreOptionsAvailability(path, selectedRoots);
-        _ignoreOptions = _ignoreOptionsService.GetOptions(availability);
+        _ignoreOptions = ignoreOptionsService.GetOptions(availability);
         var selected = new HashSet<IgnoreOptionId>();
         foreach (var option in _ignoreOptions)
         {
@@ -597,7 +577,7 @@ public sealed class SelectionSyncCoordinator : IDisposable
 
         try
         {
-            var availability = _getIgnoreOptionsAvailability(path, selectedRootFolders);
+            var availability = getIgnoreOptionsAvailability(path, selectedRootFolders);
             if (_hasExtensionlessExtensionEntries)
             {
                 return availability with
@@ -623,7 +603,7 @@ public sealed class SelectionSyncCoordinator : IDisposable
         _suppressIgnoreItemCheck = true;
         try
         {
-            _viewModel.IgnoreOptions.Clear();
+            viewModel.IgnoreOptions.Clear();
             _ignoreOptions = options;
 
             var useDefaultCheckedFallback = ShouldUseIgnoreDefaultFallback(options, previousSelections);
@@ -633,7 +613,7 @@ public sealed class SelectionSyncCoordinator : IDisposable
                     ? option.DefaultChecked
                     : previousSelections.Contains(option.Id) ||
                       (!hasPreviousSelections && option.DefaultChecked);
-                _viewModel.IgnoreOptions.Add(new IgnoreOptionViewModel(option.Id, option.Label, isChecked));
+                viewModel.IgnoreOptions.Add(new IgnoreOptionViewModel(option.Id, option.Label, isChecked));
             }
         }
         finally
@@ -641,8 +621,8 @@ public sealed class SelectionSyncCoordinator : IDisposable
             _suppressIgnoreItemCheck = false;
         }
 
-        if (!ShouldSuppressAllTogglesOverride() && _viewModel.AllIgnoreChecked)
-            SetAllChecked(_viewModel.IgnoreOptions, true, ref _suppressIgnoreItemCheck);
+        if (!ShouldSuppressAllTogglesOverride() && viewModel.AllIgnoreChecked)
+            SetAllChecked(viewModel.IgnoreOptions, true, ref _suppressIgnoreItemCheck);
 
         UpdateIgnoreSelectionCache(hasPreviousSelections ? previousSelections : null);
         SyncIgnoreAllCheckbox();
@@ -665,11 +645,11 @@ public sealed class SelectionSyncCoordinator : IDisposable
 
     public void UpdateExtensionsSelectionCache()
     {
-        if (_viewModel.Extensions.Count == 0)
+        if (viewModel.Extensions.Count == 0)
             return;
 
         _extensionsSelectionInitialized = true;
-        _extensionsSelectionCache = CollectCheckedSelectionNames(_viewModel.Extensions);
+        _extensionsSelectionCache = CollectCheckedSelectionNames(viewModel.Extensions);
     }
 
     internal void ApplyExtensionScan(IReadOnlyCollection<string> extensions)
@@ -680,21 +660,21 @@ public sealed class SelectionSyncCoordinator : IDisposable
             ? new HashSet<string>(_extensionsSelectionCache, StringComparer.OrdinalIgnoreCase)
             : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        var options = _filterSelectionService.BuildExtensionOptions(visibleExtensions, prev);
+        var options = filterSelectionService.BuildExtensionOptions(visibleExtensions, prev);
         options = ApplyMissingProfileSelectionsFallbackToExtensions(options);
         ApplyExtensionOptions(options, extensionlessEntriesCount);
     }
 
     public void UpdateIgnoreSelectionCache(IReadOnlySet<IgnoreOptionId>? preserveMissingFrom = null)
     {
-        if (_ignoreOptions.Count == 0 || _viewModel.IgnoreOptions.Count == 0)
+        if (_ignoreOptions.Count == 0 || viewModel.IgnoreOptions.Count == 0)
         {
             if (preserveMissingFrom is not null && preserveMissingFrom.Count > 0)
-                _ignoreSelectionCache = new HashSet<IgnoreOptionId>(preserveMissingFrom);
+                _ignoreSelectionCache = [..preserveMissingFrom];
             return;
         }
 
-        var selected = CollectCheckedIgnoreIds(_viewModel.IgnoreOptions);
+        var selected = CollectCheckedIgnoreIds(viewModel.IgnoreOptions);
 
         if (preserveMissingFrom is not null && preserveMissingFrom.Count > 0)
         {
@@ -716,8 +696,8 @@ public sealed class SelectionSyncCoordinator : IDisposable
 
     public void SyncIgnoreAllCheckbox()
     {
-        SyncAllCheckbox(_viewModel.IgnoreOptions, ref _suppressIgnoreAllCheck,
-            value => _viewModel.AllIgnoreChecked = value);
+        SyncAllCheckbox(viewModel.IgnoreOptions, ref _suppressIgnoreAllCheck,
+            value => viewModel.AllIgnoreChecked = value);
     }
 
     private void OnOptionCheckedChanged(object? sender, EventArgs e)
@@ -725,24 +705,24 @@ public sealed class SelectionSyncCoordinator : IDisposable
         if (sender is not SelectionOptionViewModel option)
             return;
 
-        if (_viewModel.RootFolders.Contains(option))
+        if (viewModel.RootFolders.Contains(option))
         {
             if (_suppressRootItemCheck) return;
 
             _rootSelectionInitialized = true;
-            SyncAllCheckbox(_viewModel.RootFolders, ref _suppressRootAllCheck,
-                value => _viewModel.AllRootFoldersChecked = value);
+            SyncAllCheckbox(viewModel.RootFolders, ref _suppressRootAllCheck,
+                value => viewModel.AllRootFoldersChecked = value);
             UpdateRootSelectionCache();
 
-            _ = UpdateLiveOptionsFromRootSelectionAsync(_currentPathProvider());
+            _ = UpdateLiveOptionsFromRootSelectionAsync(currentPathProvider());
         }
-        else if (_viewModel.Extensions.Contains(option))
+        else if (viewModel.Extensions.Contains(option))
         {
             if (_suppressExtensionItemCheck) return;
 
             _extensionsSelectionInitialized = true;
-            SyncAllCheckbox(_viewModel.Extensions, ref _suppressExtensionAllCheck,
-                value => _viewModel.AllExtensionsChecked = value);
+            SyncAllCheckbox(viewModel.Extensions, ref _suppressExtensionAllCheck,
+                value => viewModel.AllExtensionsChecked = value);
 
             UpdateExtensionsSelectionCache();
         }
@@ -754,12 +734,12 @@ public sealed class SelectionSyncCoordinator : IDisposable
 
         _ignoreSelectionInitialized = true;
 
-        SyncAllCheckbox(_viewModel.IgnoreOptions, ref _suppressIgnoreAllCheck,
-            value => _viewModel.AllIgnoreChecked = value);
+        SyncAllCheckbox(viewModel.IgnoreOptions, ref _suppressIgnoreAllCheck,
+            value => viewModel.AllIgnoreChecked = value);
 
         UpdateIgnoreSelectionCache();
 
-        var currentPath = _currentPathProvider();
+        var currentPath = currentPathProvider();
         if (!string.IsNullOrEmpty(currentPath))
         {
             FireAndForgetSafe(RefreshRootAndDependentsAsync(currentPath));
@@ -803,20 +783,20 @@ public sealed class SelectionSyncCoordinator : IDisposable
 
     private void ApplyExtensionOptions(IReadOnlyList<SelectionOption> options, int extensionlessEntriesCount)
     {
-        _viewModel.Extensions.Clear();
+        viewModel.Extensions.Clear();
         _extensionlessExtensionEntriesCount = extensionlessEntriesCount;
         _hasExtensionlessExtensionEntries = extensionlessEntriesCount > 0;
 
         _suppressExtensionItemCheck = true;
         foreach (var option in options)
-            _viewModel.Extensions.Add(new SelectionOptionViewModel(option.Name, option.IsChecked));
+            viewModel.Extensions.Add(new SelectionOptionViewModel(option.Name, option.IsChecked));
         _suppressExtensionItemCheck = false;
 
-        if (!ShouldSuppressAllTogglesOverride() && _viewModel.AllExtensionsChecked)
-            SetAllChecked(_viewModel.Extensions, true, ref _suppressExtensionItemCheck);
+        if (!ShouldSuppressAllTogglesOverride() && viewModel.AllExtensionsChecked)
+            SetAllChecked(viewModel.Extensions, true, ref _suppressExtensionItemCheck);
 
-        SyncAllCheckbox(_viewModel.Extensions, ref _suppressExtensionAllCheck,
-            value => _viewModel.AllExtensionsChecked = value);
+        SyncAllCheckbox(viewModel.Extensions, ref _suppressExtensionAllCheck,
+            value => viewModel.AllExtensionsChecked = value);
         if (!_extensionsSelectionInitialized)
         {
             _extensionsSelectionInitialized = true;
@@ -958,7 +938,7 @@ public sealed class SelectionSyncCoordinator : IDisposable
         _ignoreSelectionCache.Clear();
         _extensionsSelectionCache.Clear();
         _preparedSelectionPath = null;
-        _ignoreOptions = Array.Empty<IgnoreOptionDescriptor>();
+        _ignoreOptions = [];
 
         // Dispose the semaphore
         _refreshLock.Dispose();
@@ -988,7 +968,7 @@ public sealed class SelectionSyncCoordinator : IDisposable
         if (string.IsNullOrWhiteSpace(path))
             return false;
 
-        var currentPath = _currentPathProvider();
+        var currentPath = currentPathProvider();
         if (string.IsNullOrWhiteSpace(currentPath))
             return false;
 
@@ -1054,7 +1034,7 @@ public sealed class SelectionSyncCoordinator : IDisposable
 
         // Saved root folder selections exist, but all of them are absent now.
         // Recompute with default behavior for currently available roots.
-        return _filterSelectionService.BuildRootFolderOptions(
+        return filterSelectionService.BuildRootFolderOptions(
             scannedRootFolders,
             EmptyStringSet,
             ignoreRules,
@@ -1083,13 +1063,13 @@ public sealed class SelectionSyncCoordinator : IDisposable
 
     private void UpdateRootSelectionCache()
     {
-        if (_viewModel.RootFolders.Count == 0)
+        if (viewModel.RootFolders.Count == 0)
         {
             _rootSelectionCache.Clear();
             _rootSelectionCache.TrimExcess();
             return;
         }
 
-        _rootSelectionCache = CollectCheckedSelectionNames(_viewModel.RootFolders);
+        _rootSelectionCache = CollectCheckedSelectionNames(viewModel.RootFolders);
     }
 }
