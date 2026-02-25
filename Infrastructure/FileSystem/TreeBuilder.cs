@@ -74,7 +74,8 @@ public sealed class TreeBuilder : ITreeBuilder
 
 			if (isDir)
 			{
-				if (ShouldSkipDirectory(entry, ignore))
+				var directoryGitIgnore = ignore.EvaluateGitIgnore(entry.FullName, isDirectory: true, name);
+				if (ShouldSkipDirectory(entry, ignore, directoryGitIgnore))
 					continue;
 
 				var dirNode = new FileSystemNode(
@@ -101,13 +102,14 @@ public sealed class TreeBuilder : ITreeBuilder
 					// (e.g. patterns like **/bin/* that may not ignore the directory entry itself).
 					if (dirNode.Children.Count == 0 &&
 					    !dirNode.IsAccessDenied &&
-					    IsEffectivelyGitIgnoredDirectory(entry, ignore))
+					    IsEffectivelyGitIgnoredDirectory(entry, ignore, directoryGitIgnore))
 					{
 						continue;
 					}
 
 					// Keep ignored directories out of UI when traversal found no visible descendants.
-					if (IsTraversableGitIgnoredDirectory(entry, ignore) &&
+					if (directoryGitIgnore.IsIgnored &&
+					    directoryGitIgnore.ShouldTraverseIgnoredDirectory &&
 					    dirNode.Children.Count == 0 &&
 					    !dirNode.IsAccessDenied)
 					{
@@ -119,7 +121,8 @@ public sealed class TreeBuilder : ITreeBuilder
 			}
 			else
 			{
-				if (ShouldSkipFile(entry, ignore))
+				var fileGitIgnore = ignore.EvaluateGitIgnore(entry.FullName, isDirectory: false, name);
+				if (ShouldSkipFile(entry, ignore, fileGitIgnore))
 					continue;
 
 				if (IsExtensionlessFileName(name))
@@ -168,11 +171,14 @@ public sealed class TreeBuilder : ITreeBuilder
 		}
 	}
 
-	private static bool ShouldSkipDirectory(FileSystemInfo entry, IgnoreRules rules)
+	private static bool ShouldSkipDirectory(
+		FileSystemInfo entry,
+		IgnoreRules rules,
+		in IgnoreRules.GitIgnoreEvaluation gitIgnoreEvaluation)
 	{
-		if (rules.IsGitIgnored(entry.FullName, isDirectory: true, entry.Name))
+		if (gitIgnoreEvaluation.IsIgnored)
 		{
-			if (!rules.ShouldTraverseGitIgnoredDirectory(entry.FullName, entry.Name))
+			if (!gitIgnoreEvaluation.ShouldTraverseIgnoredDirectory)
 				return true;
 		}
 
@@ -203,28 +209,28 @@ public sealed class TreeBuilder : ITreeBuilder
 		return false;
 	}
 
-	private static bool IsTraversableGitIgnoredDirectory(FileSystemInfo entry, IgnoreRules rules)
-	{
-		return rules.IsGitIgnored(entry.FullName, isDirectory: true, entry.Name) &&
-		       rules.ShouldTraverseGitIgnoredDirectory(entry.FullName, entry.Name);
-	}
-
-	private static bool IsEffectivelyGitIgnoredDirectory(FileSystemInfo entry, IgnoreRules rules)
+	private static bool IsEffectivelyGitIgnoredDirectory(
+		FileSystemInfo entry,
+		IgnoreRules rules,
+		in IgnoreRules.GitIgnoreEvaluation directoryGitIgnoreEvaluation)
 	{
 		if (!rules.UseGitIgnore)
 			return false;
 
-		if (rules.IsGitIgnored(entry.FullName, isDirectory: true, entry.Name))
+		if (directoryGitIgnoreEvaluation.IsIgnored)
 			return true;
 
 		const string probeName = "__devprojex_ignore_probe__";
 		var probePath = Path.Combine(entry.FullName, probeName);
-		return rules.IsGitIgnored(probePath, isDirectory: false, probeName);
+		return rules.EvaluateGitIgnore(probePath, isDirectory: false, probeName).IsIgnored;
 	}
 
-	private static bool ShouldSkipFile(FileSystemInfo entry, IgnoreRules rules)
+	private static bool ShouldSkipFile(
+		FileSystemInfo entry,
+		IgnoreRules rules,
+		in IgnoreRules.GitIgnoreEvaluation gitIgnoreEvaluation)
 	{
-		if (rules.IsGitIgnored(entry.FullName, isDirectory: false, entry.Name))
+		if (gitIgnoreEvaluation.IsIgnored)
 			return true;
 
 		if (rules.ShouldApplySmartIgnore(entry.FullName) && rules.SmartIgnoredFiles.Contains(entry.Name))

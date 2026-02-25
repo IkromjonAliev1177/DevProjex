@@ -26,6 +26,11 @@ public sealed record IgnoreRules(
 	public IReadOnlyList<string> SmartIgnoreScopeRoots { get; init; } =
 		[];
 
+	public readonly record struct GitIgnoreEvaluation(bool IsIgnored, bool ShouldTraverseIgnoredDirectory)
+	{
+		public static readonly GitIgnoreEvaluation NotIgnored = new(false, false);
+	}
+
 	public GitIgnoreMatcher ResolveGitIgnoreMatcher(string fullPath)
 	{
 		if (!UseGitIgnore)
@@ -47,21 +52,35 @@ public sealed record IgnoreRules(
 		return bestMatch?.Matcher ?? GitIgnoreMatcher.Empty;
 	}
 
-	public bool IsGitIgnored(string fullPath, bool isDirectory, string name)
+	public GitIgnoreEvaluation EvaluateGitIgnore(string fullPath, bool isDirectory, string name)
 	{
 		if (!UseGitIgnore)
-			return false;
+			return GitIgnoreEvaluation.NotIgnored;
 
-		if (ScopedGitIgnoreMatchers.Count == 0)
-			return GitIgnoreMatcher.IsIgnored(fullPath, isDirectory, name);
+		var scopedCount = ScopedGitIgnoreMatchers.Count;
+		if (scopedCount == 0)
+			return EvaluateWithSingleMatcher(GitIgnoreMatcher, fullPath, isDirectory, name);
+
+		if (scopedCount == 1)
+		{
+			var scoped = ScopedGitIgnoreMatchers[0];
+			if (!IsPathInsideScope(fullPath, scoped.ScopeRootPath))
+				return GitIgnoreEvaluation.NotIgnored;
+
+			return EvaluateWithSingleMatcher(scoped.Matcher, fullPath, isDirectory, name);
+		}
 
 		var hasMatch = false;
 		var ignored = false;
+		var hasNegationAwareScope = false;
 
 		foreach (var scoped in ScopedGitIgnoreMatchers)
 		{
 			if (!IsPathInsideScope(fullPath, scoped.ScopeRootPath))
 				continue;
+
+			if (isDirectory && scoped.Matcher.HasNegationRules)
+				hasNegationAwareScope = true;
 
 			var evaluation = scoped.Matcher.Evaluate(fullPath, isDirectory, name);
 			if (!evaluation.HasMatch)
@@ -71,19 +90,11 @@ public sealed record IgnoreRules(
 			ignored = evaluation.IsIgnored;
 		}
 
-		return hasMatch && ignored;
-	}
+		if (!hasMatch || !ignored)
+			return GitIgnoreEvaluation.NotIgnored;
 
-	public bool ShouldTraverseGitIgnoredDirectory(string fullPath, string name)
-	{
-		if (!UseGitIgnore)
-			return false;
-
-		if (!IsGitIgnored(fullPath, isDirectory: true, name))
-			return false;
-
-		if (ScopedGitIgnoreMatchers.Count == 0)
-			return GitIgnoreMatcher.ShouldTraverseIgnoredDirectory(fullPath, name);
+		if (!isDirectory || !hasNegationAwareScope)
+			return new GitIgnoreEvaluation(IsIgnored: true, ShouldTraverseIgnoredDirectory: false);
 
 		foreach (var scoped in ScopedGitIgnoreMatchers)
 		{
@@ -91,10 +102,20 @@ public sealed record IgnoreRules(
 				continue;
 
 			if (scoped.Matcher.ShouldTraverseIgnoredDirectory(fullPath, name))
-				return true;
+				return new GitIgnoreEvaluation(IsIgnored: true, ShouldTraverseIgnoredDirectory: true);
 		}
 
-		return false;
+		return new GitIgnoreEvaluation(IsIgnored: true, ShouldTraverseIgnoredDirectory: false);
+	}
+
+	public bool IsGitIgnored(string fullPath, bool isDirectory, string name)
+	{
+		return EvaluateGitIgnore(fullPath, isDirectory, name).IsIgnored;
+	}
+
+	public bool ShouldTraverseGitIgnoredDirectory(string fullPath, string name)
+	{
+		return EvaluateGitIgnore(fullPath, isDirectory: true, name).ShouldTraverseIgnoredDirectory;
 	}
 
 	public bool ShouldApplySmartIgnore(string fullPath)
@@ -132,6 +153,25 @@ public sealed record IgnoreRules(
 
 		var next = fullSpan[scopeSpan.Length];
 		return next == Path.DirectorySeparatorChar || next == Path.AltDirectorySeparatorChar;
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	private static GitIgnoreEvaluation EvaluateWithSingleMatcher(
+		GitIgnoreMatcher matcher,
+		string fullPath,
+		bool isDirectory,
+		string name)
+	{
+		var evaluation = matcher.Evaluate(fullPath, isDirectory, name);
+		if (!evaluation.HasMatch || !evaluation.IsIgnored)
+			return GitIgnoreEvaluation.NotIgnored;
+
+		if (!isDirectory)
+			return new GitIgnoreEvaluation(IsIgnored: true, ShouldTraverseIgnoredDirectory: false);
+
+		return new GitIgnoreEvaluation(
+			IsIgnored: true,
+			ShouldTraverseIgnoredDirectory: matcher.ShouldTraverseIgnoredDirectory(fullPath, name));
 	}
 }
 
