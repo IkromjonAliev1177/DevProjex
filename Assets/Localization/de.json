@@ -95,6 +95,7 @@
   "Settings.Ignore.HiddenFiles": "versteckte Dateien",
   "Settings.Ignore.DotFolders": "Ordner mit Punkt",
   "Settings.Ignore.DotFiles": "Dateien mit Punkt",
+  "Settings.Ignore.EmptyFolders": "Leere Ordner",
   "Settings.Ignore.ExtensionlessFiles": "Dateien ohne Erweiterung",
   "Settings.All": "Alle",
   "Settings.Ignore": "Ignorieren:",

@@ -11,6 +11,8 @@ public sealed record IgnoreOptionsAvailability(
 	int DotFoldersCount = 0,
 	bool IncludeDotFiles = true,
 	int DotFilesCount = 0,
+	bool IncludeEmptyFolders = false,
+	int EmptyFoldersCount = 0,
 	bool IncludeExtensionlessFiles = false,
 	int ExtensionlessFilesCount = 0,
 	bool ShowAdvancedCounts = false);

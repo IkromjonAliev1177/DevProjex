@@ -140,6 +140,13 @@ public sealed class TreeBuilder : ITreeBuilder
 
 			BuildChildren(dirNode, entry.FullName, options, isRoot: false, state, cancellationToken);
 
+			if (ignore.IgnoreEmptyFolders &&
+			    dirNode.Children.Count == 0 &&
+			    !dirNode.IsAccessDenied)
+			{
+				return null;
+			}
+
 			// Keep full directory context when extension/ignore filters remove all files.
 			// Name filter remains strict to preserve intentional narrowing behavior.
 			if (hasNameFilter)

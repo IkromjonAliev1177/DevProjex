@@ -53,6 +53,14 @@ public sealed class IgnoreOptionsService(LocalizationService localization)
 				true));
 		}
 
+		if (availability.IncludeEmptyFolders)
+		{
+			options.Add(new IgnoreOptionDescriptor(
+				IgnoreOptionId.EmptyFolders,
+				FormatLabelWithCount(localization["Settings.Ignore.EmptyFolders"], availability.EmptyFoldersCount, availability.ShowAdvancedCounts),
+				true));
+		}
+
 		if (availability.IncludeExtensionlessFiles)
 		{
 			options.Add(new IgnoreOptionDescriptor(

@@ -95,6 +95,7 @@
   "Settings.Ignore.HiddenFiles": "Скрытые файлы",
   "Settings.Ignore.DotFolders": "Папки с точкой в начале",
   "Settings.Ignore.DotFiles": "Файлы с точкой в начале",
+  "Settings.Ignore.EmptyFolders": "Пустые папки",
   "Settings.Ignore.ExtensionlessFiles": "Файлы без расширений",
   "Settings.All": "Все",
   "Settings.Ignore": "Игнорировать:",

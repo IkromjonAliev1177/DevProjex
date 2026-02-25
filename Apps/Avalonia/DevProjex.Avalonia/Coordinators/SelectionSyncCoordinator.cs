@@ -640,7 +640,9 @@ public sealed class SelectionSyncCoordinator(
                     IncludeDotFolders = _ignoreOptionCounts.DotFolders > 0,
                     DotFoldersCount = _ignoreOptionCounts.DotFolders,
                     IncludeDotFiles = _ignoreOptionCounts.DotFiles > 0,
-                    DotFilesCount = _ignoreOptionCounts.DotFiles
+                    DotFilesCount = _ignoreOptionCounts.DotFiles,
+                    IncludeEmptyFolders = _ignoreOptionCounts.EmptyFolders > 0,
+                    EmptyFoldersCount = _ignoreOptionCounts.EmptyFolders
                 };
             }
 

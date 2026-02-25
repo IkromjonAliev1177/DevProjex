@@ -205,25 +205,25 @@ public sealed class FileSystemScanner : IFileSystemScanner, IFileSystemScannerAd
 				HadAccessDenied: false);
 		}
 
-		// Directory discovery is single-threaded; keep it allocation-light.
-		var directories = new List<string>(capacity: 256);
+		// Directory discovery is single-threaded; keep it allocation-light and parent-indexed.
+		var directories = new List<DirectoryScanNode>(capacity: 256);
 		var rootAccessDenied = 0;
 		var hadAccessDenied = 0;
 		var directoryCounts = default(MutableIgnoreOptionCounts);
 
-		// First pass: collect all directories (single-threaded to avoid race conditions on initial scan)
-		var pending = new Stack<string>();
-		pending.Push(rootPath);
-		bool isFirst = true;
+		// First pass: collect all traversable directories and parent links.
+		var pending = new Stack<(string Path, int ParentIndex, bool IsRootDirectory)>();
+		pending.Push((rootPath, ParentIndex: -1, IsRootDirectory: true));
 
 		while (pending.Count > 0)
 		{
 			cancellationToken.ThrowIfCancellationRequested();
 
-			var dir = pending.Pop();
-			directories.Add(dir);
+			var (dir, parentIndex, isRootDirectory) = pending.Pop();
+			var currentDirectoryIndex = directories.Count;
+			directories.Add(new DirectoryScanNode(dir, parentIndex, isAccessDenied: false));
 
-			if (collectIgnoreOptionCounts && isFirst && includeRootDirectoryInCounts)
+			if (collectIgnoreOptionCounts && isRootDirectory && includeRootDirectoryInCounts)
 				AccumulateDirectoryIgnoreOptionCounts(dir, Path.GetFileName(dir), ref directoryCounts);
 
 			string[] subDirs;
@@ -237,8 +237,11 @@ public sealed class FileSystemScanner : IFileSystemScanner, IFileSystemScannerAd
 			}
 			catch (UnauthorizedAccessException)
 			{
+				var accessDeniedNode = directories[currentDirectoryIndex];
+				accessDeniedNode.IsAccessDenied = true;
+				directories[currentDirectoryIndex] = accessDeniedNode;
 				Interlocked.Exchange(ref hadAccessDenied, 1);
-				if (isFirst) Interlocked.Exchange(ref rootAccessDenied, 1);
+				if (isRootDirectory) Interlocked.Exchange(ref rootAccessDenied, 1);
 				continue;
 			}
 			catch
@@ -258,10 +261,8 @@ public sealed class FileSystemScanner : IFileSystemScanner, IFileSystemScannerAd
 				if (ShouldSkipDirectoryByName(dirName, sd, rules, directoryGitIgnore))
 					continue;
 
-				pending.Push(sd);
+				pending.Push((sd, currentDirectoryIndex, IsRootDirectory: false));
 			}
-
-			isFirst = false;
 		}
 
 		// Second pass: scan files in all directories in parallel
@@ -273,13 +274,20 @@ public sealed class FileSystemScanner : IFileSystemScanner, IFileSystemScannerAd
 
 		var mergeLock = new object();
 		var fileCounts = default(MutableIgnoreOptionCounts);
-		Parallel.ForEach(
-			directories,
+		var hasVisibleFilesByDirectory = new bool[directories.Count];
+		var isAccessDeniedByDirectory = new bool[directories.Count];
+		for (var i = 0; i < directories.Count; i++)
+			isAccessDeniedByDirectory[i] = directories[i].IsAccessDenied;
+
+		Parallel.For(
+			0,
+			directories.Count,
 			parallelOptions,
 			() => new LocalExtensionScanState(),
-			(dir, _, localState) =>
+			(index, _, localState) =>
 			{
 				parallelOptions.CancellationToken.ThrowIfCancellationRequested();
+				var dir = directories[index].Path;
 
 				string[] files;
 				try
@@ -293,6 +301,7 @@ public sealed class FileSystemScanner : IFileSystemScanner, IFileSystemScannerAd
 				catch (UnauthorizedAccessException)
 				{
 					Interlocked.Exchange(ref hadAccessDenied, 1);
+					isAccessDeniedByDirectory[index] = true;
 					return localState;
 				}
 				catch
@@ -300,6 +309,7 @@ public sealed class FileSystemScanner : IFileSystemScanner, IFileSystemScannerAd
 					return localState;
 				}
 
+				var hasVisibleFiles = false;
 				foreach (var file in files)
 				{
 					parallelOptions.CancellationToken.ThrowIfCancellationRequested();
@@ -312,6 +322,7 @@ public sealed class FileSystemScanner : IFileSystemScanner, IFileSystemScannerAd
 					if (ShouldSkipFileByName(name, file, rules, fileGitIgnore))
 						continue;
 
+					hasVisibleFiles = true;
 					var ext = Path.GetExtension(name);
 					if (IsExtensionlessFileName(name))
 						localState.Extensions.Add(name);
@@ -319,6 +330,7 @@ public sealed class FileSystemScanner : IFileSystemScanner, IFileSystemScannerAd
 						localState.Extensions.Add(ext);
 				}
 
+				hasVisibleFilesByDirectory[index] = hasVisibleFiles;
 				return localState;
 			},
 			localState =>
@@ -335,8 +347,33 @@ public sealed class FileSystemScanner : IFileSystemScanner, IFileSystemScannerAd
 				}
 			});
 
+		var emptyFolderCount = 0;
+		if (collectIgnoreOptionCounts && directories.Count > 0)
+		{
+			// Bottom-up fold simulates IgnoreEmptyFolders pruning without a second filesystem pass.
+			var nonPrunedChildCounts = new int[directories.Count];
+			for (var index = directories.Count - 1; index >= 0; index--)
+			{
+				var hasVisibleFiles = hasVisibleFilesByDirectory[index];
+				var hasVisibleChildren = nonPrunedChildCounts[index] > 0;
+				var isAccessDenied = isAccessDeniedByDirectory[index];
+				var parentIndex = directories[index].ParentIndex;
+
+				var shouldRemain = isAccessDenied || hasVisibleFiles || hasVisibleChildren;
+				if (!shouldRemain)
+				{
+					if (parentIndex >= 0 || includeRootDirectoryInCounts)
+						emptyFolderCount++;
+					continue;
+				}
+
+				if (parentIndex >= 0)
+					nonPrunedChildCounts[parentIndex]++;
+			}
+		}
+
 		var counts = collectIgnoreOptionCounts
-			? directoryCounts.ToImmutable().Add(fileCounts.ToImmutable())
+			? directoryCounts.ToImmutable().Add(fileCounts.ToImmutable()) with { EmptyFolders = emptyFolderCount }
 			: IgnoreOptionCounts.Empty;
 
 		return new ScanResult<ExtensionsScanData>(
@@ -478,12 +515,27 @@ public sealed class FileSystemScanner : IFileSystemScanner, IFileSystemScannerAd
 		public MutableIgnoreOptionCounts Counts;
 	}
 
+	private struct DirectoryScanNode
+	{
+		public DirectoryScanNode(string path, int parentIndex, bool isAccessDenied)
+		{
+			Path = path;
+			ParentIndex = parentIndex;
+			IsAccessDenied = isAccessDenied;
+		}
+
+		public string Path { get; }
+		public int ParentIndex { get; }
+		public bool IsAccessDenied { get; set; }
+	}
+
 	private struct MutableIgnoreOptionCounts
 	{
 		public int HiddenFolders;
 		public int HiddenFiles;
 		public int DotFolders;
 		public int DotFiles;
+		public int EmptyFolders;
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void Add(in MutableIgnoreOptionCounts other)
@@ -492,12 +544,13 @@ public sealed class FileSystemScanner : IFileSystemScanner, IFileSystemScannerAd
 			HiddenFiles += other.HiddenFiles;
 			DotFolders += other.DotFolders;
 			DotFiles += other.DotFiles;
+			EmptyFolders += other.EmptyFolders;
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public readonly IgnoreOptionCounts ToImmutable()
 		{
-			return new IgnoreOptionCounts(HiddenFolders, HiddenFiles, DotFolders, DotFiles);
+			return new IgnoreOptionCounts(HiddenFolders, HiddenFiles, DotFolders, DotFiles, EmptyFolders);
 		}
 	}
 }
