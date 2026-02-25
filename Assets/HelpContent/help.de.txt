@@ -137,6 +137,10 @@ Macht die Oberfläche dichter: kleinere Abstände im Baum und in den Einstellung
 ### Baumanimation
 Aktiviert eine sanfte Schiebe-Animation beim Überfahren von Baumzeilen.
 
+### Zusätzliche Zähler
+Zeigt/blendet Mengen in Klammern bei den Optionen im Block „Ignorieren“.
+Ändert die Filterregeln nicht.
+
 ## 8) Suche im Baum
 Öffnet die Suche, hebt Treffer hervor und erlaubt Navigation.
 * Ctrl+F — anzeigen/ausblenden
@@ -198,7 +202,10 @@ Reihenfolge der Optionen:
 * Versteckte Dateien
 * Ordner mit führendem Punkt
 * Dateien mit führendem Punkt
-* Dateien ohne Erweiterung (wird nur angezeigt, wenn solche Dateien erkannt wurden)
+* Leere Ordner
+* Dateien ohne Erweiterung
+
+Optionen der Grundregeln (versteckt, mit Punkt, leer, ohne Erweiterung) werden nur angezeigt, wenn passende Elemente vorhanden sind.
 
 Die Trennlinie unter „.gitignore verwenden“ trennt Git/Smart-Regeln von den grundlegenden Sichtbarkeitsregeln.
 
@@ -227,8 +234,11 @@ Optionen:
 * Versteckte Dateien
 * Ordner mit führendem Punkt
 * Dateien mit führendem Punkt
+* Leere Ordner
+* Dateien ohne Erweiterung
 
-Diese Regeln sind unabhängig von `.gitignore` und Smart Ignore und wirken nur über ihre eigenen Schalter.
+Wenn aktiviert, blendet eine Option die passenden Elemente im Baum sowie in Kopier-/Exportergebnissen aus.
+Diese Regeln sind unabhängig von `.gitignore` und Smart Ignore.
 
 ### 11.5 Internes Verhalten: typische Fälle
 1. Ein Projekt mit `.gitignore`.
@@ -253,14 +263,14 @@ Smart Ignore (wenn aktiviert) ergänzt die Filterung in den gefundenen Bereichen
 Wenn keine `.gitignore` gefunden wird und Smart Ignore nicht relevant ist, werden diese Punkte nicht angezeigt.
 Es bleiben nur die grundlegenden Sichtbarkeitsregeln.
 
-### 11.6 Dateien ohne Erweiterung
-Die Option „Dateien ohne Erweiterung“ steuert die Sichtbarkeit von Dateien ohne Erweiterung (zum Beispiel: `Dockerfile`, `Makefile`, `README`).
+### 11.6 Leere Ordner
+Blendet logisch leere Ordner im Baum sowie in Kopier-/Exportergebnissen aus.
 
-Regeln:
-* die Option wird nur angezeigt, wenn solche Dateien im aktuellen Datensatz tatsächlich vorhanden sind;
-* wenn aktiviert, werden Dateien ohne Erweiterung aus dem Baum sowie aus Kopier-/Exportoperationen ausgeschlossen;
-* wenn deaktiviert, werden Dateien ohne Erweiterung in das Ergebnis aufgenommen;
-* die Liste „Dateitypen“ beeinflusst dieses Verhalten nicht.
+### 11.7 Dateien ohne Erweiterung
+Blendet Dateien ohne Erweiterung (zum Beispiel: `Dockerfile`, `Makefile`, `README`) im Baum sowie in Kopier-/Exportergebnissen aus.
+
+### 11.8 Zähler im Block „Ignorieren“
+Wenn „Ansicht → Zusätzliche Zähler“ aktiviert ist, wird bei verfügbaren Optionen die Anzahl im Format `(N)` angezeigt.
 ## 12) Wie Baum und Kennzahlen berechnet werden
 Das Ergebnis hängt ab von:
 * ausgewählte Ordner der obersten Ebene
