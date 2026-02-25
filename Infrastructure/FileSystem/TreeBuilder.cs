@@ -170,11 +170,9 @@ public sealed class TreeBuilder : ITreeBuilder
 
 	private static bool ShouldSkipDirectory(FileSystemInfo entry, IgnoreRules rules)
 	{
-		var matcher = rules.ResolveGitIgnoreMatcher(entry.FullName);
-		if (!ReferenceEquals(matcher, GitIgnoreMatcher.Empty) &&
-		    matcher.IsIgnored(entry.FullName, isDirectory: true, entry.Name))
+		if (rules.IsGitIgnored(entry.FullName, isDirectory: true, entry.Name))
 		{
-			if (!matcher.ShouldTraverseIgnoredDirectory(entry.FullName, entry.Name))
+			if (!rules.ShouldTraverseGitIgnoredDirectory(entry.FullName, entry.Name))
 				return true;
 		}
 
@@ -207,31 +205,26 @@ public sealed class TreeBuilder : ITreeBuilder
 
 	private static bool IsTraversableGitIgnoredDirectory(FileSystemInfo entry, IgnoreRules rules)
 	{
-		var matcher = rules.ResolveGitIgnoreMatcher(entry.FullName);
-		return !ReferenceEquals(matcher, GitIgnoreMatcher.Empty) &&
-		       matcher.IsIgnored(entry.FullName, isDirectory: true, entry.Name) &&
-		       matcher.ShouldTraverseIgnoredDirectory(entry.FullName, entry.Name);
+		return rules.IsGitIgnored(entry.FullName, isDirectory: true, entry.Name) &&
+		       rules.ShouldTraverseGitIgnoredDirectory(entry.FullName, entry.Name);
 	}
 
 	private static bool IsEffectivelyGitIgnoredDirectory(FileSystemInfo entry, IgnoreRules rules)
 	{
-		var matcher = rules.ResolveGitIgnoreMatcher(entry.FullName);
-		if (ReferenceEquals(matcher, GitIgnoreMatcher.Empty))
+		if (!rules.UseGitIgnore)
 			return false;
 
-		if (matcher.IsIgnored(entry.FullName, isDirectory: true, entry.Name))
+		if (rules.IsGitIgnored(entry.FullName, isDirectory: true, entry.Name))
 			return true;
 
 		const string probeName = "__devprojex_ignore_probe__";
 		var probePath = Path.Combine(entry.FullName, probeName);
-		return matcher.IsIgnored(probePath, isDirectory: false, probeName);
+		return rules.IsGitIgnored(probePath, isDirectory: false, probeName);
 	}
 
 	private static bool ShouldSkipFile(FileSystemInfo entry, IgnoreRules rules)
 	{
-		var matcher = rules.ResolveGitIgnoreMatcher(entry.FullName);
-		if (!ReferenceEquals(matcher, GitIgnoreMatcher.Empty) &&
-		    matcher.IsIgnored(entry.FullName, isDirectory: false, entry.Name))
+		if (rules.IsGitIgnored(entry.FullName, isDirectory: false, entry.Name))
 			return true;
 
 		if (rules.ShouldApplySmartIgnore(entry.FullName) && rules.SmartIgnoredFiles.Contains(entry.Name))

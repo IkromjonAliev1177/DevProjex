@@ -230,8 +230,15 @@ public sealed class IgnoreRulesService
 		if (scopesWithGitIgnore.Count == 0)
 			yield break;
 
-		// Sort in-place
-		scopesWithGitIgnore.Sort((a, b) => PathComparer.Default.Compare(a.RootPath, b.RootPath));
+		// GitIgnore precedence is parent -> child, so scopes must be ordered by depth.
+		scopesWithGitIgnore.Sort((a, b) =>
+		{
+			var lengthComparison = a.RootPath.Length.CompareTo(b.RootPath.Length);
+			if (lengthComparison != 0)
+				return lengthComparison;
+
+			return PathComparer.Default.Compare(a.RootPath, b.RootPath);
+		});
 
 		foreach (var scope in scopesWithGitIgnore)
 		{
@@ -320,7 +327,7 @@ public sealed class IgnoreRulesService
 		var rootHasProjectMarker = HasProjectMarker(rootPath);
 		var candidateDirectories = ResolveCandidateDirectories(rootPath, selectedRootFolders);
 
-		if (rootHasGitIgnore || rootHasProjectMarker || candidateDirectories.Count == 0)
+		if (candidateDirectories.Count == 0)
 		{
 			return ProjectScanContext.FromScopes(new[]
 			{
@@ -418,8 +425,6 @@ public sealed class IgnoreRulesService
 			candidate =>
 			{
 				allScopes.Add(candidate);
-				if (candidate.LooksLikeProject)
-					return;
 
 				foreach (var childPath in EnumerateDescendantDirectoriesSafe(
 					         candidate.RootPath,
