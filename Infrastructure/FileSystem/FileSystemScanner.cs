@@ -1,6 +1,6 @@
 namespace DevProjex.Infrastructure.FileSystem;
 
-public sealed class FileSystemScanner : IFileSystemScanner
+public sealed class FileSystemScanner : IFileSystemScanner, IFileSystemScannerAdvanced
 {
 	// Optimal parallelism for modern multi-core CPUs with NVMe SSDs
 	private static readonly int MaxParallelism = Math.Max(4, Environment.ProcessorCount);
@@ -24,178 +24,40 @@ public sealed class FileSystemScanner : IFileSystemScanner
 
 	public ScanResult<HashSet<string>> GetExtensions(string rootPath, IgnoreRules rules, CancellationToken cancellationToken = default)
 	{
-		cancellationToken.ThrowIfCancellationRequested();
+		var scan = ScanExtensionsCore(
+			rootPath,
+			rules,
+			collectIgnoreOptionCounts: false,
+			includeRootDirectoryInCounts: false,
+			cancellationToken);
+		return new ScanResult<HashSet<string>>(scan.Value.Extensions, scan.RootAccessDenied, scan.HadAccessDenied);
+	}
 
-		if (string.IsNullOrWhiteSpace(rootPath) || !Directory.Exists(rootPath))
-			return new ScanResult<HashSet<string>>(new HashSet<string>(StringComparer.OrdinalIgnoreCase), false, false);
-
-		// Directory discovery is single-threaded; keep it allocation-light.
-		var directories = new List<string>(capacity: 256);
-		var rootAccessDenied = 0;
-		var hadAccessDenied = 0;
-
-		// First pass: collect all directories (single-threaded to avoid race conditions on initial scan)
-		var pending = new Stack<string>();
-		pending.Push(rootPath);
-		bool isFirst = true;
-
-		while (pending.Count > 0)
-		{
-			cancellationToken.ThrowIfCancellationRequested();
-
-			var dir = pending.Pop();
-			directories.Add(dir);
-
-			string[] subDirs;
-			try
-			{
-				subDirs = Directory.GetDirectories(dir);
-			}
-			catch (OperationCanceledException)
-			{
-				throw;
-			}
-			catch (UnauthorizedAccessException)
-			{
-				Interlocked.Exchange(ref hadAccessDenied, 1);
-				if (isFirst) Interlocked.Exchange(ref rootAccessDenied, 1);
-				continue;
-			}
-			catch
-			{
-				continue;
-			}
-
-			foreach (var sd in subDirs)
-			{
-				cancellationToken.ThrowIfCancellationRequested();
-
-				var dirName = Path.GetFileName(sd);
-				var directoryGitIgnore = rules.EvaluateGitIgnore(sd, isDirectory: true, dirName);
-				if (ShouldSkipDirectoryByName(dirName, sd, rules, directoryGitIgnore))
-					continue;
-
-				pending.Push(sd);
-			}
-
-			isFirst = false;
-		}
-
-		// Second pass: scan files in all directories in parallel
-		var parallelOptions = new ParallelOptions
-		{
-			MaxDegreeOfParallelism = MaxParallelism,
-			CancellationToken = cancellationToken
-		};
-
-		var uniqueExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-		var mergeLock = new object();
-		Parallel.ForEach(
-			directories,
-			parallelOptions,
-			() => new HashSet<string>(StringComparer.OrdinalIgnoreCase),
-			(dir, _, localExtensions) =>
-			{
-				parallelOptions.CancellationToken.ThrowIfCancellationRequested();
-
-				string[] files;
-				try
-				{
-					files = Directory.GetFiles(dir);
-				}
-				catch (OperationCanceledException)
-				{
-					throw;
-				}
-				catch (UnauthorizedAccessException)
-				{
-					Interlocked.Exchange(ref hadAccessDenied, 1);
-					return localExtensions;
-				}
-				catch
-				{
-					return localExtensions;
-				}
-
-				foreach (var file in files)
-				{
-					parallelOptions.CancellationToken.ThrowIfCancellationRequested();
-
-					var name = Path.GetFileName(file);
-					var fileGitIgnore = rules.EvaluateGitIgnore(file, isDirectory: false, name);
-					if (ShouldSkipFileByName(name, file, rules, fileGitIgnore))
-						continue;
-
-					var ext = Path.GetExtension(name);
-					if (IsExtensionlessFileName(name))
-						localExtensions.Add(name);
-					else if (!string.IsNullOrWhiteSpace(ext))
-						localExtensions.Add(ext);
-				}
-
-				return localExtensions;
-			},
-			localExtensions =>
-			{
-				if (localExtensions.Count == 0)
-					return;
-
-				lock (mergeLock)
-				{
-					uniqueExtensions.UnionWith(localExtensions);
-				}
-			});
-
-		return new ScanResult<HashSet<string>>(uniqueExtensions, rootAccessDenied == 1, hadAccessDenied == 1);
+	public ScanResult<ExtensionsScanData> GetExtensionsWithIgnoreOptionCounts(
+		string rootPath,
+		IgnoreRules rules,
+		CancellationToken cancellationToken = default)
+	{
+		return ScanExtensionsCore(
+			rootPath,
+			rules,
+			collectIgnoreOptionCounts: true,
+			includeRootDirectoryInCounts: true,
+			cancellationToken);
 	}
 
 	public ScanResult<HashSet<string>> GetRootFileExtensions(string rootPath, IgnoreRules rules, CancellationToken cancellationToken = default)
 	{
-		cancellationToken.ThrowIfCancellationRequested();
+		var scan = ScanRootFilesCore(rootPath, rules, collectIgnoreOptionCounts: false, cancellationToken);
+		return new ScanResult<HashSet<string>>(scan.Value.Extensions, scan.RootAccessDenied, scan.HadAccessDenied);
+	}
 
-		var exts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-		if (string.IsNullOrWhiteSpace(rootPath) || !Directory.Exists(rootPath))
-			return new ScanResult<HashSet<string>>(exts, false, false);
-
-		bool rootAccessDenied = false;
-		bool hadAccessDenied = false;
-
-		string[] files;
-		try
-		{
-			files = Directory.GetFiles(rootPath);
-		}
-		catch (OperationCanceledException)
-		{
-			throw;
-		}
-		catch (UnauthorizedAccessException)
-		{
-			return new ScanResult<HashSet<string>>(exts, true, true);
-		}
-		catch
-		{
-			return new ScanResult<HashSet<string>>(exts, false, false);
-		}
-
-		foreach (var file in files)
-		{
-			cancellationToken.ThrowIfCancellationRequested();
-
-			var name = Path.GetFileName(file);
-			var fileGitIgnore = rules.EvaluateGitIgnore(file, isDirectory: false, name);
-			if (ShouldSkipFileByName(name, file, rules, fileGitIgnore))
-				continue;
-
-			var ext = Path.GetExtension(name);
-			if (IsExtensionlessFileName(name))
-				exts.Add(name);
-			else if (!string.IsNullOrWhiteSpace(ext))
-				exts.Add(ext);
-		}
-
-		return new ScanResult<HashSet<string>>(exts, rootAccessDenied, hadAccessDenied);
+	public ScanResult<ExtensionsScanData> GetRootFileExtensionsWithIgnoreOptionCounts(
+		string rootPath,
+		IgnoreRules rules,
+		CancellationToken cancellationToken = default)
+	{
+		return ScanRootFilesCore(rootPath, rules, collectIgnoreOptionCounts: true, cancellationToken);
 	}
 
 	public ScanResult<List<string>> GetRootFolderNames(string rootPath, IgnoreRules rules, CancellationToken cancellationToken = default)
@@ -325,6 +187,273 @@ public sealed class FileSystemScanner : IFileSystemScanner
 		return false;
 	}
 
+	private ScanResult<ExtensionsScanData> ScanExtensionsCore(
+		string rootPath,
+		IgnoreRules rules,
+		bool collectIgnoreOptionCounts,
+		bool includeRootDirectoryInCounts,
+		CancellationToken cancellationToken)
+	{
+		cancellationToken.ThrowIfCancellationRequested();
+
+		var uniqueExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+		if (string.IsNullOrWhiteSpace(rootPath) || !Directory.Exists(rootPath))
+		{
+			return new ScanResult<ExtensionsScanData>(
+				new ExtensionsScanData(uniqueExtensions, IgnoreOptionCounts.Empty),
+				RootAccessDenied: false,
+				HadAccessDenied: false);
+		}
+
+		// Directory discovery is single-threaded; keep it allocation-light.
+		var directories = new List<string>(capacity: 256);
+		var rootAccessDenied = 0;
+		var hadAccessDenied = 0;
+		var directoryCounts = default(MutableIgnoreOptionCounts);
+
+		// First pass: collect all directories (single-threaded to avoid race conditions on initial scan)
+		var pending = new Stack<string>();
+		pending.Push(rootPath);
+		bool isFirst = true;
+
+		while (pending.Count > 0)
+		{
+			cancellationToken.ThrowIfCancellationRequested();
+
+			var dir = pending.Pop();
+			directories.Add(dir);
+
+			if (collectIgnoreOptionCounts && isFirst && includeRootDirectoryInCounts)
+				AccumulateDirectoryIgnoreOptionCounts(dir, Path.GetFileName(dir), ref directoryCounts);
+
+			string[] subDirs;
+			try
+			{
+				subDirs = Directory.GetDirectories(dir);
+			}
+			catch (OperationCanceledException)
+			{
+				throw;
+			}
+			catch (UnauthorizedAccessException)
+			{
+				Interlocked.Exchange(ref hadAccessDenied, 1);
+				if (isFirst) Interlocked.Exchange(ref rootAccessDenied, 1);
+				continue;
+			}
+			catch
+			{
+				continue;
+			}
+
+			foreach (var sd in subDirs)
+			{
+				cancellationToken.ThrowIfCancellationRequested();
+
+				var dirName = Path.GetFileName(sd);
+				if (collectIgnoreOptionCounts)
+					AccumulateDirectoryIgnoreOptionCounts(sd, dirName, ref directoryCounts);
+
+				var directoryGitIgnore = rules.EvaluateGitIgnore(sd, isDirectory: true, dirName);
+				if (ShouldSkipDirectoryByName(dirName, sd, rules, directoryGitIgnore))
+					continue;
+
+				pending.Push(sd);
+			}
+
+			isFirst = false;
+		}
+
+		// Second pass: scan files in all directories in parallel
+		var parallelOptions = new ParallelOptions
+		{
+			MaxDegreeOfParallelism = MaxParallelism,
+			CancellationToken = cancellationToken
+		};
+
+		var mergeLock = new object();
+		var fileCounts = default(MutableIgnoreOptionCounts);
+		Parallel.ForEach(
+			directories,
+			parallelOptions,
+			() => new LocalExtensionScanState(),
+			(dir, _, localState) =>
+			{
+				parallelOptions.CancellationToken.ThrowIfCancellationRequested();
+
+				string[] files;
+				try
+				{
+					files = Directory.GetFiles(dir);
+				}
+				catch (OperationCanceledException)
+				{
+					throw;
+				}
+				catch (UnauthorizedAccessException)
+				{
+					Interlocked.Exchange(ref hadAccessDenied, 1);
+					return localState;
+				}
+				catch
+				{
+					return localState;
+				}
+
+				foreach (var file in files)
+				{
+					parallelOptions.CancellationToken.ThrowIfCancellationRequested();
+
+					var name = Path.GetFileName(file);
+					if (collectIgnoreOptionCounts)
+						AccumulateFileIgnoreOptionCounts(file, name, ref localState.Counts);
+
+					var fileGitIgnore = rules.EvaluateGitIgnore(file, isDirectory: false, name);
+					if (ShouldSkipFileByName(name, file, rules, fileGitIgnore))
+						continue;
+
+					var ext = Path.GetExtension(name);
+					if (IsExtensionlessFileName(name))
+						localState.Extensions.Add(name);
+					else if (!string.IsNullOrWhiteSpace(ext))
+						localState.Extensions.Add(ext);
+				}
+
+				return localState;
+			},
+			localState =>
+			{
+				if (localState.Extensions.Count == 0 && !collectIgnoreOptionCounts)
+					return;
+
+				lock (mergeLock)
+				{
+					if (localState.Extensions.Count > 0)
+						uniqueExtensions.UnionWith(localState.Extensions);
+					if (collectIgnoreOptionCounts)
+						fileCounts.Add(localState.Counts);
+				}
+			});
+
+		var counts = collectIgnoreOptionCounts
+			? directoryCounts.ToImmutable().Add(fileCounts.ToImmutable())
+			: IgnoreOptionCounts.Empty;
+
+		return new ScanResult<ExtensionsScanData>(
+			new ExtensionsScanData(uniqueExtensions, counts),
+			rootAccessDenied == 1,
+			hadAccessDenied == 1);
+	}
+
+	private ScanResult<ExtensionsScanData> ScanRootFilesCore(
+		string rootPath,
+		IgnoreRules rules,
+		bool collectIgnoreOptionCounts,
+		CancellationToken cancellationToken)
+	{
+		cancellationToken.ThrowIfCancellationRequested();
+
+		var exts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+		if (string.IsNullOrWhiteSpace(rootPath) || !Directory.Exists(rootPath))
+		{
+			return new ScanResult<ExtensionsScanData>(
+				new ExtensionsScanData(exts, IgnoreOptionCounts.Empty),
+				RootAccessDenied: false,
+				HadAccessDenied: false);
+		}
+
+		string[] files;
+		try
+		{
+			files = Directory.GetFiles(rootPath);
+		}
+		catch (OperationCanceledException)
+		{
+			throw;
+		}
+		catch (UnauthorizedAccessException)
+		{
+			return new ScanResult<ExtensionsScanData>(
+				new ExtensionsScanData(exts, IgnoreOptionCounts.Empty),
+				RootAccessDenied: true,
+				HadAccessDenied: true);
+		}
+		catch
+		{
+			return new ScanResult<ExtensionsScanData>(
+				new ExtensionsScanData(exts, IgnoreOptionCounts.Empty),
+				RootAccessDenied: false,
+				HadAccessDenied: false);
+		}
+
+		var counts = default(MutableIgnoreOptionCounts);
+		foreach (var file in files)
+		{
+			cancellationToken.ThrowIfCancellationRequested();
+
+			var name = Path.GetFileName(file);
+			if (collectIgnoreOptionCounts)
+				AccumulateFileIgnoreOptionCounts(file, name, ref counts);
+
+			var fileGitIgnore = rules.EvaluateGitIgnore(file, isDirectory: false, name);
+			if (ShouldSkipFileByName(name, file, rules, fileGitIgnore))
+				continue;
+
+			var ext = Path.GetExtension(name);
+			if (IsExtensionlessFileName(name))
+				exts.Add(name);
+			else if (!string.IsNullOrWhiteSpace(ext))
+				exts.Add(ext);
+		}
+
+		return new ScanResult<ExtensionsScanData>(
+			new ExtensionsScanData(exts, collectIgnoreOptionCounts ? counts.ToImmutable() : IgnoreOptionCounts.Empty),
+			RootAccessDenied: false,
+			HadAccessDenied: false);
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	private static void AccumulateDirectoryIgnoreOptionCounts(
+		string fullPath,
+		string name,
+		ref MutableIgnoreOptionCounts counts)
+	{
+		if (IsDotName(name))
+			counts.DotFolders++;
+		if (HasHiddenAttribute(fullPath))
+			counts.HiddenFolders++;
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	private static void AccumulateFileIgnoreOptionCounts(
+		string fullPath,
+		string name,
+		ref MutableIgnoreOptionCounts counts)
+	{
+		if (IsDotName(name))
+			counts.DotFiles++;
+		if (HasHiddenAttribute(fullPath))
+			counts.HiddenFiles++;
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	private static bool IsDotName(string name)
+	{
+		return !string.IsNullOrEmpty(name) && name[0] == '.';
+	}
+
+	private static bool HasHiddenAttribute(string fullPath)
+	{
+		try
+		{
+			return File.GetAttributes(fullPath).HasFlag(FileAttributes.Hidden);
+		}
+		catch
+		{
+			return false;
+		}
+	}
+
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	private static bool IsExtensionlessFileName(string name)
 	{
@@ -341,5 +470,34 @@ public sealed class FileSystemScanner : IFileSystemScanner
 
 		// Dot is at the end (like "file.")
 		return dotIndex == span.Length - 1;
+	}
+
+	private sealed class LocalExtensionScanState
+	{
+		public HashSet<string> Extensions { get; } = new(StringComparer.OrdinalIgnoreCase);
+		public MutableIgnoreOptionCounts Counts;
+	}
+
+	private struct MutableIgnoreOptionCounts
+	{
+		public int HiddenFolders;
+		public int HiddenFiles;
+		public int DotFolders;
+		public int DotFiles;
+
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public void Add(in MutableIgnoreOptionCounts other)
+		{
+			HiddenFolders += other.HiddenFolders;
+			HiddenFiles += other.HiddenFiles;
+			DotFolders += other.DotFolders;
+			DotFiles += other.DotFiles;
+		}
+
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public readonly IgnoreOptionCounts ToImmutable()
+		{
+			return new IgnoreOptionCounts(HiddenFolders, HiddenFiles, DotFolders, DotFiles);
+		}
 	}
 }
