@@ -16,6 +16,7 @@ public sealed record IgnoreRules(
 
 	public bool UseGitIgnore { get; init; }
 	public bool UseSmartIgnore { get; init; }
+	public bool IgnoreEmptyFolders { get; init; }
 	public bool IgnoreExtensionlessFiles { get; init; }
 
 	public GitIgnoreMatcher GitIgnoreMatcher { get; init; } = GitIgnoreMatcher.Empty;

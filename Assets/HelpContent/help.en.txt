@@ -137,6 +137,11 @@ Makes the UI denser: smaller spacing in the tree and settings.
 ### Tree animation
 Enables smooth slide animation when hovering over tree rows.
 
+### Additional counters
+Shows/hides counts in parentheses for options in the "Ignore" block.
+Enabled by default.
+Does not change filtering rules.
+
 ## 8) Search (tree)
 Opens the search bar, highlights matches, and allows navigation.
 * Ctrl+F — show/hide
@@ -194,11 +199,14 @@ The "Ignore" list is built automatically from the current path and selected top-
 Option order:
 * Smart ignore (when available)
 * Use .gitignore (when at least one `.gitignore` is found)
+* Empty folders
 * Hidden folders
 * Hidden files
 * Dot-prefixed folders
 * Dot-prefixed files
-* Files without extension (shown only when such files are detected)
+* Files without extension
+
+Basic-rule options (hidden, dot-prefixed, empty, extensionless) are shown only when matching elements exist.
 
 The separator under "Use .gitignore" splits Git/Smart rules from basic visibility rules.
 
@@ -227,8 +235,11 @@ Options:
 * Hidden files
 * Dot-prefixed folders
 * Dot-prefixed files
+* Empty folders
+* Files without extension
 
-These rules are independent from `.gitignore` and Smart Ignore and work only by their own toggles.
+When enabled, an option hides matching elements from the tree and from copy/export results.
+These rules are independent from `.gitignore` and Smart Ignore.
 
 ### 11.5 Internal behavior: common cases
 1. Single project with `.gitignore`.
@@ -253,14 +264,14 @@ Smart Ignore (when enabled) complements filtering in detected scopes.
 If no `.gitignore` is found and Smart Ignore is not relevant, these options are hidden.
 Only basic visibility rules remain.
 
-### 11.6 Files without extension
-The "Files without extension" option controls visibility of files without an extension (for example: `Dockerfile`, `Makefile`, `README`).
+### 11.6 Empty folders
+Hides logically empty folders from the tree and from copy/export results.
 
-Rules:
-* this option is shown only when such files are actually present in the current data set;
-* when enabled, files without extension are excluded from the tree and from copy/export operations;
-* when disabled, files without extension are included in the result;
-* the "Extensions" list does not control this behavior.
+### 11.7 Files without extension
+Hides files without extension (for example: `Dockerfile`, `Makefile`, `README`) from the tree and from copy/export results.
+
+### 11.8 Counters in the "Ignore" block
+When "View → Additional counters" is enabled, counts are shown near available options in the `(N)` format.
 ## 12) How the tree and metrics are calculated
 Result depends on:
 * selected Root folders
@@ -323,7 +334,7 @@ Items marked [Beta] may change between versions.
 ## 15) Help
 
 ### 15.1 Reset settings
-Reset settings (Help → Reset settings) resets only visual interface settings (theme, effects, Compact mode, Tree animation) and does not modify project data.
+Reset settings (Help → Reset settings) resets only visual interface settings (theme, effects, Compact mode, Tree animation, Additional counters) and does not modify project data. After reset, Additional counters are enabled by default.
 
 ### 15.2 Reset data
 Reset data (Help → Reset data) removes saved local-project parameter profiles:

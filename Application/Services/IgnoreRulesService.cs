@@ -108,6 +108,7 @@ public sealed class IgnoreRulesService(SmartIgnoreService smartIgnore)
 			SmartIgnoredFolders: smartFolders,
 			SmartIgnoredFiles: smartFiles)
 		{
+			IgnoreEmptyFolders = selectedOptions.Contains(IgnoreOptionId.EmptyFolders),
 			IgnoreExtensionlessFiles = selectedOptions.Contains(IgnoreOptionId.ExtensionlessFiles),
 			UseGitIgnore = useGitIgnore,
 			UseSmartIgnore = useSmartIgnore,

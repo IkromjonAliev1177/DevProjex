@@ -192,7 +192,10 @@ public sealed class SelectionSyncCoordinatorExtensionlessCountSequenceTests
 				IgnoreDotFiles: false,
 				SmartIgnoredFolders: new HashSet<string>(),
 				SmartIgnoredFiles: new HashSet<string>()),
-			(_, _) => new IgnoreOptionsAvailability(IncludeGitIgnore: false, IncludeSmartIgnore: false),
+			(_, _) => new IgnoreOptionsAvailability(
+				IncludeGitIgnore: false,
+				IncludeSmartIgnore: false,
+				ShowAdvancedCounts: true),
 			_ => false,
 			currentPathProvider);
 	}

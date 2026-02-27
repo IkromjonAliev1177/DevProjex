@@ -21,22 +21,51 @@ public sealed class IgnoreOptionsService(LocalizationService localization)
 				true));
 		}
 
-		options.AddRange([
-			new IgnoreOptionDescriptor(IgnoreOptionId.HiddenFolders, localization["Settings.Ignore.HiddenFolders"], true),
-			new IgnoreOptionDescriptor(IgnoreOptionId.HiddenFiles, localization["Settings.Ignore.HiddenFiles"], true),
-			new IgnoreOptionDescriptor(IgnoreOptionId.DotFolders, localization["Settings.Ignore.DotFolders"], true),
-			new IgnoreOptionDescriptor(IgnoreOptionId.DotFiles, localization["Settings.Ignore.DotFiles"], true)
-		]);
+		if (availability.IncludeEmptyFolders)
+		{
+			options.Add(new IgnoreOptionDescriptor(
+				IgnoreOptionId.EmptyFolders,
+				FormatLabelWithCount(localization["Settings.Ignore.EmptyFolders"], availability.EmptyFoldersCount, availability.ShowAdvancedCounts),
+				true));
+		}
+
+		if (availability.IncludeHiddenFolders)
+		{
+			options.Add(new IgnoreOptionDescriptor(
+				IgnoreOptionId.HiddenFolders,
+				FormatLabelWithCount(localization["Settings.Ignore.HiddenFolders"], availability.HiddenFoldersCount, availability.ShowAdvancedCounts),
+				true));
+		}
+
+		if (availability.IncludeHiddenFiles)
+		{
+			options.Add(new IgnoreOptionDescriptor(
+				IgnoreOptionId.HiddenFiles,
+				FormatLabelWithCount(localization["Settings.Ignore.HiddenFiles"], availability.HiddenFilesCount, availability.ShowAdvancedCounts),
+				true));
+		}
+
+		if (availability.IncludeDotFolders)
+		{
+			options.Add(new IgnoreOptionDescriptor(
+				IgnoreOptionId.DotFolders,
+				FormatLabelWithCount(localization["Settings.Ignore.DotFolders"], availability.DotFoldersCount, availability.ShowAdvancedCounts),
+				true));
+		}
+
+		if (availability.IncludeDotFiles)
+		{
+			options.Add(new IgnoreOptionDescriptor(
+				IgnoreOptionId.DotFiles,
+				FormatLabelWithCount(localization["Settings.Ignore.DotFiles"], availability.DotFilesCount, availability.ShowAdvancedCounts),
+				true));
+		}
 
 		if (availability.IncludeExtensionlessFiles)
 		{
-			var extensionlessLabel = availability.ExtensionlessFilesCount > 0
-				? $"{localization["Settings.Ignore.ExtensionlessFiles"]} ({availability.ExtensionlessFilesCount})"
-				: localization["Settings.Ignore.ExtensionlessFiles"];
-
 			options.Add(new IgnoreOptionDescriptor(
 				IgnoreOptionId.ExtensionlessFiles,
-				extensionlessLabel,
+				FormatLabelWithCount(localization["Settings.Ignore.ExtensionlessFiles"], availability.ExtensionlessFilesCount, availability.ShowAdvancedCounts),
 				false));
 		}
 
@@ -55,5 +84,12 @@ public sealed class IgnoreOptionsService(LocalizationService localization)
 		return GetOptions(new IgnoreOptionsAvailability(
 			IncludeGitIgnore: includeGitIgnore,
 			IncludeSmartIgnore: false));
+	}
+
+	private static string FormatLabelWithCount(string baseLabel, int count, bool showAdvancedCounts)
+	{
+		return showAdvancedCounts && count > 0
+			? $"{baseLabel} ({count})"
+			: baseLabel;
 	}
 }

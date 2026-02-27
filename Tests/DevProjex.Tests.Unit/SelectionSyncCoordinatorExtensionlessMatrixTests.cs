@@ -121,7 +121,10 @@ public sealed class SelectionSyncCoordinatorExtensionlessMatrixTests
 			filterSelectionService,
 			ignoreOptionsService,
 			(rootPath, _, _) => new IgnoreRules(false, false, false, false, new HashSet<string>(), new HashSet<string>()),
-			(rootPath, _) => new IgnoreOptionsAvailability(IncludeGitIgnore: false, IncludeSmartIgnore: false),
+			(rootPath, _) => new IgnoreOptionsAvailability(
+				IncludeGitIgnore: false,
+				IncludeSmartIgnore: false,
+				ShowAdvancedCounts: true),
 			_ => false,
 			() => currentPath);
 	}

@@ -33,7 +33,8 @@ public sealed class IgnoreOptionsServiceExtensionlessCountTests
 			IncludeGitIgnore: false,
 			IncludeSmartIgnore: false,
 			IncludeExtensionlessFiles: includeExtensionlessFiles,
-			ExtensionlessFilesCount: extensionlessCount));
+			ExtensionlessFilesCount: extensionlessCount,
+			ShowAdvancedCounts: true));
 
 		var option = options.SingleOrDefault(item => item.Id == IgnoreOptionId.ExtensionlessFiles);
 		Assert.NotNull(option);
@@ -64,7 +65,8 @@ public sealed class IgnoreOptionsServiceExtensionlessCountTests
 			IncludeGitIgnore: true,
 			IncludeSmartIgnore: true,
 			IncludeExtensionlessFiles: true,
-			ExtensionlessFilesCount: 2));
+			ExtensionlessFilesCount: 2,
+			ShowAdvancedCounts: true));
 
 		Assert.Equal(7, options.Count);
 		Assert.Equal(IgnoreOptionId.SmartIgnore, options[0].Id);
@@ -83,4 +85,3 @@ public sealed class IgnoreOptionsServiceExtensionlessCountTests
 		return new IgnoreOptionsService(localization);
 	}
 }
-

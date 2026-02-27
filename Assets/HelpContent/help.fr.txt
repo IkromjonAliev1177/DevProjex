@@ -137,6 +137,11 @@ Rend l’interface plus dense : moins d’espaces dans l’arbre et les paramè
 ### Animation de l'arborescence
 Active une animation de glissement fluide au survol des lignes de l'arborescence.
 
+### Compteurs supplémentaires
+Affiche/masque les quantités entre parenthèses pour les options du bloc « Ignorer ».
+Activés par défaut.
+N’affecte pas les règles de filtrage.
+
 ## 8) Recherche dans l'arbre
 Ouvre la recherche, met en évidence les correspondances et permet la navigation.
 * Ctrl+F — afficher/masquer
@@ -194,11 +199,14 @@ La liste « Ignorer » est générée automatiquement à partir du chemin actuel
 Ordre des options :
 * Smart ignore (si disponible)
 * Utiliser .gitignore (si au moins un `.gitignore` est trouvé)
+* Dossiers vides
 * Dossiers cachés
 * Fichiers cachés
 * Dossiers commençant par un point
 * Fichiers commençant par un point
-* Fichiers sans extension (affiché uniquement si de tels fichiers sont détectés)
+* Fichiers sans extension
+
+Les options des règles de base (cachés, avec point, vides, sans extension) sont affichées uniquement si des éléments correspondants existent.
 
 La ligne sous « Utiliser .gitignore » sépare les règles Git/Smart des règles de visibilité de base.
 
@@ -227,8 +235,11 @@ Options :
 * Fichiers cachés
 * Dossiers commençant par un point
 * Fichiers commençant par un point
+* Dossiers vides
+* Fichiers sans extension
 
-Ces règles sont indépendantes de `.gitignore` et Smart Ignore et dépendent uniquement de leurs propres interrupteurs.
+Quand une option est activée, elle masque les éléments correspondants dans l’arbre et dans les résultats de copie/export.
+Ces règles sont indépendantes de `.gitignore` et Smart Ignore.
 
 ### 11.5 Fonctionnement interne : cas typiques
 1. Projet unique avec `.gitignore`.
@@ -253,15 +264,15 @@ Smart Ignore (s’il est activé) complète le filtrage dans les zones détecté
 Si aucun `.gitignore` n’est trouvé et que Smart Ignore n’est pas pertinent, ces options sont masquées.
 Seules les règles de visibilité de base restent actives.
 
-### 11.6 Fichiers sans extension
-L’option « Fichiers sans extension » contrôle l’affichage des fichiers sans extension (par exemple : `Dockerfile`, `Makefile`, `README`).
+### 11.6 Dossiers vides
+Masque les dossiers logiquement vides dans l’arbre et dans les résultats de copie/export.
 
-Règles :
-* cette option est affichée uniquement si de tels fichiers existent réellement dans l’ensemble de données courant ;
-* lorsqu’elle est activée, les fichiers sans extension sont exclus de l’arbre et des opérations de copie/export ;
-* lorsqu’elle est désactivée, les fichiers sans extension sont inclus dans le résultat ;
-* la liste « Types de fichiers » n’influence pas ce mécanisme.
-## 12) Comment l’arbre et les métriques sont calculés
+### 11.7 Fichiers sans extension
+Masque les fichiers sans extension (par exemple : `Dockerfile`, `Makefile`, `README`) dans l’arbre et dans les résultats de copie/export.
+
+### 11.8 Compteurs dans le bloc « Ignorer »
+Quand « Affichage → Compteurs supplémentaires » est activé, le nombre est affiché à côté des options disponibles au format `(N)`.
+## 12) Comment l'arbre et les métriques sont calculés
 Le résultat dépend de :
 * dossiers de premier niveau sélectionnés
 * types de fichiers sélectionnés
@@ -323,7 +334,7 @@ Les éléments [Beta] peuvent évoluer entre versions.
 ## 15) Aide
 
 ### 15.1 Réinitialiser les paramètres
-Réinitialiser les paramètres (Aide → Réinitialiser les paramètres) réinitialise uniquement les paramètres visuels de l’interface (thème, effets, mode compact, animation de l'arborescence) et ne modifie pas les données du projet.
+Réinitialiser les paramètres (Aide → Réinitialiser les paramètres) réinitialise uniquement les paramètres visuels de l’interface (thème, effets, mode compact, animation de l'arborescence, compteurs supplémentaires) et ne modifie pas les données du projet. Après réinitialisation, les compteurs supplémentaires sont activés par défaut.
 
 ### 15.2 Réinitialiser les données
 Réinitialiser les données (Aide → Réinitialiser les données) supprime les profils enregistrés de paramètres des projets locaux :

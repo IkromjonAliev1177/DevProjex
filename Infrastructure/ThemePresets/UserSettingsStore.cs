@@ -13,6 +13,14 @@ public sealed class UserSettingsStore
         Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
     };
 
+    private static readonly AppViewSettings DefaultViewSettings = new()
+    {
+        IsCompactMode = false,
+        IsTreeAnimationEnabled = false,
+        IsAdvancedIgnoreCountsEnabled = true,
+        PreferredLanguage = null
+    };
+
     public UserSettingsDb Load()
     {
         var path = GetPath();
@@ -99,7 +107,7 @@ public sealed class UserSettingsStore
     {
         db.SchemaVersion = CurrentSchemaVersion;
         db.Presets ??= new Dictionary<string, ThemePreset>();
-        db.ViewSettings ??= new AppViewSettings();
+        db.ViewSettings ??= DefaultViewSettings;
 
         foreach (var preset in CreateDefaultPresets())
         {
@@ -120,12 +128,7 @@ public sealed class UserSettingsStore
             SchemaVersion = CurrentSchemaVersion,
             Presets = CreateDefaultPresets(),
             LastSelected = GetKey(ThemeVariant.Dark, ThemeEffectMode.Transparent),
-            ViewSettings = new AppViewSettings
-            {
-                IsCompactMode = false,
-                IsTreeAnimationEnabled = false,
-                PreferredLanguage = null
-            }
+            ViewSettings = DefaultViewSettings
         };
 
         return db;
