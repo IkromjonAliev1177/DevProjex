@@ -120,7 +120,7 @@ public sealed class FileSystemScanner : IFileSystemScanner, IFileSystemScannerAd
 				return true;
 		}
 
-		if (rules.ShouldApplySmartIgnore(fullPath) && rules.SmartIgnoredFolders.Contains(name))
+		if (rules.ShouldApplySmartIgnore(fullPath, isDirectory: true) && rules.SmartIgnoredFolders.Contains(name))
 			return true;
 
 		if (rules.IgnoreDotFolders && name.StartsWith(".", StringComparison.Ordinal))
@@ -154,12 +154,13 @@ public sealed class FileSystemScanner : IFileSystemScanner, IFileSystemScannerAd
 		string name,
 		string fullPath,
 		IgnoreRules rules,
+		bool shouldApplySmartIgnore,
 		in IgnoreRules.GitIgnoreEvaluation gitIgnoreEvaluation)
 	{
 		if (gitIgnoreEvaluation.IsIgnored)
 			return true;
 
-		if (rules.ShouldApplySmartIgnore(fullPath) && rules.SmartIgnoredFiles.Contains(name))
+		if (shouldApplySmartIgnore && rules.SmartIgnoredFiles.Contains(name))
 			return true;
 
 		if (rules.IgnoreDotFiles && name.StartsWith(".", StringComparison.Ordinal))
@@ -279,6 +280,7 @@ public sealed class FileSystemScanner : IFileSystemScanner, IFileSystemScannerAd
 			{
 				cancellationToken.ThrowIfCancellationRequested();
 				var dir = directories[index].Path;
+				var shouldApplySmartIgnoreForFiles = rules.ShouldApplySmartIgnore(dir, isDirectory: true);
 
 				string[] files;
 				try
@@ -311,7 +313,7 @@ public sealed class FileSystemScanner : IFileSystemScanner, IFileSystemScannerAd
 						AccumulateFileIgnoreOptionCounts(file, name, ref localCounts);
 
 					var fileGitIgnore = rules.EvaluateGitIgnore(file, isDirectory: false, name);
-					if (ShouldSkipFileByName(name, file, rules, fileGitIgnore))
+					if (ShouldSkipFileByName(name, file, rules, shouldApplySmartIgnoreForFiles, fileGitIgnore))
 						continue;
 
 					hasVisibleFiles = true;
@@ -344,6 +346,7 @@ public sealed class FileSystemScanner : IFileSystemScanner, IFileSystemScannerAd
 				{
 					parallelOptions.CancellationToken.ThrowIfCancellationRequested();
 					var dir = directories[index].Path;
+					var shouldApplySmartIgnoreForFiles = rules.ShouldApplySmartIgnore(dir, isDirectory: true);
 
 					string[] files;
 					try
@@ -375,7 +378,7 @@ public sealed class FileSystemScanner : IFileSystemScanner, IFileSystemScannerAd
 							AccumulateFileIgnoreOptionCounts(file, name, ref localState.Counts);
 
 						var fileGitIgnore = rules.EvaluateGitIgnore(file, isDirectory: false, name);
-						if (ShouldSkipFileByName(name, file, rules, fileGitIgnore))
+						if (ShouldSkipFileByName(name, file, rules, shouldApplySmartIgnoreForFiles, fileGitIgnore))
 							continue;
 
 						hasVisibleFiles = true;
@@ -481,6 +484,7 @@ public sealed class FileSystemScanner : IFileSystemScanner, IFileSystemScannerAd
 		}
 
 		var counts = default(MutableIgnoreOptionCounts);
+		var shouldApplySmartIgnoreForFiles = rules.ShouldApplySmartIgnore(rootPath, isDirectory: true);
 		foreach (var file in files)
 		{
 			cancellationToken.ThrowIfCancellationRequested();
@@ -490,7 +494,7 @@ public sealed class FileSystemScanner : IFileSystemScanner, IFileSystemScannerAd
 				AccumulateFileIgnoreOptionCounts(file, name, ref counts);
 
 			var fileGitIgnore = rules.EvaluateGitIgnore(file, isDirectory: false, name);
-			if (ShouldSkipFileByName(name, file, rules, fileGitIgnore))
+			if (ShouldSkipFileByName(name, file, rules, shouldApplySmartIgnoreForFiles, fileGitIgnore))
 				continue;
 
 			var ext = Path.GetExtension(name);
