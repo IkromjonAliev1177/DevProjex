@@ -150,6 +150,8 @@ Opens the search bar, highlights matches, and allows navigation.
 * Esc — close
 
 Search auto-expands only the needed branches; clearing the query collapses the tree (except root).
+For very large match sets, the app may limit auto-expand and global highlighting to keep the UI responsive.
+When the search bar is closed, the query is cleared after the close animation completes.
 
 Constraints:
 * opening Search closes Filter automatically;
@@ -335,6 +337,7 @@ Items marked [Beta] may change between versions.
 
 ### 15.1 Reset settings
 Reset settings (Help → Reset settings) resets only visual interface settings (theme, effects, Compact mode, Tree animation, Additional counters) and does not modify project data. After reset, Additional counters are enabled by default.
+Reset settings also clears the saved interface language selection.
 
 ### 15.2 Reset data
 Reset data (Help → Reset data) removes saved local-project parameter profiles:

@@ -150,6 +150,8 @@ Apre la ricerca, evidenzia le corrispondenze e permette la navigazione.
 * Esc — chiudi
 
 La ricerca apre solo i rami necessari; svuotando la query l’albero si richiude (tranne la radice).
+Con un numero molto elevato di corrispondenze, l’app può limitare l’espansione automatica e l’evidenziazione globale per mantenere l’interfaccia reattiva.
+Alla chiusura della ricerca, la query viene svuotata dopo il completamento dell’animazione di chiusura.
 
 Limitazioni:
 * all’apertura della ricerca, il filtro si chiude automaticamente;
@@ -335,6 +337,7 @@ Gli elementi [Beta] possono cambiare tra versioni.
 
 ### 15.1 Ripristina impostazioni
 Ripristina impostazioni (Aiuto → Ripristina impostazioni) reimposta solo i parametri visivi dell’interfaccia (tema, effetti, modalità compatta, animazione albero, contatori aggiuntivi) e non modifica i dati del progetto. Dopo il ripristino, i contatori aggiuntivi sono attivi per impostazione predefinita.
+Questa azione azzera anche la lingua dell’interfaccia salvata.
 
 ### 15.2 Ripristina dati
 Ripristina dati (Aiuto → Ripristina dati) rimuove i profili salvati dei parametri dei progetti locali:

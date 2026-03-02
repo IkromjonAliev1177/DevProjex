@@ -150,6 +150,8 @@ Ouvre la recherche, met en évidence les correspondances et permet la navigation
 * Esc — fermer
 
 La recherche n’ouvre que les branches nécessaires ; en effaçant la requête, l’arbre se replie (sauf la racine).
+Pour un très grand nombre de correspondances, l’application peut limiter l’ouverture automatique et la mise en évidence globale afin de garder l’interface réactive.
+À la fermeture de la recherche, la requête est effacée après la fin de l’animation de fermeture.
 
 Limitations :
 * à l’ouverture de la recherche, le filtre se ferme automatiquement ;
@@ -335,6 +337,7 @@ Les éléments [Beta] peuvent évoluer entre versions.
 
 ### 15.1 Réinitialiser les paramètres
 Réinitialiser les paramètres (Aide → Réinitialiser les paramètres) réinitialise uniquement les paramètres visuels de l’interface (thème, effets, mode compact, animation de l'arborescence, compteurs supplémentaires) et ne modifie pas les données du projet. Après réinitialisation, les compteurs supplémentaires sont activés par défaut.
+Cette action efface aussi le choix de langue de l’interface enregistré.
 
 ### 15.2 Réinitialiser les données
 Réinitialiser les données (Aide → Réinitialiser les données) supprime les profils enregistrés de paramètres des projets locaux :
