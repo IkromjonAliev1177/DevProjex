@@ -18,12 +18,7 @@ It’s designed for real projects where CLI output is noisy, IDE tools are unava
 **Latest GitHub release:**
 👉 [https://github.com/Avazbek22/DevProjex/releases/latest](https://github.com/Avazbek22/DevProjex/releases/latest)
 
-Older versions are available on the Releases page.
-
-**Install via WinGet (Windows):**
-```powershell
-winget install OlimoffDev.DevProjex
-```
+**Install via WinGet (Windows):** `winget install OlimoffDev.DevProjex`
 
 ---
 
