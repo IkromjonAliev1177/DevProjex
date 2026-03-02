@@ -63,10 +63,18 @@ public sealed class TreeBuilder : ITreeBuilder
 
 		var children = (List<FileSystemNode>)parent.Children;
 		var hasNameFilter = !string.IsNullOrWhiteSpace(options.NameFilter);
+		var shouldApplySmartIgnoreForFiles = options.IgnoreRules.ShouldApplySmartIgnore(path, isDirectory: true);
 
 		if (isRoot && entries.Length > 1)
 		{
-			BuildRootChildrenInParallel(entries, children, options, hasNameFilter, state, cancellationToken);
+			BuildRootChildrenInParallel(
+				entries,
+				children,
+				options,
+				hasNameFilter,
+				shouldApplySmartIgnoreForFiles,
+				state,
+				cancellationToken);
 			return;
 		}
 
@@ -74,7 +82,14 @@ public sealed class TreeBuilder : ITreeBuilder
 		{
 			cancellationToken.ThrowIfCancellationRequested();
 
-			var node = BuildNodeForEntry(entry, options, isRoot, hasNameFilter, state, cancellationToken);
+			var node = BuildNodeForEntry(
+				entry,
+				options,
+				isRoot,
+				hasNameFilter,
+				shouldApplySmartIgnoreForFiles,
+				state,
+				cancellationToken);
 			if (node is not null)
 				children.Add(node);
 		}
@@ -85,6 +100,7 @@ public sealed class TreeBuilder : ITreeBuilder
 		List<FileSystemNode> children,
 		TreeFilterOptions options,
 		bool hasNameFilter,
+		bool shouldApplySmartIgnoreForFiles,
 		BuildState state,
 		CancellationToken cancellationToken)
 	{
@@ -99,7 +115,14 @@ public sealed class TreeBuilder : ITreeBuilder
 		Parallel.For(0, entries.Length, parallelOptions, i =>
 		{
 			var entry = entries[i];
-			nodes[i] = BuildNodeForEntry(entry, options, isRoot: true, hasNameFilter, state, parallelOptions.CancellationToken);
+			nodes[i] = BuildNodeForEntry(
+				entry,
+				options,
+				isRoot: true,
+				hasNameFilter,
+				shouldApplySmartIgnoreForFiles,
+				state,
+				parallelOptions.CancellationToken);
 		});
 
 		for (var i = 0; i < nodes.Length; i++)
@@ -115,6 +138,7 @@ public sealed class TreeBuilder : ITreeBuilder
 		TreeFilterOptions options,
 		bool isRoot,
 		bool hasNameFilter,
+		bool shouldApplySmartIgnoreForFiles,
 		BuildState state,
 		CancellationToken cancellationToken)
 	{
@@ -178,7 +202,7 @@ public sealed class TreeBuilder : ITreeBuilder
 		}
 
 		var fileGitIgnore = ignore.EvaluateGitIgnore(entry.FullName, isDirectory: false, name);
-		if (ShouldSkipFile(entry, ignore, fileGitIgnore))
+		if (ShouldSkipFile(entry, ignore, shouldApplySmartIgnoreForFiles, fileGitIgnore))
 			return null;
 
 		if (IsExtensionlessFileName(name))
@@ -235,7 +259,7 @@ public sealed class TreeBuilder : ITreeBuilder
 				return true;
 		}
 
-		if (rules.ShouldApplySmartIgnore(entry.FullName) && rules.SmartIgnoredFolders.Contains(entry.Name))
+		if (rules.ShouldApplySmartIgnore(entry.FullName, isDirectory: true) && rules.SmartIgnoredFolders.Contains(entry.Name))
 			return true;
 
 		if (rules.IgnoreDotFolders && entry.Name.StartsWith(".", StringComparison.Ordinal))
@@ -281,12 +305,13 @@ public sealed class TreeBuilder : ITreeBuilder
 	private static bool ShouldSkipFile(
 		FileSystemInfo entry,
 		IgnoreRules rules,
+		bool shouldApplySmartIgnoreForFiles,
 		in IgnoreRules.GitIgnoreEvaluation gitIgnoreEvaluation)
 	{
 		if (gitIgnoreEvaluation.IsIgnored)
 			return true;
 
-		if (rules.ShouldApplySmartIgnore(entry.FullName) && rules.SmartIgnoredFiles.Contains(entry.Name))
+		if (shouldApplySmartIgnoreForFiles && rules.SmartIgnoredFiles.Contains(entry.Name))
 			return true;
 
 		if (rules.IgnoreDotFiles && entry.Name.StartsWith(".", StringComparison.Ordinal))

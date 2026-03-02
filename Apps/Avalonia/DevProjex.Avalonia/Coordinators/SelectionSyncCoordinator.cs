@@ -295,8 +295,8 @@ public sealed class SelectionSyncCoordinator(
             cancellationToken.ThrowIfCancellationRequested();
             if (IsStalePathRequest(path)) return;
 
-            // Scan root folders off the UI thread to keep the window responsive.
-            var scan = scanOptions.Execute(new ScanOptionsRequest(path, ignoreRules), cancellationToken);
+            // Root folder list does not require full extension scan.
+            var scan = scanOptions.GetRootFolders(path, ignoreRules, cancellationToken);
             if (scan.RootAccessDenied)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -306,11 +306,11 @@ public sealed class SelectionSyncCoordinator(
 
             cancellationToken.ThrowIfCancellationRequested();
             var options = filterSelectionService.BuildRootFolderOptions(
-                scan.RootFolders,
+                scan.Value,
                 prev,
                 ignoreRules,
                 hasPreviousSelections);
-            options = ApplyMissingProfileSelectionsFallbackToRootFolders(options, scan.RootFolders, ignoreRules);
+            options = ApplyMissingProfileSelectionsFallbackToRootFolders(options, scan.Value, ignoreRules);
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
                 cancellationToken.ThrowIfCancellationRequested();

@@ -150,6 +150,8 @@ Standardmäßig aktiviert.
 * Esc — schließen
 
 Die Suche öffnet nur benötigte Zweige; beim Leeren der Suche wird der Baum eingeklappt (außer der Wurzel).
+Bei sehr großen Treffermengen kann die App Auto-Expand und globale Hervorhebung begrenzen, damit die UI reaktionsfähig bleibt.
+Beim Schließen der Suche wird die Suchanfrage nach Abschluss der Schließanimation geleert.
 
 Einschränkungen:
 * Beim Öffnen der Suche wird der Filter automatisch geschlossen.
@@ -335,6 +337,7 @@ Einträge mit [Beta] können sich zwischen Versionen ändern.
 
 ### 15.1 Einstellungen zurücksetzen
 Einstellungen zurücksetzen (Hilfe → Einstellungen zurücksetzen) setzt nur visuelle UI-Parameter zurück (Theme, Effekte, Kompaktmodus, Baumanimation, zusätzliche Zähler) und ändert keine Projektdaten. Nach dem Zurücksetzen sind zusätzliche Zähler standardmäßig aktiviert.
+Einstellungen zurücksetzen löscht außerdem die gespeicherte Sprachauswahl der Oberfläche.
 
 ### 15.2 Daten zurücksetzen
 Daten zurücksetzen (Hilfe → Daten zurücksetzen) löscht gespeicherte Profile lokaler Projektparameter:

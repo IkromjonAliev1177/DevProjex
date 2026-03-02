@@ -150,6 +150,8 @@ Qidiruv panelini ochadi, mosliklarni yoritadi va navigatsiya qiladi.
 * Esc — yopish
 
 Qidiruv faqat kerakli shoxlarni ochadi; so‘rov tozalansa, daraxt yig‘iladi (ildizdan tashqari).
+Mosliklar soni juda ko‘p bo‘lsa, interfeys tezkorligini saqlash uchun ilova avtomatik ochish va ommaviy yoritishni cheklashi mumkin.
+Qidiruv paneli yopilganda, yopilish animatsiyasi tugagach so‘rov tozalanadi.
 
 Cheklovlar:
 * qidiruv ochilganda, filtr avtomatik yopiladi;
@@ -335,6 +337,7 @@ Tema popoveri quyilarni almashtiradi:
 
 ### 15.1 Sozlamalarni tiklash
 Sozlamalarni tiklash (Yordam → Sozlamalarni tiklash) faqat interfeysning vizual sozlamalarini tiklaydi (tema, effektlar, ixcham rejim, daraxt animatsiyasi, qo‘shimcha hisoblagichlar) va loyiha ma’lumotlarini o‘zgartirmaydi. Tiklangandan keyin qo‘shimcha hisoblagichlar standart holatda yoqilgan bo‘ladi.
+Bu amal interfeys tilining saqlangan tanlovini ham tozalaydi.
 
 ### 15.2 Ma’lumotlarni tiklash
 Ma’lumotlarni tiklash (Yordam → Ma’lumotlarni tiklash) mahalliy loyiha parametrlarining saqlangan profillarini o‘chiradi:

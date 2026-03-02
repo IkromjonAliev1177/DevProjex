@@ -128,6 +128,9 @@ public partial class MainWindow : Window
 
     private BuildTreeResult? _currentTree;
     private BuildTreeResult? _filterBaseTree;
+    private TreeNodeDescriptor? _lastInteractiveFilteredRoot;
+    private TreeNodeDescriptor? _lastInteractiveFilterBaseRoot;
+    private string? _lastInteractiveFilterQuery;
     private string? _currentPath;
     private string? _currentProjectDisplayName;
     private string? _currentRepositoryUrl;
@@ -223,6 +226,9 @@ public partial class MainWindow : Window
     private bool _restoreFilterAfterPreview;
     private bool _previewFontInitialized;
     private int _suppressSearchFilterRealtimeDepth;
+    private static readonly int TreeViewModelBuildParallelism =
+        Math.Clamp(Environment.ProcessorCount, min: 2, max: 12);
+    private const int TreeViewModelParallelChildrenThreshold = 24;
 
     // Real-time metrics calculation
     private readonly object _metricsLock = new();
@@ -585,6 +591,7 @@ public partial class MainWindow : Window
         _currentTree = null;
         _filterBaseTree = null;
         _filterExpansionSnapshot = null;
+        ResetInteractiveFilterCache();
         InvalidateComputedMetricsCaches();
 
         // Clear file metrics cache
@@ -3453,6 +3460,7 @@ public partial class MainWindow : Window
             {
                 RestoreExpandedNodes(_filterExpansionSnapshot);
                 _filterExpansionSnapshot = null;
+                ResetInteractiveFilterCache();
             }
         }
         catch (OperationCanceledException)
@@ -3481,7 +3489,7 @@ public partial class MainWindow : Window
 
         if (e.Key == Key.Enter)
         {
-            _searchCoordinator.UpdateSearchMatches();
+            _searchCoordinator.UpdateSearchMatches(normalizeTreeWhenEmptyQuery: false);
             if (e.KeyModifiers.HasFlag(KeyModifiers.Shift))
                 _searchCoordinator.Navigate(-1);
             else
@@ -4188,6 +4196,7 @@ public partial class MainWindow : Window
             _searchCoordinator.UpdateHighlights(null);
             _searchCoordinator.ClearSearchState();
             _filterExpansionSnapshot = null;
+            ResetInteractiveFilterCache();
             Interlocked.Increment(ref _filterApplyVersion);
 
             ForceHideSearchBarVisualState();
@@ -4439,6 +4448,7 @@ public partial class MainWindow : Window
 
         // Clear filter state
         _filterExpansionSnapshot = null;
+        ResetInteractiveFilterCache();
         _filterCoordinator.CancelPending();
 
         // Clear TreeView selection and temporarily disconnect ItemsSource
@@ -4511,13 +4521,28 @@ public partial class MainWindow : Window
         cancellationToken.ThrowIfCancellationRequested();
         if (string.IsNullOrWhiteSpace(nameFilter))
         {
+            ResetInteractiveFilterCache();
             result = baseTree;
             return true;
         }
 
-        // Reuse the latest unfiltered tree snapshot and apply only name filtering in-memory.
-        // This avoids repeated file-system rescans while preserving the visible tree behavior.
-        var filteredRoot = FilterTreeForNameQuery(baseTree.Root, nameFilter, cancellationToken);
+        // For incremental typing, filter from previous filtered snapshot to reduce work.
+        // On non-prefix edits (or stale cache), fall back to base tree for correctness.
+        var filterSourceRoot = baseTree.Root;
+        if (_lastInteractiveFilteredRoot is not null &&
+            _lastInteractiveFilterBaseRoot is not null &&
+            ReferenceEquals(_lastInteractiveFilterBaseRoot, baseTree.Root) &&
+            !string.IsNullOrWhiteSpace(_lastInteractiveFilterQuery) &&
+            nameFilter.StartsWith(_lastInteractiveFilterQuery, StringComparison.OrdinalIgnoreCase))
+        {
+            filterSourceRoot = _lastInteractiveFilteredRoot;
+        }
+
+        var filteredRoot = FilterTreeForNameQuery(filterSourceRoot, nameFilter, cancellationToken);
+        _lastInteractiveFilterBaseRoot = baseTree.Root;
+        _lastInteractiveFilteredRoot = filteredRoot;
+        _lastInteractiveFilterQuery = nameFilter;
+
         result = new BuildTreeResult(
             Root: filteredRoot,
             RootAccessDenied: baseTree.RootAccessDenied,
@@ -4540,6 +4565,14 @@ public partial class MainWindow : Window
         }
 
         return root with { Children = filteredChildren };
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private void ResetInteractiveFilterCache()
+    {
+        _lastInteractiveFilteredRoot = null;
+        _lastInteractiveFilterBaseRoot = null;
+        _lastInteractiveFilterQuery = null;
     }
 
     private static TreeNodeDescriptor? FilterTreeNodeByName(
@@ -4662,11 +4695,13 @@ public partial class MainWindow : Window
             {
                 // Keep a baseline snapshot for low-latency in-memory filter updates.
                 _filterBaseTree = string.IsNullOrWhiteSpace(nameFilter) ? result : null;
+                ResetInteractiveFilterCache();
             }
             else if (!usedInMemoryFilter && string.IsNullOrWhiteSpace(nameFilter))
             {
                 // Recover baseline after fallback interactive rebuilds.
                 _filterBaseTree = result;
+                ResetInteractiveFilterCache();
             }
 
             _viewModel.TreeNodes.Add(root);
@@ -4714,12 +4749,46 @@ public partial class MainWindow : Window
 
     private TreeNodeViewModel BuildTreeViewModel(TreeNodeDescriptor descriptor, TreeNodeViewModel? parent)
     {
+        return BuildTreeViewModelCore(descriptor, parent, allowParallelAtThisLevel: parent is null);
+    }
+
+    private TreeNodeViewModel BuildTreeViewModelCore(
+        TreeNodeDescriptor descriptor,
+        TreeNodeViewModel? parent,
+        bool allowParallelAtThisLevel)
+    {
         var icon = _iconCache.GetIcon(descriptor.IconKey);
         var node = new TreeNodeViewModel(descriptor, parent, icon);
 
+        if (descriptor.Children.Count == 0)
+            return node;
+
+        if (allowParallelAtThisLevel && descriptor.Children.Count >= TreeViewModelParallelChildrenThreshold)
+        {
+            // Build first-level branches in parallel on background threads, preserving original order.
+            var childNodes = new TreeNodeViewModel[descriptor.Children.Count];
+            var parallelOptions = new ParallelOptions
+            {
+                MaxDegreeOfParallelism = Math.Min(TreeViewModelBuildParallelism, descriptor.Children.Count)
+            };
+
+            Parallel.For(0, descriptor.Children.Count, parallelOptions, index =>
+            {
+                childNodes[index] = BuildTreeViewModelCore(
+                    descriptor.Children[index],
+                    node,
+                    allowParallelAtThisLevel: false);
+            });
+
+            for (var i = 0; i < childNodes.Length; i++)
+                node.Children.Add(childNodes[i]);
+
+            return node;
+        }
+
         foreach (var child in descriptor.Children)
         {
-            var childViewModel = BuildTreeViewModel(child, node);
+            var childViewModel = BuildTreeViewModelCore(child, node, allowParallelAtThisLevel: false);
             node.Children.Add(childViewModel);
         }
 
@@ -4965,6 +5034,7 @@ public partial class MainWindow : Window
         _currentRepositoryUrl = snapshot.RepositoryUrl;
         _currentTree = snapshot.Tree;
         _filterBaseTree = snapshot.Tree;
+        ResetInteractiveFilterCache();
         InvalidateComputedMetricsCaches();
 
         _viewModel.IsProjectLoaded = true;
@@ -5047,6 +5117,7 @@ public partial class MainWindow : Window
         _currentProjectDisplayName = null;
         _currentRepositoryUrl = null;
         _filterExpansionSnapshot = null;
+        ResetInteractiveFilterCache();
 
         _viewModel.IsProjectLoaded = false;
         _viewModel.SettingsVisible = false;

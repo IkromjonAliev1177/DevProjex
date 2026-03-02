@@ -38,6 +38,19 @@ public sealed class ScanOptionsUseCase(IFileSystemScanner scanner)
 			HadAccessDenied: extensions.HadAccessDenied || rootFolders.HadAccessDenied);
 	}
 
+	public ScanResult<List<string>> GetRootFolders(
+		string rootPath,
+		IgnoreRules ignoreRules,
+		CancellationToken cancellationToken = default)
+	{
+		cancellationToken.ThrowIfCancellationRequested();
+
+		var scan = scanner.GetRootFolderNames(rootPath, ignoreRules, cancellationToken);
+		var rootFolders = new List<string>(scan.Value);
+		rootFolders.Sort(StringComparer.OrdinalIgnoreCase);
+		return new ScanResult<List<string>>(rootFolders, scan.RootAccessDenied, scan.HadAccessDenied);
+	}
+
 	public ScanResult<HashSet<string>> GetExtensionsForRootFolders(
 		string rootPath,
 		IReadOnlyCollection<string> rootFolders,
@@ -82,20 +95,12 @@ public sealed class ScanOptionsUseCase(IFileSystemScanner scanner)
 			if (rootFiles.RootAccessDenied) Interlocked.Exchange(ref rootAccessDenied, 1);
 			if (rootFiles.HadAccessDenied) Interlocked.Exchange(ref hadAccessDenied, 1);
 
-			// Scan extensions from selected subfolders in parallel.
+			// For very small selections, sequential scan is faster than spinning thread-pool work.
 			if (rootFolders.Count > 0)
 			{
-				var parallelOptions = new ParallelOptions
+				if (rootFolders.Count <= 2)
 				{
-					MaxDegreeOfParallelism = MaxParallelism,
-					CancellationToken = cancellationToken
-				};
-
-				Parallel.ForEach(
-					rootFolders,
-					parallelOptions,
-					() => new LocalRootSelectionScanAccumulator(),
-					(folder, _, localAccumulator) =>
+					foreach (var folder in rootFolders)
 					{
 						cancellationToken.ThrowIfCancellationRequested();
 
@@ -103,27 +108,55 @@ public sealed class ScanOptionsUseCase(IFileSystemScanner scanner)
 						var result = advancedScanner.GetExtensionsWithIgnoreOptionCounts(folderPath, ignoreRules, cancellationToken);
 
 						foreach (var ext in result.Value.Extensions)
-							localAccumulator.Extensions.Add(ext);
-						localAccumulator.IgnoreOptionCounts =
-							localAccumulator.IgnoreOptionCounts.Add(result.Value.IgnoreOptionCounts);
+							extensions.Add(ext);
+						ignoreCounts = ignoreCounts.Add(result.Value.IgnoreOptionCounts);
 
 						if (result.RootAccessDenied) Interlocked.Exchange(ref rootAccessDenied, 1);
 						if (result.HadAccessDenied) Interlocked.Exchange(ref hadAccessDenied, 1);
-
-						return localAccumulator;
-					},
-					localAccumulator =>
+					}
+				}
+				else
+				{
+					var parallelOptions = new ParallelOptions
 					{
-						if (localAccumulator.Extensions.Count == 0 &&
-						    localAccumulator.IgnoreOptionCounts == IgnoreOptionCounts.Empty)
-							return;
+						MaxDegreeOfParallelism = Math.Min(MaxParallelism, rootFolders.Count),
+						CancellationToken = cancellationToken
+					};
 
-						lock (mergeLock)
+					Parallel.ForEach(
+						rootFolders,
+						parallelOptions,
+						() => new LocalRootSelectionScanAccumulator(),
+						(folder, _, localAccumulator) =>
 						{
-							extensions.UnionWith(localAccumulator.Extensions);
-							ignoreCounts = ignoreCounts.Add(localAccumulator.IgnoreOptionCounts);
-						}
-					});
+							cancellationToken.ThrowIfCancellationRequested();
+
+							var folderPath = Path.Combine(rootPath, folder);
+							var result = advancedScanner.GetExtensionsWithIgnoreOptionCounts(folderPath, ignoreRules, cancellationToken);
+
+							foreach (var ext in result.Value.Extensions)
+								localAccumulator.Extensions.Add(ext);
+							localAccumulator.IgnoreOptionCounts =
+								localAccumulator.IgnoreOptionCounts.Add(result.Value.IgnoreOptionCounts);
+
+							if (result.RootAccessDenied) Interlocked.Exchange(ref rootAccessDenied, 1);
+							if (result.HadAccessDenied) Interlocked.Exchange(ref hadAccessDenied, 1);
+
+							return localAccumulator;
+						},
+						localAccumulator =>
+						{
+							if (localAccumulator.Extensions.Count == 0 &&
+							    localAccumulator.IgnoreOptionCounts == IgnoreOptionCounts.Empty)
+								return;
+
+							lock (mergeLock)
+							{
+								extensions.UnionWith(localAccumulator.Extensions);
+								ignoreCounts = ignoreCounts.Add(localAccumulator.IgnoreOptionCounts);
+							}
+						});
+				}
 			}
 		}
 		else
@@ -137,17 +170,9 @@ public sealed class ScanOptionsUseCase(IFileSystemScanner scanner)
 
 			if (rootFolders.Count > 0)
 			{
-				var parallelOptions = new ParallelOptions
+				if (rootFolders.Count <= 2)
 				{
-					MaxDegreeOfParallelism = MaxParallelism,
-					CancellationToken = cancellationToken
-				};
-
-				Parallel.ForEach(
-					rootFolders,
-					parallelOptions,
-					() => new HashSet<string>(StringComparer.OrdinalIgnoreCase),
-					(folder, _, localExtensions) =>
+					foreach (var folder in rootFolders)
 					{
 						cancellationToken.ThrowIfCancellationRequested();
 
@@ -155,23 +180,50 @@ public sealed class ScanOptionsUseCase(IFileSystemScanner scanner)
 						var result = scanner.GetExtensions(folderPath, ignoreRules, cancellationToken);
 
 						foreach (var ext in result.Value)
-							localExtensions.Add(ext);
+							extensions.Add(ext);
 
 						if (result.RootAccessDenied) Interlocked.Exchange(ref rootAccessDenied, 1);
 						if (result.HadAccessDenied) Interlocked.Exchange(ref hadAccessDenied, 1);
-
-						return localExtensions;
-					},
-					localExtensions =>
+					}
+				}
+				else
+				{
+					var parallelOptions = new ParallelOptions
 					{
-						if (localExtensions.Count == 0)
-							return;
+						MaxDegreeOfParallelism = Math.Min(MaxParallelism, rootFolders.Count),
+						CancellationToken = cancellationToken
+					};
 
-						lock (mergeLock)
+					Parallel.ForEach(
+						rootFolders,
+						parallelOptions,
+						() => new HashSet<string>(StringComparer.OrdinalIgnoreCase),
+						(folder, _, localExtensions) =>
 						{
-							extensions.UnionWith(localExtensions);
-						}
-					});
+							cancellationToken.ThrowIfCancellationRequested();
+
+							var folderPath = Path.Combine(rootPath, folder);
+							var result = scanner.GetExtensions(folderPath, ignoreRules, cancellationToken);
+
+							foreach (var ext in result.Value)
+								localExtensions.Add(ext);
+
+							if (result.RootAccessDenied) Interlocked.Exchange(ref rootAccessDenied, 1);
+							if (result.HadAccessDenied) Interlocked.Exchange(ref hadAccessDenied, 1);
+
+							return localExtensions;
+						},
+						localExtensions =>
+						{
+							if (localExtensions.Count == 0)
+								return;
+
+							lock (mergeLock)
+							{
+								extensions.UnionWith(localExtensions);
+							}
+						});
+				}
 			}
 		}
 

@@ -1,4 +1,5 @@
 using Avalonia.Controls.Documents;
+using System.Runtime.CompilerServices;
 
 namespace DevProjex.Avalonia.ViewModels;
 
@@ -17,6 +18,8 @@ public sealed class TreeNodeViewModel(
     private bool _isCurrentSearchMatch;
     private InlineCollection? _displayInlines;
     private bool _hasHighlightedDisplay;
+    private int _searchSelfMatchEpoch;
+    private int _searchDescendantMatchEpoch;
 
     /// <summary>
     /// Raised when checkbox state changes. Used for real-time metrics updates.
@@ -195,12 +198,26 @@ public sealed class TreeNodeViewModel(
         _displayInlines?.Clear();
         _displayInlines = null;
         _hasHighlightedDisplay = false;
+        _searchSelfMatchEpoch = 0;
+        _searchDescendantMatchEpoch = 0;
         Icon = null;
 
         // Break circular references to help GC
         Parent = null;
         Descriptor = null!;
     }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void MarkSearchSelfMatch(int epoch) => _searchSelfMatchEpoch = epoch;
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void MarkSearchDescendantMatch(int epoch) => _searchDescendantMatchEpoch = epoch;
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public bool HasSearchSelfMatch(int epoch) => _searchSelfMatchEpoch == epoch;
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public bool HasSearchDescendantMatch(int epoch) => _searchDescendantMatchEpoch == epoch;
 
     public void UpdateSearchHighlight(
         string? query,

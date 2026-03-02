@@ -13,6 +13,14 @@ public sealed record IgnoreRules(
 	private static readonly StringComparison PathComparison = OperatingSystem.IsLinux()
 		? StringComparison.Ordinal
 		: StringComparison.OrdinalIgnoreCase;
+	private static readonly StringComparer PathStringComparer = OperatingSystem.IsLinux()
+		? StringComparer.Ordinal
+		: StringComparer.OrdinalIgnoreCase;
+	private const int ScopedMatcherChainCacheLimit = 2048;
+	private const int SmartScopeApplicabilityCacheLimit = 2048;
+	private readonly object _cacheSync = new();
+	private Dictionary<string, ScopedGitIgnoreMatcher[]>? _scopedMatcherChainCache;
+	private Dictionary<string, bool>? _smartScopeApplicabilityCache;
 
 	public bool UseGitIgnore { get; init; }
 	public bool UseSmartIgnore { get; init; }
@@ -71,15 +79,16 @@ public sealed record IgnoreRules(
 			return EvaluateWithSingleMatcher(scoped.Matcher, fullPath, isDirectory, name);
 		}
 
+		var scopedMatchers = GetApplicableGitIgnoreMatchers(fullPath, isDirectory);
+		if (scopedMatchers.Length == 0)
+			return GitIgnoreEvaluation.NotIgnored;
+
 		var hasMatch = false;
 		var ignored = false;
 		var hasNegationAwareScope = false;
 
-		foreach (var scoped in ScopedGitIgnoreMatchers)
+		foreach (var scoped in scopedMatchers)
 		{
-			if (!IsPathInsideScope(fullPath, scoped.ScopeRootPath))
-				continue;
-
 			if (isDirectory && scoped.Matcher.HasNegationRules)
 				hasNegationAwareScope = true;
 
@@ -97,11 +106,8 @@ public sealed record IgnoreRules(
 		if (!isDirectory || !hasNegationAwareScope)
 			return new GitIgnoreEvaluation(IsIgnored: true, ShouldTraverseIgnoredDirectory: false);
 
-		foreach (var scoped in ScopedGitIgnoreMatchers)
+		foreach (var scoped in scopedMatchers)
 		{
-			if (!IsPathInsideScope(fullPath, scoped.ScopeRootPath))
-				continue;
-
 			if (scoped.Matcher.ShouldTraverseIgnoredDirectory(fullPath, name))
 				return new GitIgnoreEvaluation(IsIgnored: true, ShouldTraverseIgnoredDirectory: true);
 		}
@@ -121,19 +127,89 @@ public sealed record IgnoreRules(
 
 	public bool ShouldApplySmartIgnore(string fullPath)
 	{
+		return ShouldApplySmartIgnore(fullPath, isDirectory: true);
+	}
+
+	public bool ShouldApplySmartIgnore(string fullPath, bool isDirectory)
+	{
 		if (!UseSmartIgnore)
 			return false;
 
 		if (SmartIgnoreScopeRoots.Count == 0)
 			return true;
 
-		foreach (var scopeRoot in SmartIgnoreScopeRoots)
+		if (string.IsNullOrWhiteSpace(fullPath))
+			return false;
+
+		var probePath = fullPath;
+		if (!isDirectory)
 		{
-			if (IsPathInsideScope(fullPath, scopeRoot))
-				return true;
+			var parentDirectory = Path.GetDirectoryName(fullPath);
+			if (!string.IsNullOrWhiteSpace(parentDirectory))
+				probePath = parentDirectory;
 		}
 
-		return false;
+		lock (_cacheSync)
+		{
+			_smartScopeApplicabilityCache ??= new Dictionary<string, bool>(PathStringComparer);
+			if (_smartScopeApplicabilityCache.TryGetValue(probePath, out var cached))
+				return cached;
+
+			var applies = false;
+			foreach (var scopeRoot in SmartIgnoreScopeRoots)
+			{
+				if (!IsPathInsideScope(probePath, scopeRoot))
+					continue;
+
+				applies = true;
+				break;
+			}
+
+			_smartScopeApplicabilityCache[probePath] = applies;
+			if (_smartScopeApplicabilityCache.Count > SmartScopeApplicabilityCacheLimit)
+				_smartScopeApplicabilityCache.Clear();
+
+			return applies;
+		}
+	}
+
+	private ScopedGitIgnoreMatcher[] GetApplicableGitIgnoreMatchers(string fullPath, bool isDirectory)
+	{
+		if (ScopedGitIgnoreMatchers.Count == 0 || string.IsNullOrWhiteSpace(fullPath))
+			return [];
+
+		var cacheKeyPath = fullPath;
+		if (!isDirectory)
+		{
+			var parentDirectory = Path.GetDirectoryName(fullPath);
+			if (string.IsNullOrWhiteSpace(parentDirectory))
+				return [];
+
+			cacheKeyPath = parentDirectory;
+		}
+
+		lock (_cacheSync)
+		{
+			_scopedMatcherChainCache ??= new Dictionary<string, ScopedGitIgnoreMatcher[]>(PathStringComparer);
+			if (_scopedMatcherChainCache.TryGetValue(cacheKeyPath, out var cached))
+				return cached;
+
+			var matched = new List<ScopedGitIgnoreMatcher>();
+			foreach (var scoped in ScopedGitIgnoreMatchers)
+			{
+				if (IsPathInsideScope(cacheKeyPath, scoped.ScopeRootPath))
+					matched.Add(scoped);
+			}
+
+			ScopedGitIgnoreMatcher[] resolved = matched.Count == 0
+				? Array.Empty<ScopedGitIgnoreMatcher>()
+				: [.. matched];
+			_scopedMatcherChainCache[cacheKeyPath] = resolved;
+			if (_scopedMatcherChainCache.Count > ScopedMatcherChainCacheLimit)
+				_scopedMatcherChainCache.Clear();
+
+			return resolved;
+		}
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
