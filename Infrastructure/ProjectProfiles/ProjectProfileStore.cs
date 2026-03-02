@@ -1,6 +1,6 @@
 namespace DevProjex.Infrastructure.ProjectProfiles;
 
-public sealed class ProjectProfileStore : IProjectProfileStore
+public sealed class ProjectProfileStore(Func<string>? appDataPathProvider = null) : IProjectProfileStore
 {
 	private const int CurrentSchemaVersion = 1;
 	private const int MaxProfiles = 500;
@@ -15,19 +15,14 @@ public sealed class ProjectProfileStore : IProjectProfileStore
 	};
 
 	private readonly object _sync = new();
-    private readonly Func<string> _appDataPathProvider;
+    private readonly Func<string> _appDataPathProvider = appDataPathProvider ?? (() => Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData));
 
-    public ProjectProfileStore(Func<string>? appDataPathProvider = null)
-    {
-        _appDataPathProvider = appDataPathProvider ?? (() => Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData));
-    }
-
-	public bool TryLoadProfile(string localProjectPath, out ProjectSelectionProfile profile)
+    public bool TryLoadProfile(string localProjectPath, out ProjectSelectionProfile profile)
 	{
 		profile = new ProjectSelectionProfile(
-			SelectedRootFolders: Array.Empty<string>(),
-			SelectedExtensions: Array.Empty<string>(),
-			SelectedIgnoreOptions: Array.Empty<IgnoreOptionId>());
+			SelectedRootFolders: [],
+			SelectedExtensions: [],
+			SelectedIgnoreOptions: []);
 
 		if (!TryNormalizePath(localProjectPath, out var normalizedPath))
 			return false;
@@ -171,9 +166,9 @@ public sealed class ProjectProfileStore : IProjectProfileStore
 
 	private static PersistedProjectProfile NormalizePersistedProfile(PersistedProjectProfile profile)
 	{
-		profile.SelectedRootFolders ??= new List<string>();
-		profile.SelectedExtensions ??= new List<string>();
-		profile.SelectedIgnoreOptions ??= new List<IgnoreOptionId>();
+		profile.SelectedRootFolders ??= [];
+		profile.SelectedExtensions ??= [];
+		profile.SelectedIgnoreOptions ??= [];
 
 		profile.SelectedRootFolders = profile.SelectedRootFolders
 			.Where(static item => !string.IsNullOrWhiteSpace(item))
@@ -277,9 +272,9 @@ public sealed class ProjectProfileStore : IProjectProfileStore
 
 	private sealed class PersistedProjectProfile
 	{
-		public List<string> SelectedRootFolders { get; set; } = new();
-		public List<string> SelectedExtensions { get; set; } = new();
-		public List<IgnoreOptionId> SelectedIgnoreOptions { get; set; } = new();
+		public List<string> SelectedRootFolders { get; set; } = [];
+		public List<string> SelectedExtensions { get; set; } = [];
+		public List<IgnoreOptionId> SelectedIgnoreOptions { get; set; } = [];
 		public DateTimeOffset UpdatedUtc { get; set; } = DateTimeOffset.UtcNow;
 	}
 }

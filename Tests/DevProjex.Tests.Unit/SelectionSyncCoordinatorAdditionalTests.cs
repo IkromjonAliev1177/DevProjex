@@ -100,8 +100,8 @@ public sealed class SelectionSyncCoordinatorAdditionalTests
 		var coordinator = CreateCoordinator(viewModel);
 		coordinator.UpdateExtensionsSelectionCache();
 
-		coordinator.ApplyExtensionScan(new[] { ".cs" });
-		coordinator.ApplyExtensionScan(new[] { ".cs", ".md" });
+		coordinator.ApplyExtensionScan([".cs"]);
+		coordinator.ApplyExtensionScan([".cs", ".md"]);
 
 		var md = viewModel.Extensions.Single(option => option.Name == ".md");
 		Assert.True(md.IsChecked);
@@ -117,8 +117,8 @@ public sealed class SelectionSyncCoordinatorAdditionalTests
 		var coordinator = CreateCoordinator(viewModel);
 		coordinator.UpdateExtensionsSelectionCache();
 
-		coordinator.ApplyExtensionScan(Array.Empty<string>());
-		coordinator.ApplyExtensionScan(new[] { ".cs", ".md" });
+		coordinator.ApplyExtensionScan([]);
+		coordinator.ApplyExtensionScan([".cs", ".md"]);
 
 		var md = viewModel.Extensions.Single(option => option.Name == ".md");
 		Assert.True(md.IsChecked);
@@ -132,7 +132,7 @@ public sealed class SelectionSyncCoordinatorAdditionalTests
 
 		var coordinator = CreateCoordinator(viewModel);
 
-		coordinator.ApplyExtensionScan(new[] { ".cs", ".md", ".root" });
+		coordinator.ApplyExtensionScan([".cs", ".md", ".root"]);
 
 		var names = viewModel.Extensions.Select(option => option.Name).ToList();
 		Assert.Contains(".root", names);
@@ -152,7 +152,7 @@ public sealed class SelectionSyncCoordinatorAdditionalTests
 		var coordinator = CreateCoordinator(viewModel);
 		coordinator.UpdateExtensionsSelectionCache();
 
-		coordinator.ApplyExtensionScan(new[] { ".md", ".txt" });
+		coordinator.ApplyExtensionScan([".md", ".txt"]);
 
 		var md = viewModel.Extensions.Single(option => option.Name == ".md");
 		var txt = viewModel.Extensions.Single(option => option.Name == ".txt");
@@ -171,7 +171,7 @@ public sealed class SelectionSyncCoordinatorAdditionalTests
 		var coordinator = CreateCoordinator(viewModel);
 		coordinator.ResetProjectProfileSelections("C:\\ProjectB");
 
-		coordinator.ApplyExtensionScan(new[] { ".cs", ".json" });
+		coordinator.ApplyExtensionScan([".cs", ".json"]);
 
 		Assert.All(viewModel.Extensions, option => Assert.True(option.IsChecked));
 	}
@@ -185,7 +185,7 @@ public sealed class SelectionSyncCoordinatorAdditionalTests
 
 		var coordinator = CreateCoordinator(viewModel);
 
-		coordinator.ApplyExtensionScan(Array.Empty<string>());
+		coordinator.ApplyExtensionScan([]);
 
 		Assert.Empty(viewModel.Extensions);
 		Assert.False(viewModel.AllExtensionsChecked);
@@ -199,7 +199,7 @@ public sealed class SelectionSyncCoordinatorAdditionalTests
 		var viewModel = CreateViewModel();
 		var coordinator = CreateCoordinator(viewModel);
 
-		coordinator.PopulateIgnoreOptionsForRootSelection(Array.Empty<string>());
+		coordinator.PopulateIgnoreOptionsForRootSelection([]);
 
 		// Ignore options are populated for root-level files
 		Assert.NotEmpty(viewModel.IgnoreOptions);
@@ -210,13 +210,13 @@ public sealed class SelectionSyncCoordinatorAdditionalTests
 	{
 		var viewModel = CreateViewModel();
 		var coordinator = CreateCoordinator(viewModel);
-		coordinator.PopulateIgnoreOptionsForRootSelection(new[] { "src" });
+		coordinator.PopulateIgnoreOptionsForRootSelection(["src"]);
 		coordinator.HandleIgnoreAllChanged(false, currentPath: null);
 		viewModel.IgnoreOptions[0].IsChecked = true;
 		viewModel.IgnoreOptions[1].IsChecked = false;
 		coordinator.UpdateIgnoreSelectionCache();
 
-		coordinator.PopulateIgnoreOptionsForRootSelection(new[] { "src" });
+		coordinator.PopulateIgnoreOptionsForRootSelection(["src"]);
 
 		var hiddenFolders = viewModel.IgnoreOptions.Single(option => option.Id == IgnoreOptionId.HiddenFolders);
 		var hiddenFiles = viewModel.IgnoreOptions.Single(option => option.Id == IgnoreOptionId.HiddenFiles);
@@ -245,7 +245,7 @@ public sealed class SelectionSyncCoordinatorAdditionalTests
 				_ => false,
 				() => tempRoot);
 
-			coordinator.PopulateIgnoreOptionsForRootSelection(new[] { "src" }, tempRoot);
+			coordinator.PopulateIgnoreOptionsForRootSelection(["src"], tempRoot);
 
 			Assert.Contains(viewModel.IgnoreOptions, option => option.Id == IgnoreOptionId.UseGitIgnore);
 		}
@@ -275,7 +275,7 @@ public sealed class SelectionSyncCoordinatorAdditionalTests
 				_ => false,
 				() => tempRoot);
 
-			coordinator.PopulateIgnoreOptionsForRootSelection(new[] { "src" }, tempRoot);
+			coordinator.PopulateIgnoreOptionsForRootSelection(["src"], tempRoot);
 
 			Assert.DoesNotContain(viewModel.IgnoreOptions, option => option.Id == IgnoreOptionId.UseGitIgnore);
 		}
@@ -291,9 +291,9 @@ public sealed class SelectionSyncCoordinatorAdditionalTests
 		var viewModel = CreateViewModel();
 		var coordinator = CreateCoordinator(viewModel);
 		var profile = new ProjectSelectionProfile(
-			SelectedRootFolders: Array.Empty<string>(),
-			SelectedExtensions: Array.Empty<string>(),
-			SelectedIgnoreOptions: new[] { IgnoreOptionId.DotFiles, IgnoreOptionId.HiddenFiles });
+			SelectedRootFolders: [],
+			SelectedExtensions: [],
+			SelectedIgnoreOptions: [IgnoreOptionId.DotFiles, IgnoreOptionId.HiddenFiles]);
 
 		coordinator.ApplyProjectProfileSelections("C:\\ProjectA", profile);
 		var selected = coordinator.GetSelectedIgnoreOptionIds();
@@ -309,12 +309,12 @@ public sealed class SelectionSyncCoordinatorAdditionalTests
 		var viewModel = CreateViewModel();
 		var coordinator = CreateCoordinator(viewModel);
 		var profile = new ProjectSelectionProfile(
-			SelectedRootFolders: Array.Empty<string>(),
-			SelectedExtensions: new[] { ".md" },
-			SelectedIgnoreOptions: Array.Empty<IgnoreOptionId>());
+			SelectedRootFolders: [],
+			SelectedExtensions: [".md"],
+			SelectedIgnoreOptions: []);
 
 		coordinator.ApplyProjectProfileSelections("C:\\ProjectA", profile);
-		coordinator.ApplyExtensionScan(new[] { ".cs", ".md" });
+		coordinator.ApplyExtensionScan([".cs", ".md"]);
 
 		Assert.False(viewModel.Extensions.Single(option => option.Name == ".cs").IsChecked);
 		Assert.True(viewModel.Extensions.Single(option => option.Name == ".md").IsChecked);
@@ -327,12 +327,12 @@ public sealed class SelectionSyncCoordinatorAdditionalTests
 		// Intentionally keep default AllExtensionsChecked=true to verify fix.
 		var coordinator = CreateCoordinator(viewModel);
 		var profile = new ProjectSelectionProfile(
-			SelectedRootFolders: Array.Empty<string>(),
-			SelectedExtensions: new[] { ".md" },
-			SelectedIgnoreOptions: Array.Empty<IgnoreOptionId>());
+			SelectedRootFolders: [],
+			SelectedExtensions: [".md"],
+			SelectedIgnoreOptions: []);
 
 		coordinator.ApplyProjectProfileSelections("C:\\ProjectA", profile);
-		coordinator.ApplyExtensionScan(new[] { ".cs", ".md", ".json" });
+		coordinator.ApplyExtensionScan([".cs", ".md", ".json"]);
 
 		Assert.False(viewModel.AllExtensionsChecked);
 		Assert.False(viewModel.Extensions.Single(option => option.Name == ".cs").IsChecked);
@@ -346,12 +346,12 @@ public sealed class SelectionSyncCoordinatorAdditionalTests
 		var viewModel = CreateViewModel();
 		var coordinator = CreateCoordinator(viewModel);
 		var profile = new ProjectSelectionProfile(
-			SelectedRootFolders: Array.Empty<string>(),
-			SelectedExtensions: new[] { ".removed-ext" },
-			SelectedIgnoreOptions: Array.Empty<IgnoreOptionId>());
+			SelectedRootFolders: [],
+			SelectedExtensions: [".removed-ext"],
+			SelectedIgnoreOptions: []);
 
 		coordinator.ApplyProjectProfileSelections("C:\\ProjectA", profile);
-		coordinator.ApplyExtensionScan(new[] { ".cs", ".json" });
+		coordinator.ApplyExtensionScan([".cs", ".json"]);
 
 		Assert.True(viewModel.Extensions.Single(option => option.Name == ".cs").IsChecked);
 		Assert.True(viewModel.Extensions.Single(option => option.Name == ".json").IsChecked);
@@ -364,12 +364,12 @@ public sealed class SelectionSyncCoordinatorAdditionalTests
 		var viewModel = CreateViewModel();
 		var coordinator = CreateCoordinator(viewModel);
 		var profile = new ProjectSelectionProfile(
-			SelectedRootFolders: Array.Empty<string>(),
-			SelectedExtensions: Array.Empty<string>(),
-			SelectedIgnoreOptions: Array.Empty<IgnoreOptionId>());
+			SelectedRootFolders: [],
+			SelectedExtensions: [],
+			SelectedIgnoreOptions: []);
 
 		coordinator.ApplyProjectProfileSelections("C:\\ProjectA", profile);
-		coordinator.ApplyExtensionScan(new[] { ".cs", ".json" });
+		coordinator.ApplyExtensionScan([".cs", ".json"]);
 
 		Assert.False(viewModel.Extensions.Single(option => option.Name == ".cs").IsChecked);
 		Assert.False(viewModel.Extensions.Single(option => option.Name == ".json").IsChecked);
@@ -385,9 +385,9 @@ public sealed class SelectionSyncCoordinatorAdditionalTests
 		viewModel.AllIgnoreChecked = true;
 		var coordinator = CreateCoordinator(viewModel);
 		var profile = new ProjectSelectionProfile(
-			SelectedRootFolders: new[] { "src" },
-			SelectedExtensions: new[] { ".cs" },
-			SelectedIgnoreOptions: new[] { IgnoreOptionId.DotFiles });
+			SelectedRootFolders: ["src"],
+			SelectedExtensions: [".cs"],
+			SelectedIgnoreOptions: [IgnoreOptionId.DotFiles]);
 
 		coordinator.ApplyProjectProfileSelections("C:\\ProjectA", profile);
 
@@ -402,12 +402,12 @@ public sealed class SelectionSyncCoordinatorAdditionalTests
 		var viewModel = CreateViewModel();
 		var coordinator = CreateCoordinator(viewModel);
 		var profile = new ProjectSelectionProfile(
-			SelectedRootFolders: Array.Empty<string>(),
-			SelectedExtensions: Array.Empty<string>(),
-			SelectedIgnoreOptions: new[] { IgnoreOptionId.UseGitIgnore });
+			SelectedRootFolders: [],
+			SelectedExtensions: [],
+			SelectedIgnoreOptions: [IgnoreOptionId.UseGitIgnore]);
 
 		coordinator.ApplyProjectProfileSelections("C:\\ProjectA", profile);
-		coordinator.PopulateIgnoreOptionsForRootSelection(new[] { "src" }, "C:\\ProjectA");
+		coordinator.PopulateIgnoreOptionsForRootSelection(["src"], "C:\\ProjectA");
 
 		var hiddenFolders = viewModel.IgnoreOptions.Single(option => option.Id == IgnoreOptionId.HiddenFolders);
 		var hiddenFiles = viewModel.IgnoreOptions.Single(option => option.Id == IgnoreOptionId.HiddenFiles);
@@ -426,12 +426,12 @@ public sealed class SelectionSyncCoordinatorAdditionalTests
 		var viewModel = CreateViewModel();
 		var coordinator = CreateCoordinator(viewModel);
 		var profile = new ProjectSelectionProfile(
-			SelectedRootFolders: Array.Empty<string>(),
-			SelectedExtensions: Array.Empty<string>(),
-			SelectedIgnoreOptions: Array.Empty<IgnoreOptionId>());
+			SelectedRootFolders: [],
+			SelectedExtensions: [],
+			SelectedIgnoreOptions: []);
 
 		coordinator.ApplyProjectProfileSelections("C:\\ProjectA", profile);
-		coordinator.PopulateIgnoreOptionsForRootSelection(new[] { "src" }, "C:\\ProjectA");
+		coordinator.PopulateIgnoreOptionsForRootSelection(["src"], "C:\\ProjectA");
 
 		Assert.All(viewModel.IgnoreOptions, option => Assert.False(option.IsChecked));
 		Assert.False(viewModel.AllIgnoreChecked);
@@ -444,13 +444,13 @@ public sealed class SelectionSyncCoordinatorAdditionalTests
 		viewModel.AllExtensionsChecked = false;
 		var coordinator = CreateCoordinator(viewModel);
 		var profile = new ProjectSelectionProfile(
-			SelectedRootFolders: Array.Empty<string>(),
-			SelectedExtensions: new[] { ".md" },
-			SelectedIgnoreOptions: Array.Empty<IgnoreOptionId>());
+			SelectedRootFolders: [],
+			SelectedExtensions: [".md"],
+			SelectedIgnoreOptions: []);
 
 		coordinator.ApplyProjectProfileSelections("C:\\ProjectA", profile);
 		coordinator.ResetProjectProfileSelections("C:\\ProjectB");
-		coordinator.ApplyExtensionScan(new[] { ".cs", ".md" });
+		coordinator.ApplyExtensionScan([".cs", ".md"]);
 
 		Assert.True(viewModel.Extensions.Single(option => option.Name == ".cs").IsChecked);
 		Assert.True(viewModel.Extensions.Single(option => option.Name == ".md").IsChecked);
@@ -590,7 +590,7 @@ private static SelectionSyncCoordinator CreateCoordinator(
 		var currentPath = "C:\\ProjectB";
 		var coordinator = CreateCoordinator(viewModel, currentPathProvider: () => currentPath);
 
-		coordinator.PopulateIgnoreOptionsForRootSelection(Array.Empty<string>(), "C:\\ProjectA");
+		coordinator.PopulateIgnoreOptionsForRootSelection([], "C:\\ProjectA");
 
 		Assert.Empty(viewModel.IgnoreOptions);
 	}
@@ -603,7 +603,7 @@ private static SelectionSyncCoordinator CreateCoordinator(
 		var scanner = new StubFileSystemScanner
 		{
 			GetRootFolderNamesHandler = (_, _) => new ScanResult<List<string>>(
-				new List<string> { "src", "tests" },
+				["src", "tests"],
 				false,
 				false)
 		};
@@ -629,7 +629,7 @@ private static SelectionSyncCoordinator CreateCoordinator(
 		};
 		var coordinator = CreateCoordinator(viewModel, scanner, () => currentPath);
 
-		await coordinator.PopulateExtensionsForRootSelectionAsync("C:\\ProjectA", Array.Empty<string>());
+		await coordinator.PopulateExtensionsForRootSelectionAsync("C:\\ProjectA", []);
 
 		Assert.Single(viewModel.Extensions);
 		Assert.Equal(".keep", viewModel.Extensions[0].Name);
@@ -641,9 +641,9 @@ private static SelectionSyncCoordinator CreateCoordinator(
 	{
 		var coordinator = CreateCoordinator(CreateViewModel());
 		var profile = new ProjectSelectionProfile(
-			SelectedRootFolders: Array.Empty<string>(),
-			SelectedExtensions: Array.Empty<string>(),
-			SelectedIgnoreOptions: Array.Empty<IgnoreOptionId>());
+			SelectedRootFolders: [],
+			SelectedExtensions: [],
+			SelectedIgnoreOptions: []);
 
 		coordinator.ApplyProjectProfileSelections("C:\\ProjectA", profile);
 
@@ -687,12 +687,12 @@ private static SelectionSyncCoordinator CreateCoordinator(
 		// Intentionally keep default AllIgnoreChecked=true to verify fix.
 		var coordinator = CreateCoordinator(viewModel);
 		var profile = new ProjectSelectionProfile(
-			SelectedRootFolders: Array.Empty<string>(),
-			SelectedExtensions: Array.Empty<string>(),
-			SelectedIgnoreOptions: new[] { IgnoreOptionId.DotFiles });
+			SelectedRootFolders: [],
+			SelectedExtensions: [],
+			SelectedIgnoreOptions: [IgnoreOptionId.DotFiles]);
 
 		coordinator.ApplyProjectProfileSelections("C:\\ProjectA", profile);
-		coordinator.PopulateIgnoreOptionsForRootSelection(new[] { "src" });
+		coordinator.PopulateIgnoreOptionsForRootSelection(["src"]);
 
 		Assert.False(viewModel.AllIgnoreChecked);
 		Assert.Contains(viewModel.IgnoreOptions, option => option.Id == IgnoreOptionId.DotFiles && option.IsChecked);
@@ -723,7 +723,7 @@ private static SelectionSyncCoordinator CreateCoordinator(
 			"ShouldClearCachesForCurrentPath",
 			BindingFlags.NonPublic | BindingFlags.Instance);
 		Assert.NotNull(method);
-		return (bool)method.Invoke(coordinator, new object[] { path })!;
+		return (bool)method.Invoke(coordinator, [path])!;
 	}
 
 	private static bool InvokeShouldSkipRefreshForPreparedPath(SelectionSyncCoordinator coordinator, string path)
@@ -732,7 +732,7 @@ private static SelectionSyncCoordinator CreateCoordinator(
 			"ShouldSkipRefreshForPreparedPath",
 			BindingFlags.NonPublic | BindingFlags.Instance);
 		Assert.NotNull(method);
-		return (bool)method.Invoke(coordinator, new object[] { path })!;
+		return (bool)method.Invoke(coordinator, [path])!;
 	}
 
 	private static void SetPrivateField(SelectionSyncCoordinator coordinator, string fieldName, string? value)

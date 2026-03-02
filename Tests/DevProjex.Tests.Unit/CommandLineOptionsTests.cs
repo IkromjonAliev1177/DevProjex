@@ -6,7 +6,7 @@ public sealed class CommandLineOptionsTests
 	[Fact]
 	public void Parse_ReturnsEmptyWhenNoArgs()
 	{
-		var result = CommandLineOptions.Parse(Array.Empty<string>());
+		var result = CommandLineOptions.Parse([]);
 
 		Assert.Equal(CommandLineOptions.Empty, result);
 	}
@@ -15,7 +15,7 @@ public sealed class CommandLineOptionsTests
 	[Fact]
 	public void Parse_ReadsPathLanguageAndElevation()
 	{
-		var result = CommandLineOptions.Parse(new[] { "--path", "/tmp/root", "--lang", "ru", "--elevationAttempted" });
+		var result = CommandLineOptions.Parse(["--path", "/tmp/root", "--lang", "ru", "--elevationAttempted"]);
 
 		Assert.Equal("/tmp/root", result.Path);
 		Assert.Equal(AppLanguage.Ru, result.Language);
@@ -26,7 +26,7 @@ public sealed class CommandLineOptionsTests
 	[Fact]
 	public void Parse_IgnoresUnknownArgs()
 	{
-		var result = CommandLineOptions.Parse(new[] { "--unknown", "value" });
+		var result = CommandLineOptions.Parse(["--unknown", "value"]);
 
 		Assert.Equal(CommandLineOptions.Empty, result);
 	}

@@ -29,7 +29,7 @@ public sealed class SmartIgnoreServiceTests
 	[Fact]
 	public void Build_ReturnsEmptyWhenNoRules()
 	{
-		var service = new SmartIgnoreService(Array.Empty<ISmartIgnoreRule>());
+		var service = new SmartIgnoreService([]);
 
 		var result = service.Build("/root");
 

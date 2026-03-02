@@ -7,16 +7,16 @@ namespace DevProjex.Infrastructure.SmartIgnore;
 public sealed class GoArtifactsIgnoreRule : ISmartIgnoreRule
 {
 	private static readonly string[] MarkerFiles =
-	{
+	[
 		"go.mod",
 		"go.work"
-	};
+	];
 
 	private static readonly string[] FolderNames =
-	{
+	[
 		"vendor",
 		"bin"
-	};
+	];
 
 	public SmartIgnoreResult Evaluate(string rootPath)
 	{

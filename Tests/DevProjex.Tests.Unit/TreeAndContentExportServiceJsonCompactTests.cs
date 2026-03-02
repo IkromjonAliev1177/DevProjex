@@ -84,7 +84,7 @@ public sealed class TreeAndContentExportServiceJsonCompactTests
 	public void Build_WithJsonFormat_NoTextContentReturnsTreeDocumentOnly()
 	{
 		using var temp = new TemporaryDirectory();
-		var binary = temp.CreateBinaryFile("image.bin", new byte[] { 0, 1, 2, 3, 4, 255 });
+		var binary = temp.CreateBinaryFile("image.bin", [0, 1, 2, 3, 4, 255]);
 
 		var root = new TreeNodeDescriptor(
 			"root",

@@ -7,18 +7,18 @@ namespace DevProjex.Infrastructure.SmartIgnore;
 public sealed class DotNetArtifactsIgnoreRule : ISmartIgnoreRule
 {
 	private static readonly string[] MarkerExtensions =
-	{
+	[
 		".sln",
 		".csproj",
 		".fsproj",
 		".vbproj"
-	};
+	];
 
 	private static readonly string[] FolderNames =
-	{
+	[
 		"bin",
 		"obj"
-	};
+	];
 
 	public SmartIgnoreResult Evaluate(string rootPath)
 	{

@@ -3,12 +3,13 @@
              xmlns:vm="using:DevProjex.Avalonia.ViewModels"
              x:Class="DevProjex.Avalonia.Views.FilterBarView"
              x:DataType="vm:MainWindowViewModel">
-  <Border Classes="filter-panel" IsEnabled="{Binding IsProjectLoaded}">
+  <Border Classes="filter-panel" IsEnabled="{Binding IsProjectLoaded}" UseLayoutRounding="True">
     <StackPanel Orientation="Horizontal" Spacing="8" Margin="12,6">
       <TextBox Name="FilterBox"
                Watermark="{Binding FilterByNamePlaceholder}"
                Text="{Binding NameFilter, Mode=TwoWay}"
                Width="260"
+               FocusAdorner="{x:Null}"
                KeyDown="OnFilterKeyDown" />
       <Button Content="✕" Width="32" Click="OnFilterClose" />
     </StackPanel>

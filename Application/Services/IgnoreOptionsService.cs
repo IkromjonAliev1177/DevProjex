@@ -1,14 +1,7 @@
 namespace DevProjex.Application.Services;
 
-public sealed class IgnoreOptionsService
+public sealed class IgnoreOptionsService(LocalizationService localization)
 {
-	private readonly LocalizationService _localization;
-
-	public IgnoreOptionsService(LocalizationService localization)
-	{
-		_localization = localization;
-	}
-
 	public IReadOnlyList<IgnoreOptionDescriptor> GetOptions(IgnoreOptionsAvailability availability)
 	{
 		var options = new List<IgnoreOptionDescriptor>();
@@ -16,7 +9,7 @@ public sealed class IgnoreOptionsService
 		{
 			options.Add(new IgnoreOptionDescriptor(
 				IgnoreOptionId.SmartIgnore,
-				_localization["Settings.Ignore.SmartIgnore"],
+				localization["Settings.Ignore.SmartIgnore"],
 				true));
 		}
 
@@ -24,23 +17,55 @@ public sealed class IgnoreOptionsService
 		{
 			options.Add(new IgnoreOptionDescriptor(
 				IgnoreOptionId.UseGitIgnore,
-				_localization["Settings.Ignore.UseGitIgnore"],
+				localization["Settings.Ignore.UseGitIgnore"],
 				true));
 		}
 
-		options.AddRange(new[]
+		if (availability.IncludeEmptyFolders)
 		{
-			new IgnoreOptionDescriptor(IgnoreOptionId.HiddenFolders, _localization["Settings.Ignore.HiddenFolders"], true),
-			new IgnoreOptionDescriptor(IgnoreOptionId.HiddenFiles, _localization["Settings.Ignore.HiddenFiles"], true),
-			new IgnoreOptionDescriptor(IgnoreOptionId.DotFolders, _localization["Settings.Ignore.DotFolders"], true),
-			new IgnoreOptionDescriptor(IgnoreOptionId.DotFiles, _localization["Settings.Ignore.DotFiles"], true)
-		});
+			options.Add(new IgnoreOptionDescriptor(
+				IgnoreOptionId.EmptyFolders,
+				FormatLabelWithCount(localization["Settings.Ignore.EmptyFolders"], availability.EmptyFoldersCount, availability.ShowAdvancedCounts),
+				true));
+		}
+
+		if (availability.IncludeHiddenFolders)
+		{
+			options.Add(new IgnoreOptionDescriptor(
+				IgnoreOptionId.HiddenFolders,
+				FormatLabelWithCount(localization["Settings.Ignore.HiddenFolders"], availability.HiddenFoldersCount, availability.ShowAdvancedCounts),
+				true));
+		}
+
+		if (availability.IncludeHiddenFiles)
+		{
+			options.Add(new IgnoreOptionDescriptor(
+				IgnoreOptionId.HiddenFiles,
+				FormatLabelWithCount(localization["Settings.Ignore.HiddenFiles"], availability.HiddenFilesCount, availability.ShowAdvancedCounts),
+				true));
+		}
+
+		if (availability.IncludeDotFolders)
+		{
+			options.Add(new IgnoreOptionDescriptor(
+				IgnoreOptionId.DotFolders,
+				FormatLabelWithCount(localization["Settings.Ignore.DotFolders"], availability.DotFoldersCount, availability.ShowAdvancedCounts),
+				true));
+		}
+
+		if (availability.IncludeDotFiles)
+		{
+			options.Add(new IgnoreOptionDescriptor(
+				IgnoreOptionId.DotFiles,
+				FormatLabelWithCount(localization["Settings.Ignore.DotFiles"], availability.DotFilesCount, availability.ShowAdvancedCounts),
+				true));
+		}
 
 		if (availability.IncludeExtensionlessFiles)
 		{
 			options.Add(new IgnoreOptionDescriptor(
 				IgnoreOptionId.ExtensionlessFiles,
-				_localization["Settings.Ignore.ExtensionlessFiles"],
+				FormatLabelWithCount(localization["Settings.Ignore.ExtensionlessFiles"], availability.ExtensionlessFilesCount, availability.ShowAdvancedCounts),
 				false));
 		}
 
@@ -59,5 +84,12 @@ public sealed class IgnoreOptionsService
 		return GetOptions(new IgnoreOptionsAvailability(
 			IncludeGitIgnore: includeGitIgnore,
 			IncludeSmartIgnore: false));
+	}
+
+	private static string FormatLabelWithCount(string baseLabel, int count, bool showAdvancedCounts)
+	{
+		return showAdvancedCounts && count > 0
+			? $"{baseLabel} ({count})"
+			: baseLabel;
 	}
 }

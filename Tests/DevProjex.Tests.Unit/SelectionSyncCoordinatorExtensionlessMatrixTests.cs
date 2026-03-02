@@ -7,13 +7,15 @@ public sealed class SelectionSyncCoordinatorExtensionlessMatrixTests
 	public void ApplyExtensionScan_FiltersExtensionlessFromUiAndControlsIgnoreOption(
 		string[] scanEntries,
 		string[] expectedVisibleEntries,
-		bool expectExtensionlessIgnoreOption)
+		bool expectExtensionlessIgnoreOption,
+		int expectedExtensionlessCount)
 	{
 		var viewModel = CreateViewModel();
 		var coordinator = CreateCoordinator(viewModel, @"C:\Temp\Project");
 
 		coordinator.ApplyExtensionScan(scanEntries);
-		coordinator.PopulateIgnoreOptionsForRootSelection(Array.Empty<string>(), @"C:\Temp\Project");
+		viewModel.AllIgnoreChecked = false;
+		coordinator.PopulateIgnoreOptionsForRootSelection([], @"C:\Temp\Project");
 
 		var visible = viewModel.Extensions.Select(option => option.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
 		Assert.Equal(expectedVisibleEntries.Length, visible.Count);
@@ -24,22 +26,85 @@ public sealed class SelectionSyncCoordinatorExtensionlessMatrixTests
 
 		var hasExtensionlessOption = viewModel.IgnoreOptions.Any(option => option.Id == IgnoreOptionId.ExtensionlessFiles);
 		Assert.Equal(expectExtensionlessIgnoreOption, hasExtensionlessOption);
+		if (!expectExtensionlessIgnoreOption)
+			return;
+
+		var extensionlessOption = viewModel.IgnoreOptions.Single(option => option.Id == IgnoreOptionId.ExtensionlessFiles);
+		Assert.Equal($"Files without extension ({expectedExtensionlessCount})", extensionlessOption.Label);
+		Assert.False(extensionlessOption.IsChecked);
+	}
+
+	[Fact]
+	public void ApplyExtensionScan_TransitionFromPresentToAbsent_HidesExtensionlessOption()
+	{
+		var viewModel = CreateViewModel();
+		var coordinator = CreateCoordinator(viewModel, @"C:\Temp\Project");
+
+		coordinator.ApplyExtensionScan(["Dockerfile", ".cs"]);
+		coordinator.PopulateIgnoreOptionsForRootSelection([], @"C:\Temp\Project");
+		Assert.Contains(viewModel.IgnoreOptions, option => option.Id == IgnoreOptionId.ExtensionlessFiles);
+
+		coordinator.ApplyExtensionScan([".cs", ".json", ".md"]);
+		coordinator.PopulateIgnoreOptionsForRootSelection([], @"C:\Temp\Project");
+
+		Assert.DoesNotContain(viewModel.IgnoreOptions, option => option.Id == IgnoreOptionId.ExtensionlessFiles);
+	}
+
+	[Fact]
+	public void ApplyExtensionScan_TransitionFromAbsentToPresent_UpdatesCountInLabel()
+	{
+		var viewModel = CreateViewModel();
+		var coordinator = CreateCoordinator(viewModel, @"C:\Temp\Project");
+
+		coordinator.ApplyExtensionScan([".cs", ".json"]);
+		coordinator.PopulateIgnoreOptionsForRootSelection([], @"C:\Temp\Project");
+		Assert.DoesNotContain(viewModel.IgnoreOptions, option => option.Id == IgnoreOptionId.ExtensionlessFiles);
+
+		coordinator.ApplyExtensionScan(["Dockerfile", "Makefile", ".cs"]);
+		coordinator.PopulateIgnoreOptionsForRootSelection([], @"C:\Temp\Project");
+
+		var extensionlessOption = viewModel.IgnoreOptions.Single(option => option.Id == IgnoreOptionId.ExtensionlessFiles);
+		Assert.Equal("Files without extension (2)", extensionlessOption.Label);
+	}
+
+	[Fact]
+	public void ProfiledExtensionlessSelection_ReappearsCheckedWithNewCountAfterTemporaryAbsence()
+	{
+		var viewModel = CreateViewModel();
+		var coordinator = CreateCoordinator(viewModel, @"C:\Temp\Project");
+
+		var profile = new ProjectSelectionProfile(
+			SelectedRootFolders: [],
+			SelectedExtensions: [],
+			SelectedIgnoreOptions: [IgnoreOptionId.ExtensionlessFiles]);
+		coordinator.ApplyProjectProfileSelections(@"C:\Temp\Project", profile);
+
+		coordinator.ApplyExtensionScan([".cs", ".json"]);
+		coordinator.PopulateIgnoreOptionsForRootSelection([], @"C:\Temp\Project");
+		Assert.DoesNotContain(viewModel.IgnoreOptions, option => option.Id == IgnoreOptionId.ExtensionlessFiles);
+
+		coordinator.ApplyExtensionScan(["Dockerfile", "Makefile", "LICENSE", ".cs"]);
+		coordinator.PopulateIgnoreOptionsForRootSelection([], @"C:\Temp\Project");
+
+		var extensionlessOption = viewModel.IgnoreOptions.Single(option => option.Id == IgnoreOptionId.ExtensionlessFiles);
+		Assert.True(extensionlessOption.IsChecked);
+		Assert.Equal("Files without extension (3)", extensionlessOption.Label);
 	}
 
 	public static IEnumerable<object[]> ExtensionScanCases()
 	{
-		yield return new object[] { new[] { ".cs", ".md" }, new[] { ".cs", ".md" }, false };
-		yield return new object[] { new[] { "Dockerfile", ".cs" }, new[] { ".cs" }, true };
-		yield return new object[] { new[] { "Dockerfile", "Makefile" }, Array.Empty<string>(), true };
-		yield return new object[] { new[] { ".env", ".cs" }, new[] { ".env", ".cs" }, false };
-		yield return new object[] { new[] { ".gitignore", "README", ".txt" }, new[] { ".gitignore", ".txt" }, true };
-		yield return new object[] { new[] { "LICENSE", ".json", ".yml" }, new[] { ".json", ".yml" }, true };
-		yield return new object[] { new[] { ".axaml", ".cs", ".json" }, new[] { ".axaml", ".cs", ".json" }, false };
-		yield return new object[] { new[] { "WORKSPACE", ".csproj", ".sln" }, new[] { ".csproj", ".sln" }, true };
-		yield return new object[] { new[] { ".dockerignore", "Jenkinsfile", ".yaml" }, new[] { ".dockerignore", ".yaml" }, true };
-		yield return new object[] { new[] { ".rules", ".props", ".targets" }, new[] { ".rules", ".props", ".targets" }, false };
-		yield return new object[] { new[] { "Taskfile", ".txt", ".log", ".md" }, new[] { ".txt", ".log", ".md" }, true };
-		yield return new object[] { new[] { ".env", ".gitignore", ".editorconfig" }, new[] { ".env", ".gitignore", ".editorconfig" }, false };
+		yield return [ new[] { ".cs", ".md" }, new[] { ".cs", ".md" }, false, 0 ];
+		yield return [ new[] { "Dockerfile", ".cs" }, new[] { ".cs" }, true, 1 ];
+		yield return [ new[] { "Dockerfile", "Makefile" }, Array.Empty<string>(), true, 2 ];
+		yield return [ new[] { ".env", ".cs" }, new[] { ".env", ".cs" }, false, 0 ];
+		yield return [ new[] { ".gitignore", "README", ".txt" }, new[] { ".gitignore", ".txt" }, true, 1 ];
+		yield return [ new[] { "LICENSE", ".json", ".yml" }, new[] { ".json", ".yml" }, true, 1 ];
+		yield return [ new[] { ".axaml", ".cs", ".json" }, new[] { ".axaml", ".cs", ".json" }, false, 0 ];
+		yield return [ new[] { "WORKSPACE", ".csproj", ".sln" }, new[] { ".csproj", ".sln" }, true, 1 ];
+		yield return [ new[] { ".dockerignore", "Jenkinsfile", ".yaml" }, new[] { ".dockerignore", ".yaml" }, true, 1 ];
+		yield return [ new[] { ".rules", ".props", ".targets" }, new[] { ".rules", ".props", ".targets" }, false, 0 ];
+		yield return [ new[] { "Taskfile", ".txt", ".log", ".md" }, new[] { ".txt", ".log", ".md" }, true, 1 ];
+		yield return [ new[] { ".env", ".gitignore", ".editorconfig" }, new[] { ".env", ".gitignore", ".editorconfig" }, false, 0 ];
 	}
 
 	private static SelectionSyncCoordinator CreateCoordinator(MainWindowViewModel viewModel, string currentPath)
@@ -56,7 +121,10 @@ public sealed class SelectionSyncCoordinatorExtensionlessMatrixTests
 			filterSelectionService,
 			ignoreOptionsService,
 			(rootPath, _, _) => new IgnoreRules(false, false, false, false, new HashSet<string>(), new HashSet<string>()),
-			(rootPath, _) => new IgnoreOptionsAvailability(IncludeGitIgnore: false, IncludeSmartIgnore: false),
+			(rootPath, _) => new IgnoreOptionsAvailability(
+				IncludeGitIgnore: false,
+				IncludeSmartIgnore: false,
+				ShowAdvancedCounts: true),
 			_ => false,
 			() => currentPath);
 	}
@@ -64,7 +132,12 @@ public sealed class SelectionSyncCoordinatorExtensionlessMatrixTests
 	private static MainWindowViewModel CreateViewModel()
 	{
 		var localization = new LocalizationService(CreateCatalog(), AppLanguage.En);
-		return new MainWindowViewModel(localization, new HelpContentProvider());
+		var viewModel = new MainWindowViewModel(localization, new HelpContentProvider())
+		{
+			AllIgnoreChecked = false
+		};
+
+		return viewModel;
 	}
 
 	private static StubLocalizationCatalog CreateCatalog()

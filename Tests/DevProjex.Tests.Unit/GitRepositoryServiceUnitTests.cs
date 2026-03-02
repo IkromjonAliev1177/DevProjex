@@ -6,12 +6,7 @@ namespace DevProjex.Tests.Unit;
 /// </summary>
 public class GitRepositoryServiceUnitTests
 {
-    private readonly GitRepositoryService _service;
-
-    public GitRepositoryServiceUnitTests()
-    {
-        _service = new GitRepositoryService();
-    }
+    private readonly GitRepositoryService _service = new();
 
     #region Repository Name Extraction Tests
 

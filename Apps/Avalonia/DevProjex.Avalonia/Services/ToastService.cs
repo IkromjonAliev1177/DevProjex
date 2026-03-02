@@ -9,7 +9,7 @@ public sealed class ToastService : IToastService, IDisposable
 
 	private readonly Dictionary<ToastMessageViewModel, CancellationTokenSource> _dismissTokens = new();
 
-	public ObservableCollection<ToastMessageViewModel> Items { get; } = new();
+	public ObservableCollection<ToastMessageViewModel> Items { get; } = [];
 
 	public void Show(string message)
 	{

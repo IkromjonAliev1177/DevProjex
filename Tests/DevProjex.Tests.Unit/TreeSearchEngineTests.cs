@@ -173,19 +173,13 @@ public sealed class TreeSearchEngineTests
 			[epsilon.Name] = epsilon
 		};
 
-		return new[] { root };
+		return [root];
 	}
 
-	private sealed class TestNode
+	private sealed class TestNode(string name)
 	{
-		public TestNode(string name)
-		{
-			Name = name;
-			Children = new List<TestNode>();
-		}
-
-		public string Name { get; }
-		public List<TestNode> Children { get; }
+		public string Name { get; } = name;
+		public List<TestNode> Children { get; } = [];
 		public bool Expanded { get; set; }
 	}
 }

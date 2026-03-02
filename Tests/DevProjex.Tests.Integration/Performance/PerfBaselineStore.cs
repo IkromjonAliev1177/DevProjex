@@ -1,18 +1,13 @@
 namespace DevProjex.Tests.Integration.Performance;
 
-internal sealed class PerfBaselineStore
+internal sealed class PerfBaselineStore(string baselinePath)
 {
     private static readonly object Sync = new();
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
     private const double MinActionableTimeDeltaMs = 1.0;
     private const long MinActionableAllocationDeltaBytes = 64 * 1024;
 
-    private readonly string _baselinePath;
-
-    public PerfBaselineStore(string baselinePath)
-    {
-        _baselinePath = baselinePath ?? throw new ArgumentNullException(nameof(baselinePath));
-    }
+    private readonly string _baselinePath = baselinePath ?? throw new ArgumentNullException(nameof(baselinePath));
 
     public PerfVerdict Evaluate(
         string scenarioId,

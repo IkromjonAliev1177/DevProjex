@@ -15,7 +15,7 @@ namespace DevProjex.Tests.Integration;
 /// </summary>
 public class GitRepositoryServiceTests : IAsyncLifetime
 {
-    private readonly GitRepositoryService _service;
+    private readonly GitRepositoryService _service = new();
     private string? _tempDir;
     private bool _gitAvailable;
 
@@ -23,11 +23,6 @@ public class GitRepositoryServiceTests : IAsyncLifetime
     // Using octocat/Hello-World - small and stable repo
     private const string TestRepoUrl = "https://github.com/octocat/Hello-World.git";
     private const string TestRepoName = "Hello-World";
-
-    public GitRepositoryServiceTests()
-    {
-        _service = new GitRepositoryService();
-    }
 
     public async Task InitializeAsync()
     {
@@ -145,9 +140,9 @@ public class GitRepositoryServiceTests : IAsyncLifetime
 
         var targetDir = Path.Combine(_tempDir!, "non-git-url-test");
 
-        // Try to clone a URL that is not a git repository (e.g., Telegram link)
+        // Use a stable, reachable non-git URL to avoid region-specific routing blocks/timeouts.
         var result = await _service.CloneAsync(
-            "https://t.me/addstickers/SomeSticker",
+            "https://www.google.com",
             targetDir);
 
         Assert.False(result.Success);

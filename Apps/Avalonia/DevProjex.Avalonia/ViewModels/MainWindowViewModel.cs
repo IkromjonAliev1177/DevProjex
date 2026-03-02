@@ -18,8 +18,8 @@ public enum PreviewContentMode
 
 public sealed class MainWindowViewModel : ViewModelBase, IDisposable
 {
-    public const string BaseTitle = "DevProjex v4.6";
-    public const string BaseTitleWithAuthor = "DevProjex by Olimoff v4.6";
+    public const string BaseTitle = "DevProjex v4.7";
+    public const string BaseTitleWithAuthor = "DevProjex by Olimoff v4.7";
     public const double DefaultTreeFontSize = 15;
     public const double DefaultPreviewFontSize = 15;
 
@@ -51,6 +51,7 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
     private bool _isDarkTheme = true;
     private bool _isCompactMode;
     private bool _isTreeAnimationEnabled;
+    private bool _isAdvancedIgnoreCountsEnabled;
     private bool _filterVisible;
     private ExportFormat _selectedExportFormat = ExportFormat.Ascii;
     private PreviewContentMode _selectedPreviewContentMode = PreviewContentMode.Tree;
@@ -114,7 +115,7 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         ToastItems.CollectionChanged += OnToastItemsCollectionChanged;
     }
 
-    private ObservableCollection<TreeNodeViewModel> _treeNodes = new();
+    private ObservableCollection<TreeNodeViewModel> _treeNodes = [];
 
     public ObservableCollection<TreeNodeViewModel> TreeNodes
     {
@@ -126,14 +127,14 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
             RaisePropertyChanged();
         }
     }
-    public ObservableCollection<SelectionOptionViewModel> RootFolders { get; } = new();
-    public ObservableCollection<SelectionOptionViewModel> Extensions { get; } = new();
-    public ObservableCollection<IgnoreOptionViewModel> IgnoreOptions { get; } = new();
-    public ObservableCollection<FontFamily> FontFamilies { get; } = new();
+    public ObservableCollection<SelectionOptionViewModel> RootFolders { get; } = [];
+    public ObservableCollection<SelectionOptionViewModel> Extensions { get; } = [];
+    public ObservableCollection<IgnoreOptionViewModel> IgnoreOptions { get; } = [];
+    public ObservableCollection<FontFamily> FontFamilies { get; } = [];
 
     public void ResetTreeNodes()
     {
-        TreeNodes = new ObservableCollection<TreeNodeViewModel>();
+        TreeNodes = [];
     }
 
     public string StatusTreeStatsText
@@ -346,6 +347,17 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         {
             if (_isTreeAnimationEnabled == value) return;
             _isTreeAnimationEnabled = value;
+            RaisePropertyChanged();
+        }
+    }
+
+    public bool IsAdvancedIgnoreCountsEnabled
+    {
+        get => _isAdvancedIgnoreCountsEnabled;
+        set
+        {
+            if (_isAdvancedIgnoreCountsEnabled == value) return;
+            _isAdvancedIgnoreCountsEnabled = value;
             RaisePropertyChanged();
         }
     }
@@ -624,7 +636,7 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         }
     }
 
-    public ObservableCollection<GitBranch> GitBranches { get; } = new();
+    public ObservableCollection<GitBranch> GitBranches { get; } = [];
 
     public string GitCloneUrl
     {
@@ -894,7 +906,7 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
     public string MenuCopyTree { get; private set; } = string.Empty;
     public string MenuCopyContent { get; private set; } = string.Empty;
     public string MenuCopyTreeAndContent { get; private set; } = string.Empty;
-    public ObservableCollection<ToastMessageViewModel> ToastItems { get; private set; } = new();
+    public ObservableCollection<ToastMessageViewModel> ToastItems { get; private set; } = [];
     public bool HasToastItems => ToastItems.Count > 0;
     public string MenuView { get; private set; } = string.Empty;
     public string MenuViewExpandAll { get; private set; } = string.Empty;
@@ -909,6 +921,7 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
     public string MenuViewAcrylic { get; private set; } = string.Empty;
     public string MenuViewCompactMode { get; private set; } = string.Empty;
     public string MenuViewTreeAnimation { get; private set; } = string.Empty;
+    public string MenuViewAdditionalCounts { get; private set; } = string.Empty;
     public string MenuOptions { get; private set; } = string.Empty;
     public string MenuOptionsTreeSettings { get; private set; } = string.Empty;
     public string MenuLanguage { get; private set; } = string.Empty;
@@ -1033,6 +1046,7 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         MenuViewAcrylic = _localization["Menu.View.Acrylic"];
         MenuViewCompactMode = _localization["Menu.View.CompactMode"];
         MenuViewTreeAnimation = _localization["Menu.View.TreeAnimation"];
+        MenuViewAdditionalCounts = _localization["Menu.View.AdditionalCounts"];
         MenuOptions = _localization["Menu.Options"];
         MenuOptionsTreeSettings = _localization["Menu.Options.TreeSettings"];
         MenuLanguage = _localization["Menu.Language"];
@@ -1155,6 +1169,7 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         RaisePropertyChanged(nameof(MenuViewAcrylic));
         RaisePropertyChanged(nameof(MenuViewCompactMode));
         RaisePropertyChanged(nameof(MenuViewTreeAnimation));
+        RaisePropertyChanged(nameof(MenuViewAdditionalCounts));
         RaisePropertyChanged(nameof(MenuOptions));
         RaisePropertyChanged(nameof(MenuOptionsTreeSettings));
         RaisePropertyChanged(nameof(MenuLanguage));

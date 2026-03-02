@@ -1,16 +1,7 @@
 namespace DevProjex.Application.Services;
 
-public sealed class TreeNodePresentationService
+public sealed class TreeNodePresentationService(LocalizationService localization, IIconMapper iconMapper)
 {
-	private readonly LocalizationService _localization;
-	private readonly IIconMapper _iconMapper;
-
-	public TreeNodePresentationService(LocalizationService localization, IIconMapper iconMapper)
-	{
-		_localization = localization;
-		_iconMapper = iconMapper;
-	}
-
 	public TreeNodeDescriptor Build(FileSystemNode root)
 	{
 		return BuildNode(root, isRoot: true);
@@ -19,10 +10,10 @@ public sealed class TreeNodePresentationService
 	private TreeNodeDescriptor BuildNode(FileSystemNode node, bool isRoot)
 	{
 		var displayName = node.IsAccessDenied
-			? (isRoot ? _localization["Tree.AccessDeniedRoot"] : _localization["Tree.AccessDenied"])
+			? (isRoot ? localization["Tree.AccessDeniedRoot"] : localization["Tree.AccessDenied"])
 			: node.Name;
 
-		var iconKey = _iconMapper.GetIconKey(node);
+		var iconKey = iconMapper.GetIconKey(node);
 
 		// Pre-allocate capacity to avoid list resizing
 		var children = new List<TreeNodeDescriptor>(node.Children.Count);

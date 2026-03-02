@@ -11,7 +11,7 @@ public sealed class SelectedContentExportServiceMarkerTests
 		var text = temp.CreateFile("text.txt", "Hello");
 
 		var service = new SelectedContentExportService(new FileContentAnalyzer());
-		var result = service.Build(new[] { whitespace, text, empty });
+		var result = service.Build([whitespace, text, empty]);
 
 		Assert.Contains($"{empty}:", result);
 		Assert.Contains("[No Content, 0 bytes]", result);
@@ -31,11 +31,11 @@ public sealed class SelectedContentExportServiceMarkerTests
 	public void Build_SkipsBinaryFilesEvenWhenMixed()
 	{
 		using var temp = new TemporaryDirectory();
-		var binary = temp.CreateBinaryFile("image.bin", new byte[] { 1, 2, 0, 3 });
+		var binary = temp.CreateBinaryFile("image.bin", [1, 2, 0, 3]);
 		var text = temp.CreateFile("note.txt", "text");
 
 		var service = new SelectedContentExportService(new FileContentAnalyzer());
-		var result = service.Build(new[] { binary, text });
+		var result = service.Build([binary, text]);
 
 		Assert.DoesNotContain($"{binary}:", result);
 		Assert.Contains($"{text}:", result);
@@ -50,7 +50,7 @@ public sealed class SelectedContentExportServiceMarkerTests
 		var file = temp.CreateFile("whitespace.txt", content);
 
 		var service = new SelectedContentExportService(new FileContentAnalyzer());
-		var result = service.Build(new[] { file });
+		var result = service.Build([file]);
 
 		var bytes = Encoding.UTF8.GetByteCount(content);
 		Assert.Contains($"[Whitespace, {bytes} bytes]", result);

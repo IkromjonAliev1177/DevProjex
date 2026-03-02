@@ -296,6 +296,7 @@ public class ZipDownloadAdvancedTests : IAsyncLifetime
 
         // Our specific temp file should not exist
         // (Note: Other tests might create temp files, so we can't assert complete absence)
+        var cleanupException = default(Exception);
         foreach (var zip in tempZips)
         {
             var fileInfo = new FileInfo(zip);
@@ -308,12 +309,12 @@ public class ZipDownloadAdvancedTests : IAsyncLifetime
                 }
                 catch
                 {
-                    // Best effort cleanup
+                    cleanupException ??= new IOException($"Could not clean stale temp ZIP: {zip}");
                 }
             }
         }
 
-        Assert.True(true); // Just verify no exception during cleanup
+        Assert.Null(cleanupException);
     }
 
     #endregion
@@ -342,25 +343,38 @@ public class ZipDownloadAdvancedTests : IAsyncLifetime
     [Fact]
     public async Task DownloadAndExtractAsync_CancellationCleansUpPartialFiles()
     {
-        // Verify cleanup after cancellation
+        // Use progress-driven cancellation instead of time-based cancellation.
+        // Time-based CancelAfter(...) is flaky on fast runners.
         var targetDir = _tempDir.CreateDirectory("cancel-cleanup");
-        using var cts = new CancellationTokenSource(100); // Cancel after 100ms
+        using var cts = new CancellationTokenSource();
+        var progress = new ImmediateProgress(_ =>
+        {
+            if (!cts.IsCancellationRequested)
+                cts.Cancel();
+        });
 
         try
         {
-            await _zipService.DownloadAndExtractAsync(
+            var result = await _zipService.DownloadAndExtractAsync(
                 TestRepoUrl,
                 targetDir,
+                progress,
                 cancellationToken: cts.Token);
+
+            // Network can fail before progress callback has a chance to cancel.
+            // Keep this integration test deterministic in CI.
+            if (!cts.IsCancellationRequested && !result.Success)
+                return;
+
+            throw new Xunit.Sdk.XunitException("Expected operation to be cancelled before completion.");
         }
         catch (OperationCanceledException)
         {
             // Expected
         }
 
-        // Target directory might have partial content
-        // but temp ZIP should be cleaned up
-        Assert.True(true); // Just verify no hanging resources
+        // Cancellation token must be observed as cancelled.
+        Assert.True(cts.IsCancellationRequested);
     }
 
     #endregion
@@ -507,15 +521,8 @@ public class ZipDownloadAdvancedTests : IAsyncLifetime
 
     #endregion
 
-    private sealed class ImmediateProgress : IProgress<string>
+    private sealed class ImmediateProgress(Action<string> onReport) : IProgress<string>
     {
-        private readonly Action<string> _onReport;
-
-        public ImmediateProgress(Action<string> onReport)
-        {
-            _onReport = onReport;
-        }
-
-        public void Report(string value) => _onReport(value);
+        public void Report(string value) => onReport(value);
     }
 }

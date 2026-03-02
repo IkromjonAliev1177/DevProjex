@@ -1,18 +1,25 @@
 using Avalonia.Controls.Documents;
+using System.Runtime.CompilerServices;
 
 namespace DevProjex.Avalonia.ViewModels;
 
-public sealed class TreeNodeViewModel : ViewModelBase
+public sealed class TreeNodeViewModel(
+    TreeNodeDescriptor descriptor,
+    TreeNodeViewModel? parent,
+    IImage? icon)
+    : ViewModelBase
 {
-    private static readonly IReadOnlyList<TreeNodeViewModel> EmptyChildItems = Array.Empty<TreeNodeViewModel>();
+    private static readonly IReadOnlyList<TreeNodeViewModel> EmptyChildItems = [];
 
     private bool? _isChecked = false;
     private bool _isExpanded;
     private bool _isSelected;
-    private string _displayName;
+    private string _displayName = descriptor.DisplayName;
     private bool _isCurrentSearchMatch;
     private InlineCollection? _displayInlines;
     private bool _hasHighlightedDisplay;
+    private int _searchSelfMatchEpoch;
+    private int _searchDescendantMatchEpoch;
 
     /// <summary>
     /// Raised when checkbox state changes. Used for real-time metrics updates.
@@ -20,24 +27,13 @@ public sealed class TreeNodeViewModel : ViewModelBase
     /// </summary>
     public static event EventHandler? GlobalCheckedChanged;
 
-    public TreeNodeViewModel(
-        TreeNodeDescriptor descriptor,
-        TreeNodeViewModel? parent,
-        IImage? icon)
-    {
-        Descriptor = descriptor;
-        Parent = parent;
-        _displayName = descriptor.DisplayName;
-        Icon = icon;
-        // Pre-allocate capacity based on descriptor children count
-        Children = new List<TreeNodeViewModel>(descriptor.Children.Count);
-    }
+    // Pre-allocate capacity based on descriptor children count
 
-    public TreeNodeDescriptor Descriptor { get; private set; }
+    public TreeNodeDescriptor Descriptor { get; private set; } = descriptor;
 
-    public TreeNodeViewModel? Parent { get; private set; }
+    public TreeNodeViewModel? Parent { get; private set; } = parent;
 
-    public IList<TreeNodeViewModel> Children { get; }
+    public IList<TreeNodeViewModel> Children { get; } = new List<TreeNodeViewModel>(descriptor.Children.Count);
     public IEnumerable<TreeNodeViewModel> ChildItemsSource => Children.Count > 0 ? Children : EmptyChildItems;
 
     /// <summary>
@@ -46,7 +42,7 @@ public sealed class TreeNodeViewModel : ViewModelBase
     /// </summary>
     public bool HasChildren => Children.Count > 0;
 
-    public IImage? Icon { get; set; }
+    public IImage? Icon { get; set; } = icon;
 
     public InlineCollection? DisplayInlines => _displayInlines;
 
@@ -202,12 +198,26 @@ public sealed class TreeNodeViewModel : ViewModelBase
         _displayInlines?.Clear();
         _displayInlines = null;
         _hasHighlightedDisplay = false;
+        _searchSelfMatchEpoch = 0;
+        _searchDescendantMatchEpoch = 0;
         Icon = null;
 
         // Break circular references to help GC
         Parent = null;
         Descriptor = null!;
     }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void MarkSearchSelfMatch(int epoch) => _searchSelfMatchEpoch = epoch;
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void MarkSearchDescendantMatch(int epoch) => _searchDescendantMatchEpoch = epoch;
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public bool HasSearchSelfMatch(int epoch) => _searchSelfMatchEpoch == epoch;
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public bool HasSearchDescendantMatch(int epoch) => _searchDescendantMatchEpoch == epoch;
 
     public void UpdateSearchHighlight(
         string? query,

@@ -13,7 +13,7 @@ public sealed class ScanOptionsUseCaseTests
 				RootAccessDenied: true,
 				HadAccessDenied: false),
 			GetRootFolderNamesHandler = (_, _) => new ScanResult<List<string>>(
-				new List<string> { "z", "a" },
+				["z", "a"],
 				RootAccessDenied: false,
 				HadAccessDenied: true)
 		};
@@ -26,8 +26,8 @@ public sealed class ScanOptionsUseCaseTests
 			SmartIgnoredFolders: new HashSet<string>(),
 			SmartIgnoredFiles: new HashSet<string>())));
 
-		Assert.Equal(new[] { ".a", ".b" }, result.Extensions);
-		Assert.Equal(new[] { "a", "z" }, result.RootFolders);
+		Assert.Equal([".a", ".b"], result.Extensions);
+		Assert.Equal(["a", "z"], result.RootFolders);
 		Assert.True(result.RootAccessDenied);
 		Assert.True(result.HadAccessDenied);
 	}
@@ -139,11 +139,11 @@ public sealed class ScanOptionsUseCaseTests
 		var scanner = new StubFileSystemScanner
 		{
 			GetExtensionsHandler = (_, _) => new ScanResult<HashSet<string>>(
-				new HashSet<string>(),
+				[],
 				RootAccessDenied: false,
 				HadAccessDenied: false),
 			GetRootFolderNamesHandler = (_, _) => new ScanResult<List<string>>(
-				new List<string>(),
+				[],
 				RootAccessDenied: false,
 				HadAccessDenied: false)
 		};
@@ -169,11 +169,11 @@ public sealed class ScanOptionsUseCaseTests
 		var scanner = new StubFileSystemScanner
 		{
 			GetRootFileExtensionsHandler = (_, _) => new ScanResult<HashSet<string>>(
-				new HashSet<string> { ".root" },
+				[".root"],
 				RootAccessDenied: true,
 				HadAccessDenied: false),
 			GetExtensionsHandler = (_, _) => new ScanResult<HashSet<string>>(
-				new HashSet<string> { ".cs" },
+				[".cs"],
 				RootAccessDenied: false,
 				HadAccessDenied: true)
 		};

@@ -137,6 +137,11 @@ Interfeysni zichroq qiladi: daraxt va sozlamalarda oraliqlar kichikroq.
 ### Daraxt animatsiyasi
 Daraxt qatorlarini kursorga tutganda silliq siljish animatsiyasini yoqadi.
 
+### Qo‘shimcha hisoblagichlar
+«E’tiborsiz qoldirish» blokidagi bandlar yonidagi qavs ichidagi sonni ko‘rsatadi/yashiradi.
+Standart holatda yoqilgan.
+Filtrlash qoidalariga ta’sir qilmaydi.
+
 ## 8) Daraxt bo'yicha qidiruv
 Qidiruv panelini ochadi, mosliklarni yoritadi va navigatsiya qiladi.
 * Ctrl+F — ko‘rsatish/yashirish
@@ -145,6 +150,8 @@ Qidiruv panelini ochadi, mosliklarni yoritadi va navigatsiya qiladi.
 * Esc — yopish
 
 Qidiruv faqat kerakli shoxlarni ochadi; so‘rov tozalansa, daraxt yig‘iladi (ildizdan tashqari).
+Mosliklar soni juda ko‘p bo‘lsa, interfeys tezkorligini saqlash uchun ilova avtomatik ochish va ommaviy yoritishni cheklashi mumkin.
+Qidiruv paneli yopilganda, yopilish animatsiyasi tugagach so‘rov tozalanadi.
 
 Cheklovlar:
 * qidiruv ochilganda, filtr avtomatik yopiladi;
@@ -194,11 +201,14 @@ Muhim:
 Variantlar tartibi:
 * Smart ignore (mavjud bo‘lsa)
 * .gitignore dan foydalanish (kamida bitta `.gitignore` topilsa)
+* Bo‘sh papkalar
 * Yashirin papkalar
 * Yashirin fayllar
 * Boshida nuqtali papkalar
 * Boshida nuqtali fayllar
-* Kengaytmasiz fayllar (faqat shunday fayllar aniqlanganda ko‘rsatiladi)
+* Kengaytmasiz fayllar
+
+Asosiy qoidalar bandlari (yashirin, nuqtali, bo‘sh, kengaytmasiz) faqat mos elementlar mavjud bo‘lganda ko‘rsatiladi.
 
 ".gitignore dan foydalanish" ostidagi chiziq Git/Smart qoidalarni asosiy ko‘rinish qoidalaridan ajratadi.
 
@@ -227,8 +237,11 @@ Variantlar:
 * Yashirin fayllar
 * Boshida nuqtali papkalar
 * Boshida nuqtali fayllar
+* Bo‘sh papkalar
+* Kengaytmasiz fayllar
 
-Bu qoidalar `.gitignore` va Smart Ignore’dan mustaqil, faqat o‘z yoqib/o‘chirgichlari bilan ishlaydi.
+Band yoqilganda mos elementlar daraxtdan va nusxalash/eksport natijalaridan yashiriladi.
+Bu qoidalar `.gitignore` va Smart Ignore’dan mustaqil.
 
 ### 11.5 Ichki ishlash: odatiy holatlar
 1. Bitta loyiha, `.gitignore` bor.
@@ -253,14 +266,14 @@ Smart Ignore (yoqilgan bo‘lsa) aniqlangan hududlarda filtrlashni to‘ldiradi.
 Agar `.gitignore` topilmasa va Smart Ignore mos bo‘lmasa, bu variantlar ko‘rsatilmaydi.
 Faqat asosiy ko‘rinish qoidalari qoladi.
 
-### 11.6 Kengaytmasiz fayllar
-«Kengaytmasiz fayllar» bandi kengaytmasi yo‘q fayllar ko‘rinishini boshqaradi (masalan: `Dockerfile`, `Makefile`, `README`).
+### 11.6 Bo‘sh papkalar
+Mantiqan bo‘sh papkalarni daraxtdan va nusxalash/eksport natijalaridan yashiradi.
 
-Qoidalar:
-* band faqat joriy ma’lumotlar to‘plamida bunday fayllar haqiqatda mavjud bo‘lsa ko‘rsatiladi;
-* band yoqilganda, kengaytmasiz fayllar daraxtdan va nusxalash/eksport amallaridan chiqarib tashlanadi;
-* band o‘chirilganda, kengaytmasiz fayllar natijaga kiritiladi;
-* «Fayl turlari» ro‘yxati bu mexanizmga ta’sir qilmaydi.
+### 11.7 Kengaytmasiz fayllar
+Kengaytmasi yo‘q fayllarni (masalan: `Dockerfile`, `Makefile`, `README`) daraxtdan va nusxalash/eksport natijalaridan yashiradi.
+
+### 11.8 «E’tiborsiz qoldirish» blokidagi hisoblagichlar
+«Ko‘rinish → Qo‘shimcha hisoblagichlar» yoqilganda, mavjud bandlar yonida son `(N)` formatida ko‘rsatiladi.
 ## 12) Daraxt va metrikalar qanday hisoblanadi
 Natija quyidagilarga bog‘liq:
 * tanlangan yuqori darajadagi jildlar
@@ -323,7 +336,8 @@ Tema popoveri quyilarni almashtiradi:
 ## 15) Yordam
 
 ### 15.1 Sozlamalarni tiklash
-Sozlamalarni tiklash (Yordam → Sozlamalarni tiklash) faqat interfeysning vizual sozlamalarini tiklaydi (tema, effektlar, ixcham rejim, daraxt animatsiyasi) va loyiha ma’lumotlarini o‘zgartirmaydi.
+Sozlamalarni tiklash (Yordam → Sozlamalarni tiklash) faqat interfeysning vizual sozlamalarini tiklaydi (tema, effektlar, ixcham rejim, daraxt animatsiyasi, qo‘shimcha hisoblagichlar) va loyiha ma’lumotlarini o‘zgartirmaydi. Tiklangandan keyin qo‘shimcha hisoblagichlar standart holatda yoqilgan bo‘ladi.
+Bu amal interfeys tilining saqlangan tanlovini ham tozalaydi.
 
 ### 15.2 Ma’lumotlarni tiklash
 Ma’lumotlarni tiklash (Yordam → Ma’lumotlarni tiklash) mahalliy loyiha parametrlarining saqlangan profillarini o‘chiradi:

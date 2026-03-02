@@ -7,9 +7,9 @@ namespace DevProjex.Infrastructure.SmartIgnore;
 public sealed class RustArtifactsIgnoreRule : ISmartIgnoreRule
 {
 	private static readonly string[] FolderNames =
-	{
+	[
 		"target"
-	};
+	];
 
 	public SmartIgnoreResult Evaluate(string rootPath)
 	{

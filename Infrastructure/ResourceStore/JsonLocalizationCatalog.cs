@@ -2,12 +2,7 @@ namespace DevProjex.Infrastructure.ResourceStore;
 
 public sealed class JsonLocalizationCatalog : ILocalizationCatalog
 {
-	private readonly Lazy<IReadOnlyDictionary<AppLanguage, IReadOnlyDictionary<string, string>>> _cache;
-
-	public JsonLocalizationCatalog()
-	{
-		_cache = new Lazy<IReadOnlyDictionary<AppLanguage, IReadOnlyDictionary<string, string>>>(LoadAll);
-	}
+	private readonly Lazy<IReadOnlyDictionary<AppLanguage, IReadOnlyDictionary<string, string>>> _cache = new(LoadAll);
 
 	public IReadOnlyDictionary<string, string> Get(AppLanguage language)
 	{

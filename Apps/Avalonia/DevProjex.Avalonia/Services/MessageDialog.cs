@@ -24,7 +24,7 @@ public static class MessageDialog
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             CanResize = false,
             RequestedThemeVariant = themeVariant,
-            TransparencyLevelHint = new[] { WindowTransparencyLevel.None },
+            TransparencyLevelHint = [WindowTransparencyLevel.None],
             Background = baseBackground,
             Content = BuildContent(message)
         };
@@ -71,7 +71,7 @@ public static class MessageDialog
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             CanResize = false,
             RequestedThemeVariant = themeVariant,
-            TransparencyLevelHint = new[] { WindowTransparencyLevel.None },
+            TransparencyLevelHint = [WindowTransparencyLevel.None],
             Background = baseBackground,
             Content = BuildConfirmationContent(message, confirmButtonText, cancelButtonText, completion)
         };

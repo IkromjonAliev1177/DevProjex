@@ -137,6 +137,11 @@ Rende l'interfaccia più densa: spazi più piccoli nell'albero e nelle impostazi
 ### Animazione albero
 Attiva un'animazione di scorrimento fluido quando si passa il mouse sulle righe dell'albero.
 
+### Contatori aggiuntivi
+Mostra/nasconde le quantità tra parentesi nelle opzioni del blocco « Ignora ».
+Attivi per impostazione predefinita.
+Non modifica le regole di filtro.
+
 ## 8) Ricerca nell'albero
 Apre la ricerca, evidenzia le corrispondenze e permette la navigazione.
 * Ctrl+F — mostra/nascondi
@@ -145,6 +150,8 @@ Apre la ricerca, evidenzia le corrispondenze e permette la navigazione.
 * Esc — chiudi
 
 La ricerca apre solo i rami necessari; svuotando la query l’albero si richiude (tranne la radice).
+Con un numero molto elevato di corrispondenze, l’app può limitare l’espansione automatica e l’evidenziazione globale per mantenere l’interfaccia reattiva.
+Alla chiusura della ricerca, la query viene svuotata dopo il completamento dell’animazione di chiusura.
 
 Limitazioni:
 * all’apertura della ricerca, il filtro si chiude automaticamente;
@@ -194,11 +201,14 @@ L’elenco « Ignora » viene generato automaticamente in base al percorso corre
 Ordine delle opzioni:
 * Smart ignore (se disponibile)
 * Usa .gitignore (se viene trovato almeno un `.gitignore`)
+* Cartelle vuote
 * Cartelle nascoste
 * File nascosti
 * Cartelle con punto iniziale
 * File con punto iniziale
-* File senza estensione (mostrato solo se tali file vengono rilevati)
+* File senza estensione
+
+Le opzioni delle regole base (nascosti, con punto, vuoti, senza estensione) vengono mostrate solo se esistono elementi corrispondenti.
 
 La linea sotto « Usa .gitignore » separa le regole Git/Smart dalle regole base di visibilità.
 
@@ -227,8 +237,11 @@ Opzioni:
 * File nascosti
 * Cartelle con punto iniziale
 * File con punto iniziale
+* Cartelle vuote
+* File senza estensione
 
-Queste regole sono indipendenti da `.gitignore` e Smart Ignore e dipendono solo dai rispettivi interruttori.
+Quando un’opzione è attiva, nasconde gli elementi corrispondenti nell’albero e nei risultati di copia/esportazione.
+Queste regole sono indipendenti da `.gitignore` e Smart Ignore.
 
 ### 11.5 Comportamento interno: casi tipici
 1. Progetto singolo con `.gitignore`.
@@ -253,14 +266,14 @@ Viene mostrato « Usa .gitignore ».
 Se non viene trovato `.gitignore` e Smart Ignore non è pertinente, queste opzioni non vengono mostrate.
 Restano solo le regole base di visibilità.
 
-### 11.6 File senza estensione
-L’opzione « File senza estensione » controlla la visibilità dei file senza estensione (ad esempio: `Dockerfile`, `Makefile`, `README`).
+### 11.6 Cartelle vuote
+Nasconde le cartelle logicamente vuote dall’albero e dai risultati di copia/esportazione.
 
-Regole:
-* l’opzione viene mostrata solo quando tali file sono realmente presenti nel set di dati corrente;
-* quando è attiva, i file senza estensione vengono esclusi dall’albero e dalle operazioni di copia/export;
-* quando è disattiva, i file senza estensione vengono inclusi nel risultato;
-* la lista « Tipi di file » non controlla questo comportamento.
+### 11.7 File senza estensione
+Nasconde i file senza estensione (ad esempio: `Dockerfile`, `Makefile`, `README`) dall’albero e dai risultati di copia/esportazione.
+
+### 11.8 Contatori nel blocco « Ignora »
+Quando « Visualizza → Contatori aggiuntivi » è attivo, vicino alle opzioni disponibili viene mostrato il numero nel formato `(N)`.
 ## 12) Come vengono calcolati albero e metriche
 Il risultato dipende da:
 * cartelle di primo livello selezionate
@@ -323,7 +336,8 @@ Gli elementi [Beta] possono cambiare tra versioni.
 ## 15) Aiuto
 
 ### 15.1 Ripristina impostazioni
-Ripristina impostazioni (Aiuto → Ripristina impostazioni) reimposta solo i parametri visivi dell’interfaccia (tema, effetti, modalità compatta, animazione albero) e non modifica i dati del progetto.
+Ripristina impostazioni (Aiuto → Ripristina impostazioni) reimposta solo i parametri visivi dell’interfaccia (tema, effetti, modalità compatta, animazione albero, contatori aggiuntivi) e non modifica i dati del progetto. Dopo il ripristino, i contatori aggiuntivi sono attivi per impostazione predefinita.
+Questa azione azzera anche la lingua dell’interfaccia salvata.
 
 ### 15.2 Ripristina dati
 Ripristina dati (Aiuto → Ripristina dati) rimuove i profili salvati dei parametri dei progetti locali:

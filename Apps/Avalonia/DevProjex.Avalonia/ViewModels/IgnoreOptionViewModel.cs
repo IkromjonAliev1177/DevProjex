@@ -1,18 +1,11 @@
 namespace DevProjex.Avalonia.ViewModels;
 
-public sealed class IgnoreOptionViewModel : ViewModelBase
+public sealed class IgnoreOptionViewModel(IgnoreOptionId id, string label, bool isChecked) : ViewModelBase
 {
-    private bool _isChecked;
-    private string _label;
+    private bool _isChecked = isChecked;
+    private string _label = label;
 
-    public IgnoreOptionViewModel(IgnoreOptionId id, string label, bool isChecked)
-    {
-        Id = id;
-        _label = label;
-        _isChecked = isChecked;
-    }
-
-    public IgnoreOptionId Id { get; }
+    public IgnoreOptionId Id { get; } = id;
 
     public bool IsGitIgnoreOption => Id == IgnoreOptionId.UseGitIgnore;
 

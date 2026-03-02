@@ -1,30 +1,30 @@
-using DebounceTimer = System.Timers.Timer;
-
 namespace DevProjex.Tests.Unit.Avalonia;
 
 public sealed class NameFilterCoordinatorTests
 {
     [Fact]
-    public void OnNameFilterChanged_StartsDebounceTimer()
+    public void OnNameFilterChanged_StartsDebounceOperation()
     {
         using var coordinator = new NameFilterCoordinator(_ => { });
-        var debounceTimer = GetDebounceTimer(coordinator);
 
         coordinator.OnNameFilterChanged();
 
-        Assert.True(debounceTimer.Enabled);
+        var debounceCts = GetDebounceCts(coordinator);
+        Assert.NotNull(debounceCts);
+        Assert.False(debounceCts!.IsCancellationRequested);
     }
 
     [Fact]
-    public void CancelPending_StopsDebounceTimer()
+    public void CancelPending_CancelsDebounceOperation()
     {
         using var coordinator = new NameFilterCoordinator(_ => { });
-        var debounceTimer = GetDebounceTimer(coordinator);
         coordinator.OnNameFilterChanged();
+        var debounceCts = GetDebounceCts(coordinator);
 
         coordinator.CancelPending();
 
-        Assert.False(debounceTimer.Enabled);
+        Assert.NotNull(debounceCts);
+        Assert.True(debounceCts!.IsCancellationRequested);
     }
 
     [Fact]
@@ -39,16 +39,14 @@ public sealed class NameFilterCoordinatorTests
         Assert.True(cts.IsCancellationRequested);
     }
 
-    private static DebounceTimer GetDebounceTimer(NameFilterCoordinator coordinator)
+    private static CancellationTokenSource? GetDebounceCts(NameFilterCoordinator coordinator)
     {
         var field = typeof(NameFilterCoordinator).GetField(
-            "_filterDebounceTimer",
+            "_debounceCts",
             BindingFlags.Instance | BindingFlags.NonPublic);
 
         Assert.NotNull(field);
-        var timer = field!.GetValue(coordinator) as DebounceTimer;
-        Assert.NotNull(timer);
-        return timer!;
+        return field!.GetValue(coordinator) as CancellationTokenSource;
     }
 
     private static void SetFilterCts(NameFilterCoordinator coordinator, CancellationTokenSource cts)

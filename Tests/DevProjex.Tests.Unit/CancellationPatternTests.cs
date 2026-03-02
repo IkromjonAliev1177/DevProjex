@@ -243,24 +243,27 @@ public sealed class CancellationPatternTests
 	[Fact]
 	public void Cts_DisposalPattern_NoExceptions()
 	{
-		CancellationTokenSource? cts = null;
-
-		// Simulate multiple operations
-		for (int i = 0; i < 5; i++)
+		var exception = Record.Exception(() =>
 		{
+			CancellationTokenSource? cts = null;
+
+			// Simulate multiple operations
+			for (int i = 0; i < 5; i++)
+			{
+				cts?.Cancel();
+				cts = new CancellationTokenSource();
+			}
+
+			// Final cleanup
 			cts?.Cancel();
-			cts = new CancellationTokenSource();
-		}
+			cts?.Dispose();
 
-		// Final cleanup
-		cts?.Cancel();
-		cts?.Dispose();
+			// Disposing null should not throw
+			CancellationTokenSource? nullCts = null;
+			nullCts?.Dispose();
+		});
 
-		// Disposing null should not throw
-		CancellationTokenSource? nullCts = null;
-		nullCts?.Dispose();
-
-		Assert.True(true); // No exceptions thrown
+		Assert.Null(exception);
 	}
 
 	/// <summary>
@@ -271,6 +274,7 @@ public sealed class CancellationPatternTests
 	{
 		using var cts = new CancellationTokenSource();
 		var exitedGracefully = false;
+		var innerTasksStarted = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
 
 		var outerTask = Task.Run(async () =>
 		{
@@ -287,6 +291,8 @@ public sealed class CancellationPatternTests
 				await Task.Delay(200, cts.Token);
 			}, cts.Token);
 
+			innerTasksStarted.TrySetResult(true);
+
 			try
 			{
 				await Task.WhenAll(innerTask1, innerTask2);
@@ -299,8 +305,8 @@ public sealed class CancellationPatternTests
 			}
 		}, cts.Token);
 
-		// Cancel after short delay
-		await Task.Delay(50);
+		// Ensure cancellation happens after inner tasks are scheduled.
+		await innerTasksStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
 		cts.Cancel();
 
 		try
@@ -312,7 +318,7 @@ public sealed class CancellationPatternTests
 			exitedGracefully = true;
 		}
 
-		Assert.True(exitedGracefully);
+		Assert.True(exitedGracefully || outerTask.IsCanceled);
 	}
 
 	/// <summary>

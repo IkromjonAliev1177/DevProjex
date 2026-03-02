@@ -16,18 +16,13 @@ namespace DevProjex.Tests.Integration;
 /// </summary>
 public class ZipDownloadServiceTests : IAsyncLifetime
 {
-    private readonly ZipDownloadService _service;
+    private readonly ZipDownloadService _service = new();
     private string? _tempDir;
 
     // Test repository - small public repo for testing
     // Using octocat/Hello-World - small and stable repo
     private const string TestRepoUrl = "https://github.com/octocat/Hello-World";
     private const string TestRepoName = "Hello-World";
-
-    public ZipDownloadServiceTests()
-    {
-        _service = new ZipDownloadService();
-    }
 
     public Task InitializeAsync()
     {

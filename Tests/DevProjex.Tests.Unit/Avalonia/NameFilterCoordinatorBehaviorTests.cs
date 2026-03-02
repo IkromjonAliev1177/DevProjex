@@ -1,5 +1,3 @@
-using DebounceTimer = System.Timers.Timer;
-
 namespace DevProjex.Tests.Unit.Avalonia;
 
 public sealed class NameFilterCoordinatorBehaviorTests
@@ -7,24 +5,34 @@ public sealed class NameFilterCoordinatorBehaviorTests
     [Fact]
     public void Constructor_ConfiguresExpectedDebounceInterval()
     {
-        using var coordinator = new NameFilterCoordinator(_ => { });
-        var timer = GetDebounceTimer(coordinator);
+        var field = typeof(NameFilterCoordinator).GetField(
+            "DebounceDelay",
+            BindingFlags.Static | BindingFlags.NonPublic);
 
-        Assert.Equal(360d, timer.Interval);
-        Assert.False(timer.AutoReset);
+        Assert.NotNull(field);
+        var debounceDelay = (TimeSpan)field!.GetValue(null)!;
+        Assert.Equal(TimeSpan.FromMilliseconds(360), debounceDelay);
     }
 
     [Fact]
-    public void OnNameFilterChanged_MultipleCalls_LeavesDebounceTimerEnabled()
+    public void OnNameFilterChanged_MultipleCalls_ReplacesAndCancelsPreviousDebounceToken()
     {
         using var coordinator = new NameFilterCoordinator(_ => { });
-        var timer = GetDebounceTimer(coordinator);
+        coordinator.OnNameFilterChanged();
+        var firstDebounceCts = GetDebounceCts(coordinator);
+        Assert.NotNull(firstDebounceCts);
 
         coordinator.OnNameFilterChanged();
-        coordinator.OnNameFilterChanged();
-        coordinator.OnNameFilterChanged();
+        var secondDebounceCts = GetDebounceCts(coordinator);
+        Assert.NotNull(secondDebounceCts);
 
-        Assert.True(timer.Enabled);
+        coordinator.OnNameFilterChanged();
+        var thirdDebounceCts = GetDebounceCts(coordinator);
+
+        Assert.NotNull(thirdDebounceCts);
+        Assert.True(firstDebounceCts!.IsCancellationRequested);
+        Assert.True(secondDebounceCts!.IsCancellationRequested);
+        Assert.False(thirdDebounceCts!.IsCancellationRequested);
     }
 
     [Fact]
@@ -81,24 +89,24 @@ public sealed class NameFilterCoordinatorBehaviorTests
     public void Dispose_StopsDebounceTimer()
     {
         var coordinator = new NameFilterCoordinator(_ => { });
-        var timer = GetDebounceTimer(coordinator);
         coordinator.OnNameFilterChanged();
+        var debounceCts = GetDebounceCts(coordinator);
 
         coordinator.Dispose();
 
-        Assert.False(timer.Enabled);
+        Assert.NotNull(debounceCts);
+        Assert.True(debounceCts!.IsCancellationRequested);
+        Assert.True(IsDebounceCtsNull(coordinator));
     }
 
-    private static DebounceTimer GetDebounceTimer(NameFilterCoordinator coordinator)
+    private static CancellationTokenSource? GetDebounceCts(NameFilterCoordinator coordinator)
     {
         var field = typeof(NameFilterCoordinator).GetField(
-            "_filterDebounceTimer",
+            "_debounceCts",
             BindingFlags.Instance | BindingFlags.NonPublic);
 
         Assert.NotNull(field);
-        var timer = field!.GetValue(coordinator) as DebounceTimer;
-        Assert.NotNull(timer);
-        return timer!;
+        return field!.GetValue(coordinator) as CancellationTokenSource;
     }
 
     private static void SetFilterCts(NameFilterCoordinator coordinator, CancellationTokenSource cts)
@@ -115,6 +123,16 @@ public sealed class NameFilterCoordinatorBehaviorTests
     {
         var field = typeof(NameFilterCoordinator).GetField(
             "_filterCts",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+
+        Assert.NotNull(field);
+        return field!.GetValue(coordinator) is null;
+    }
+
+    private static bool IsDebounceCtsNull(NameFilterCoordinator coordinator)
+    {
+        var field = typeof(NameFilterCoordinator).GetField(
+            "_debounceCts",
             BindingFlags.Instance | BindingFlags.NonPublic);
 
         Assert.NotNull(field);

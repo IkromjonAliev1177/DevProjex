@@ -149,7 +149,6 @@
     ".mpg": "video",
     ".mpe": "video",
     ".m2v": "video",
-    ".ts": "video",
     ".m2ts": "video",
     ".mts": "video",
     ".3gp": "video",

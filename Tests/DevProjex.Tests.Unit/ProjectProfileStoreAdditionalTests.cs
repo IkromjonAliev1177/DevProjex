@@ -98,9 +98,9 @@ public sealed class ProjectProfileStoreAdditionalTests
 			store.SaveProfile(
 				Path.Combine(tempRoot, "RepoA"),
 				new ProjectSelectionProfile(
-					SelectedRootFolders: new[] { "src", "SRC", "", "   ", "tests" },
-					SelectedExtensions: Array.Empty<string>(),
-					SelectedIgnoreOptions: Array.Empty<IgnoreOptionId>()));
+					SelectedRootFolders: ["src", "SRC", "", "   ", "tests"],
+					SelectedExtensions: [],
+					SelectedIgnoreOptions: []));
 
 			Assert.True(store.TryLoadProfile(Path.Combine(tempRoot, "RepoA"), out var loaded));
 			Assert.Equal(2, loaded.SelectedRootFolders.Count);
@@ -123,9 +123,9 @@ public sealed class ProjectProfileStoreAdditionalTests
 			store.SaveProfile(
 				Path.Combine(tempRoot, "RepoA"),
 				new ProjectSelectionProfile(
-					SelectedRootFolders: Array.Empty<string>(),
-					SelectedExtensions: new[] { ".cs", ".CS", "", "  ", ".md" },
-					SelectedIgnoreOptions: Array.Empty<IgnoreOptionId>()));
+					SelectedRootFolders: [],
+					SelectedExtensions: [".cs", ".CS", "", "  ", ".md"],
+					SelectedIgnoreOptions: []));
 
 			Assert.True(store.TryLoadProfile(Path.Combine(tempRoot, "RepoA"), out var loaded));
 			Assert.Equal(2, loaded.SelectedExtensions.Count);
@@ -148,14 +148,14 @@ public sealed class ProjectProfileStoreAdditionalTests
 			store.SaveProfile(
 				Path.Combine(tempRoot, "RepoA"),
 				new ProjectSelectionProfile(
-					SelectedRootFolders: Array.Empty<string>(),
-					SelectedExtensions: Array.Empty<string>(),
-					SelectedIgnoreOptions: new[]
-					{
+					SelectedRootFolders: [],
+					SelectedExtensions: [],
+					SelectedIgnoreOptions:
+					[
 						IgnoreOptionId.DotFiles,
 						IgnoreOptionId.DotFiles,
 						IgnoreOptionId.HiddenFiles
-					}));
+					]));
 
 			Assert.True(store.TryLoadProfile(Path.Combine(tempRoot, "RepoA"), out var loaded));
 			Assert.Equal(2, loaded.SelectedIgnoreOptions.Count);
@@ -176,9 +176,9 @@ public sealed class ProjectProfileStoreAdditionalTests
 			store.SaveProfile(
 				Path.Combine(tempRoot, "RepoA"),
 				new ProjectSelectionProfile(
-					SelectedRootFolders: Array.Empty<string>(),
-					SelectedExtensions: Array.Empty<string>(),
-					SelectedIgnoreOptions: Array.Empty<IgnoreOptionId>()));
+					SelectedRootFolders: [],
+					SelectedExtensions: [],
+					SelectedIgnoreOptions: []));
 
 			Assert.True(store.TryLoadProfile(Path.Combine(tempRoot, "RepoA"), out var loaded));
 			Assert.Empty(loaded.SelectedRootFolders);
@@ -268,9 +268,9 @@ public sealed class ProjectProfileStoreAdditionalTests
 				store.SaveProfile(
 					Path.Combine(tempRoot, $"Repo{i}"),
 					new ProjectSelectionProfile(
-						SelectedRootFolders: new[] { $"src{i}" },
-						SelectedExtensions: new[] { ".cs" },
-						SelectedIgnoreOptions: Array.Empty<IgnoreOptionId>()));
+						SelectedRootFolders: [$"src{i}"],
+						SelectedExtensions: [".cs"],
+						SelectedIgnoreOptions: []));
 			}
 
 			var json = File.ReadAllText(store.GetPath());
@@ -347,9 +347,9 @@ public sealed class ProjectProfileStoreAdditionalTests
 	private static ProjectSelectionProfile CreateProfile()
 	{
 		return new ProjectSelectionProfile(
-			SelectedRootFolders: new[] { "src" },
-			SelectedExtensions: new[] { ".cs" },
-			SelectedIgnoreOptions: new[] { IgnoreOptionId.DotFiles });
+			SelectedRootFolders: ["src"],
+			SelectedExtensions: [".cs"],
+			SelectedIgnoreOptions: [IgnoreOptionId.DotFiles]);
 	}
 
 	private static ProjectProfileStore CreateStore(string tempRoot)

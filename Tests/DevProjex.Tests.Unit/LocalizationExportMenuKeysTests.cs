@@ -3,7 +3,7 @@ namespace DevProjex.Tests.Unit;
 public sealed class LocalizationExportMenuKeysTests
 {
 	private static readonly string[] RequiredExportKeys =
-	{
+	[
 		"Menu.File.Export",
 		"Menu.File.Export.Tree",
 		"Menu.File.Export.Content",
@@ -11,7 +11,7 @@ public sealed class LocalizationExportMenuKeysTests
 		"Toast.Export.Tree",
 		"Toast.Export.Content",
 		"Toast.Export.TreeAndContent"
-	};
+	];
 
 	[Fact]
 	public void LocalizationFiles_ContainAllExportKeys()

@@ -287,7 +287,7 @@ public sealed class TreeBuilderTests
 		temp.CreateFile("build/keep.txt", "keep");
 		temp.CreateFile("build/drop.txt", "drop");
 
-		var matcher = GitIgnoreMatcher.Build(temp.Path, new[] { "build/", "!build/keep.txt" });
+		var matcher = GitIgnoreMatcher.Build(temp.Path, ["build/", "!build/keep.txt"]);
 		var rules = new IgnoreRules(false, false, false, false,
 			new HashSet<string>(), new HashSet<string>())
 		{
@@ -320,11 +320,10 @@ public sealed class TreeBuilderTests
 		temp.CreateFile("src/MyProject/Bin/Release/app.exe", "exe"); // Capital B
 		temp.CreateFile("src/MyProject/Obj/Release/data.txt", "data"); // Capital O
 
-		var matcher = GitIgnoreMatcher.Build(temp.Path, new[]
-		{
+		var matcher = GitIgnoreMatcher.Build(temp.Path, [
 			"[Bb]in/",
 			"[Oo]bj/"
-		});
+		]);
 		var rules = new IgnoreRules(false, false, false, false,
 			new HashSet<string>(), new HashSet<string>())
 		{
@@ -363,11 +362,10 @@ public sealed class TreeBuilderTests
 		temp.CreateFile("deep/nested/Project3/bin/out.dll", "out");
 
 		// Use directory patterns to ignore bin/obj folders themselves
-		var matcher = GitIgnoreMatcher.Build(temp.Path, new[]
-		{
+		var matcher = GitIgnoreMatcher.Build(temp.Path, [
 			"[Bb]in/",
 			"[Oo]bj/"
-		});
+		]);
 		var rules = new IgnoreRules(false, false, false, false,
 			new HashSet<string>(), new HashSet<string>())
 		{
@@ -403,7 +401,7 @@ public sealed class TreeBuilderTests
 		temp.CreateFile("node_modules/lodash/index.js", "lib");
 		temp.CreateFile("packages/app/node_modules/react/index.js", "react");
 
-		var matcher = GitIgnoreMatcher.Build(temp.Path, new[] { "node_modules/" });
+		var matcher = GitIgnoreMatcher.Build(temp.Path, ["node_modules/"]);
 		var rules = new IgnoreRules(false, false, false, false,
 			new HashSet<string>(), new HashSet<string>())
 		{
@@ -441,11 +439,10 @@ public sealed class TreeBuilderTests
 		temp.CreateFile("src/__pycache__/app.cpython-311.pyc", "cache");
 		temp.CreateFile("module.pyc", "compiled");
 
-		var matcher = GitIgnoreMatcher.Build(temp.Path, new[]
-		{
+		var matcher = GitIgnoreMatcher.Build(temp.Path, [
 			"__pycache__/",
 			"*.py[cod]"
-		});
+		]);
 		var rules = new IgnoreRules(false, false, false, false,
 			new HashSet<string>(), new HashSet<string>())
 		{
@@ -479,11 +476,10 @@ public sealed class TreeBuilderTests
 		temp.CreateFile("target/classes/App.class", "compiled");
 		temp.CreateFile("module/target/output.jar", "jar");
 
-		var matcher = GitIgnoreMatcher.Build(temp.Path, new[]
-		{
+		var matcher = GitIgnoreMatcher.Build(temp.Path, [
 			"target/",
 			"*.class"
-		});
+		]);
 		var rules = new IgnoreRules(false, false, false, false,
 			new HashSet<string>(), new HashSet<string>())
 		{
@@ -512,11 +508,10 @@ public sealed class TreeBuilderTests
 		temp.CreateFile("vendor/github.com/pkg/lib.go", "lib");
 		temp.CreateFile("app.exe", "binary");
 
-		var matcher = GitIgnoreMatcher.Build(temp.Path, new[]
-		{
+		var matcher = GitIgnoreMatcher.Build(temp.Path, [
 			"vendor/",
 			"*.exe"
-		});
+		]);
 		var rules = new IgnoreRules(false, false, false, false,
 			new HashSet<string>(), new HashSet<string>())
 		{
@@ -546,11 +541,10 @@ public sealed class TreeBuilderTests
 		temp.CreateFile("vendor/bundle/ruby/gems/rack/lib.rb", "lib");
 		temp.CreateFile("log/development.log", "log");
 
-		var matcher = GitIgnoreMatcher.Build(temp.Path, new[]
-		{
+		var matcher = GitIgnoreMatcher.Build(temp.Path, [
 			"vendor/bundle/",
 			"log/"
-		});
+		]);
 		var rules = new IgnoreRules(false, false, false, false,
 			new HashSet<string>(), new HashSet<string>())
 		{
@@ -579,11 +573,10 @@ public sealed class TreeBuilderTests
 		temp.CreateFile("target/debug/app", "binary");
 		temp.CreateFile("src/lib.rs.bk", "backup");
 
-		var matcher = GitIgnoreMatcher.Build(temp.Path, new[]
-		{
+		var matcher = GitIgnoreMatcher.Build(temp.Path, [
 			"/target/",
 			"**/*.rs.bk"
-		});
+		]);
 		var rules = new IgnoreRules(false, false, false, false,
 			new HashSet<string>(), new HashSet<string>())
 		{
@@ -621,7 +614,7 @@ public sealed class TreeBuilderTests
 		temp.CreateFile("src/app.cs", "code");
 
 		// GitIgnore only ignores .git, not .github or .hidden
-		var matcher = GitIgnoreMatcher.Build(temp.Path, new[] { ".git/" });
+		var matcher = GitIgnoreMatcher.Build(temp.Path, [".git/"]);
 		var rules = new IgnoreRules(false, false, false, false, // DotFolders is false
 			new HashSet<string>(), new HashSet<string>())
 		{
@@ -677,7 +670,7 @@ public sealed class TreeBuilderTests
 		temp.CreateFile("ignored/data.txt", "data"); // Smart-ignored folder
 		temp.CreateFile("build/out.dll", "dll"); // GitIgnore-ignored
 
-		var matcher = GitIgnoreMatcher.Build(temp.Path, new[] { "build/" });
+		var matcher = GitIgnoreMatcher.Build(temp.Path, ["build/"]);
 		var rules = new IgnoreRules(false, false, false, false,
 			new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "ignored" },
 			new HashSet<string>())
@@ -710,7 +703,7 @@ public sealed class TreeBuilderTests
 		temp.CreateFile("smart_ignored/data.txt", "data"); // Smart ignore
 		temp.CreateFile(".env", "secret"); // Dot file
 
-		var matcher = GitIgnoreMatcher.Build(temp.Path, new[] { "node_modules/" });
+		var matcher = GitIgnoreMatcher.Build(temp.Path, ["node_modules/"]);
 		var rules = new IgnoreRules(false, true, true, true, // DotFolders, DotFiles
 			new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "smart_ignored" },
 			new HashSet<string>())

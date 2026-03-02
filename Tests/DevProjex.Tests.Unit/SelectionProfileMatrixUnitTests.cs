@@ -13,9 +13,9 @@ public sealed class SelectionProfileMatrixUnitTests
 		var viewModel = CreateViewModel();
 		var coordinator = CreateCoordinator(viewModel, currentPathProvider: () => @"C:\ProjectA");
 		var profile = new ProjectSelectionProfile(
-			SelectedRootFolders: Array.Empty<string>(),
+			SelectedRootFolders: [],
 			SelectedExtensions: savedExtensions,
-			SelectedIgnoreOptions: Array.Empty<IgnoreOptionId>());
+			SelectedIgnoreOptions: []);
 
 		coordinator.ApplyProjectProfileSelections(@"C:\ProjectA", profile);
 		coordinator.ApplyExtensionScan(availableExtensions);
@@ -42,12 +42,12 @@ public sealed class SelectionProfileMatrixUnitTests
 		var viewModel = CreateViewModel();
 		var coordinator = CreateCoordinator(viewModel, currentPathProvider: () => currentPath);
 		var profile = new ProjectSelectionProfile(
-			SelectedRootFolders: Array.Empty<string>(),
-			SelectedExtensions: Array.Empty<string>(),
+			SelectedRootFolders: [],
+			SelectedExtensions: [],
 			SelectedIgnoreOptions: savedIgnoreOptions);
 
 		coordinator.ApplyProjectProfileSelections(currentPath, profile);
-		coordinator.PopulateIgnoreOptionsForRootSelection(new[] { "src" }, currentPath);
+		coordinator.PopulateIgnoreOptionsForRootSelection(["src"], currentPath);
 
 		var availableIds = viewModel.IgnoreOptions.Select(option => option.Id).ToArray();
 		var expectedChecked = CalculateExpectedCheckedIgnoreOptions(availableIds, savedIgnoreOptions);
@@ -107,7 +107,7 @@ public sealed class SelectionProfileMatrixUnitTests
 			};
 
 			foreach (var saved in savedVariants)
-				yield return new object[] { caseId++, available, saved };
+				yield return [ caseId++, available, saved ];
 		}
 	}
 
@@ -158,7 +158,7 @@ public sealed class SelectionProfileMatrixUnitTests
 		foreach (var _ in contexts)
 		{
 			foreach (var saved in savedVariants)
-				yield return new object[] { caseId++, saved };
+				yield return [ caseId++, saved ];
 		}
 
 		// Sanity: 26 variants * 3 contexts = 78 theory cases.
@@ -193,7 +193,7 @@ public sealed class SelectionProfileMatrixUnitTests
 		var available = new HashSet<IgnoreOptionId>(availableOptions);
 		var saved = new HashSet<IgnoreOptionId>(savedOptions);
 		if (saved.Count == 0)
-			return new HashSet<IgnoreOptionId>();
+			return [];
 
 		var matched = new HashSet<IgnoreOptionId>();
 		foreach (var option in saved)
@@ -204,7 +204,7 @@ public sealed class SelectionProfileMatrixUnitTests
 
 		return matched.Count > 0
 			? matched
-			: new HashSet<IgnoreOptionId>(available);
+			: [..available];
 	}
 
 	private static MainWindowViewModel CreateViewModel()

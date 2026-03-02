@@ -236,9 +236,9 @@ public class GitConcurrencyTests : IAsyncLifetime
         var task3 = Task.Run(() => _cacheService.DeleteRepositoryDirectory(dir));
 
         // Should not throw
-        await Task.WhenAll(task1, task2, task3);
-
-        Assert.True(true); // No exception thrown
+        var exception = await Record.ExceptionAsync(() => Task.WhenAll(task1, task2, task3));
+        Assert.Null(exception);
+        Assert.False(Directory.Exists(dir));
     }
 
     [Fact]

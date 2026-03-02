@@ -2,16 +2,9 @@ namespace DevProjex.Tests.Integration.Performance;
 
 [Collection("LocalPerformance")]
 [Trait("Category", "LocalPerformance")]
-public sealed class ExportPipelineLocalPerformanceTests
+public sealed class ExportPipelineLocalPerformanceTests(ITestOutputHelper output)
 {
-    private readonly ITestOutputHelper _output;
-    private readonly PerfBaselineStore _baselineStore;
-
-    public ExportPipelineLocalPerformanceTests(ITestOutputHelper output)
-    {
-        _output = output;
-        _baselineStore = new PerfBaselineStore(LocalPerformanceSettings.BaselineFilePath);
-    }
+    private readonly PerfBaselineStore _baselineStore = new(LocalPerformanceSettings.BaselineFilePath);
 
     public static IEnumerable<object[]> TreeExportCases()
     {
@@ -24,7 +17,7 @@ public sealed class ExportPipelineLocalPerformanceTests
         foreach (var branchFactor in branchFactors)
         foreach (var files in filesPerDirectory)
         foreach (var format in formats)
-            yield return new object[] { new TreeExportPerfCase(depth, branchFactor, files, format) };
+            yield return [ new TreeExportPerfCase(depth, branchFactor, files, format) ];
     }
 
     public static IEnumerable<object[]> ContentExportCases()
@@ -38,7 +31,7 @@ public sealed class ExportPipelineLocalPerformanceTests
         foreach (var size in fileSizes)
         foreach (var selection in selectionModes)
         foreach (var format in formats)
-            yield return new object[] { new ContentExportPerfCase(count, size, selection, format) };
+            yield return [ new ContentExportPerfCase(count, size, selection, format) ];
     }
 
     [LocalPerformanceTheory]
@@ -133,10 +126,10 @@ public sealed class ExportPipelineLocalPerformanceTests
     private void ReportAndAssert(string scenarioId, PerfMeasurement measurement, double maxMs, long maxAllocatedBytes)
     {
         var verdict = _baselineStore.Evaluate(scenarioId, measurement);
-        _output.WriteLine(verdict.Message);
+        output.WriteLine(verdict.Message);
 
         if (verdict.IsAcceleration)
-            _output.WriteLine($"[acceleration-detected] {scenarioId}");
+            output.WriteLine($"[acceleration-detected] {scenarioId}");
 
         if (LocalPerformanceSettings.ShouldEnforceBaselineRegression)
         {
@@ -144,7 +137,7 @@ public sealed class ExportPipelineLocalPerformanceTests
         }
         else if (verdict.IsRegression)
         {
-            _output.WriteLine($"[regression-detected-nonblocking] {scenarioId}");
+            output.WriteLine($"[regression-detected-nonblocking] {scenarioId}");
         }
 
         Assert.True(measurement.MedianMilliseconds < maxMs,

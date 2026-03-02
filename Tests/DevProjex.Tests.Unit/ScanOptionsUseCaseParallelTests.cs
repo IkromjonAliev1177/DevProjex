@@ -42,7 +42,7 @@ public sealed class ScanOptionsUseCaseParallelTests
 				Interlocked.Increment(ref foldersCalled);
 				Thread.Sleep(50); // Simulate I/O
 				return new ScanResult<List<string>>(
-					new List<string> { "src" },
+					["src"],
 					RootAccessDenied: false,
 					HadAccessDenied: false);
 			}
@@ -70,7 +70,7 @@ public sealed class ScanOptionsUseCaseParallelTests
 		var scanner = new StubFileSystemScanner
 		{
 			GetRootFileExtensionsHandler = (_, _) => new ScanResult<HashSet<string>>(
-				new HashSet<string>(), false, false),
+				[], false, false),
 			GetExtensionsHandler = (path, _) =>
 			{
 				Interlocked.Increment(ref callCount);
@@ -109,7 +109,7 @@ public sealed class ScanOptionsUseCaseParallelTests
 		var scanner = new StubFileSystemScanner
 		{
 			GetRootFileExtensionsHandler = (_, _) => new ScanResult<HashSet<string>>(
-				new HashSet<string>(), false, false),
+				[], false, false),
 			GetExtensionsHandler = (path, _) =>
 			{
 				var folderName = Path.GetFileName(path);
@@ -144,7 +144,7 @@ public sealed class ScanOptionsUseCaseParallelTests
 		var scanner = new StubFileSystemScanner
 		{
 			GetRootFileExtensionsHandler = (_, _) => new ScanResult<HashSet<string>>(
-				new HashSet<string>(), false, false),
+				[], false, false),
 			GetExtensionsHandler = (_, _) =>
 			{
 				var idx = Interlocked.Increment(ref callIndex);
@@ -179,14 +179,14 @@ public sealed class ScanOptionsUseCaseParallelTests
 		var scanner = new StubFileSystemScanner
 		{
 			GetRootFileExtensionsHandler = (_, _) => new ScanResult<HashSet<string>>(
-				new HashSet<string>(), false, false),
+				[], false, false),
 			GetExtensionsHandler = (path, _) =>
 			{
 				if (path.Contains("failing"))
 				{
 					// Return empty result (simulating handled exception)
 					return new ScanResult<HashSet<string>>(
-						new HashSet<string>(), false, true);
+						[], false, true);
 				}
 
 				Interlocked.Increment(ref processedCount);
@@ -276,11 +276,11 @@ public sealed class ScanOptionsUseCaseParallelTests
 		var scanner = new StubFileSystemScanner
 		{
 			GetExtensionsHandler = (_, _) => new ScanResult<HashSet<string>>(
-				new HashSet<string> { ".cs" },
+				[".cs"],
 				RootAccessDenied: true,
 				HadAccessDenied: false),
 			GetRootFolderNamesHandler = (_, _) => new ScanResult<List<string>>(
-				new List<string> { "src" },
+				["src"],
 				RootAccessDenied: false,
 				HadAccessDenied: true)
 		};
@@ -326,7 +326,7 @@ public sealed class ScanOptionsUseCaseParallelTests
 		var scanner = new StubFileSystemScanner
 		{
 			GetRootFileExtensionsHandler = (_, _) => new ScanResult<HashSet<string>>(
-				new HashSet<string>(), false, false),
+				[], false, false),
 			GetExtensionsHandler = (_, _) =>
 			{
 				Interlocked.Increment(ref processedCount);
@@ -371,7 +371,7 @@ public sealed class ScanOptionsUseCaseParallelTests
 			{
 				Interlocked.Increment(ref callCount);
 				return new ScanResult<List<string>>(
-					new List<string> { "src" },
+					["src"],
 					RootAccessDenied: false,
 					HadAccessDenied: false);
 			}
@@ -412,7 +412,7 @@ public sealed class ScanOptionsUseCaseParallelTests
 				RootAccessDenied: false,
 				HadAccessDenied: false),
 			GetRootFolderNamesHandler = (_, _) => new ScanResult<List<string>>(
-				new List<string> { "z", "A", "m" },
+				["z", "A", "m"],
 				RootAccessDenied: false,
 				HadAccessDenied: false)
 		};
@@ -421,7 +421,7 @@ public sealed class ScanOptionsUseCaseParallelTests
 		var result = useCase.Execute(new ScanOptionsRequest("/root", CreateDefaultRules()));
 
 		// Verify case-insensitive alphabetical sorting
-		Assert.Equal(new[] { ".A", ".m", ".z" }, result.Extensions);
-		Assert.Equal(new[] { "A", "m", "z" }, result.RootFolders);
+		Assert.Equal([".A", ".m", ".z"], result.Extensions);
+		Assert.Equal(["A", "m", "z"], result.RootFolders);
 	}
 }

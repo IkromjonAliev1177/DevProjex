@@ -3,7 +3,7 @@ namespace DevProjex.Infrastructure.SmartIgnore;
 public sealed class FrontendArtifactsIgnoreRule : ISmartIgnoreRule
 {
 	private static readonly string[] MarkerFiles =
-	{
+	[
 		"package.json",
 		"package-lock.json",
 		"pnpm-lock.yaml",
@@ -12,10 +12,10 @@ public sealed class FrontendArtifactsIgnoreRule : ISmartIgnoreRule
 		"bun.lock",
 		"pnpm-workspace.yaml",
 		"npm-shrinkwrap.json"
-	};
+	];
 
 	private static readonly string[] FolderNames =
-	{
+	[
 		"node_modules",
 		"dist",
 		"build",
@@ -32,7 +32,7 @@ public sealed class FrontendArtifactsIgnoreRule : ISmartIgnoreRule
 		".astro",
 		"storybook-static",
 		"out"
-	};
+	];
 
 	public SmartIgnoreResult Evaluate(string rootPath)
 	{

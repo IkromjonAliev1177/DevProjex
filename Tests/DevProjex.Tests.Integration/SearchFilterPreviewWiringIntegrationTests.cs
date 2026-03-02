@@ -56,10 +56,10 @@ public sealed class SearchFilterPreviewWiringIntegrationTests
     {
         var body = SliceMainWindow("private async void OnToggleFilter(", "private void OnFilterClose(");
 
-        var closeSearch = body.IndexOf("await CloseSearchAsync(focusTree: false, waitForAnimation: true);", StringComparison.Ordinal);
+        var closeSearch = body.IndexOf("await CloseSearchAsync(focusTree: false);", StringComparison.Ordinal);
         var showFilter = body.IndexOf("ShowFilter();", StringComparison.Ordinal);
 
-        Assert.True(closeSearch >= 0, "CloseSearchAsync with waitForAnimation should be used.");
+        Assert.True(closeSearch >= 0, "CloseSearchAsync should be awaited before showing filter.");
         Assert.True(showFilter > closeSearch, "Filter must be shown only after search close path.");
     }
 
@@ -67,14 +67,16 @@ public sealed class SearchFilterPreviewWiringIntegrationTests
     public void MainWindow_ShowSearch_ForwardsSelectAllFlagToFocusRoutine()
     {
         var body = SliceMainWindow("private void ShowSearch(", "private async Task FocusSearchBoxAfterOpenAnimationAsync(");
-        Assert.Contains("_ = FocusSearchBoxAfterOpenAnimationAsync(selectAllOnFocus);", body, StringComparison.Ordinal);
+        Assert.Contains("var focusRequestVersion = Interlocked.Increment(ref _searchFocusRequestVersion);", body, StringComparison.Ordinal);
+        Assert.Contains("_ = FocusSearchBoxAfterOpenAnimationAsync(selectAllOnFocus, focusRequestVersion);", body, StringComparison.Ordinal);
     }
 
     [Fact]
     public void MainWindow_ShowFilter_ForwardsSelectAllFlagToFocusRoutine()
     {
         var body = SliceMainWindow("private void ShowFilter(", "private async Task CloseFilterAsync(");
-        Assert.Contains("_ = FocusFilterBoxAfterOpenAnimationAsync(selectAllOnFocus);", body, StringComparison.Ordinal);
+        Assert.Contains("var focusRequestVersion = Interlocked.Increment(ref _filterFocusRequestVersion);", body, StringComparison.Ordinal);
+        Assert.Contains("_ = FocusFilterBoxAfterOpenAnimationAsync(selectAllOnFocus, focusRequestVersion);", body, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -182,10 +184,13 @@ public sealed class SearchFilterPreviewWiringIntegrationTests
     }
 
     [Fact]
-    public void MainWindow_CloseSearchAsync_ImmediatelyClearsQueryAndMatches()
+    public void MainWindow_CloseSearchAsync_WaitsAnimationBeforeConditionalSearchClear()
     {
         var body = SliceMainWindow("private async Task CloseSearchAsync(", "private bool IsSearchBarEffectivelyVisible()");
 
+        Assert.Contains("await WaitForPanelAnimationAsync(SearchBarAnimationDuration);", body, StringComparison.Ordinal);
+        Assert.Contains("if (_viewModel.SearchVisible)", body, StringComparison.Ordinal);
+        Assert.Contains("return;", body, StringComparison.Ordinal);
         Assert.Contains("_viewModel.SearchQuery = string.Empty;", body, StringComparison.Ordinal);
         Assert.Contains("_searchCoordinator.CancelPending();", body, StringComparison.Ordinal);
         Assert.Contains("_searchCoordinator.UpdateSearchMatches();", body, StringComparison.Ordinal);

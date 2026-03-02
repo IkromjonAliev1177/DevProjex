@@ -48,7 +48,7 @@ public sealed class AppIconTests
         }
         catch
         {
-            return Enumerable.Empty<string>();
+            return [];
         }
     }
 
@@ -262,7 +262,7 @@ public sealed class AppIconTests
             stream.ReadExactly(header);
 
             // PNG signature: 89 50 4E 47 0D 0A 1A 0A
-            byte[] pngSignature = { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A };
+            byte[] pngSignature = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
             Assert.True(header.SequenceEqual(pngSignature),
                 $"File {Path.GetFileName(pngFile)} should have valid PNG signature");
         }

@@ -7,7 +7,7 @@ namespace DevProjex.Infrastructure.SmartIgnore;
 public sealed class PythonArtifactsIgnoreRule : ISmartIgnoreRule
 {
 	private static readonly string[] MarkerFiles =
-	{
+	[
 		"pyproject.toml",
 		"requirements.txt",
 		"requirements-dev.txt",
@@ -16,10 +16,10 @@ public sealed class PythonArtifactsIgnoreRule : ISmartIgnoreRule
 		"Pipfile",
 		"poetry.lock",
 		"environment.yml"
-	};
+	];
 
 	private static readonly string[] FolderNames =
-	{
+	[
 		"__pycache__",
 		".pytest_cache",
 		".mypy_cache",
@@ -32,7 +32,7 @@ public sealed class PythonArtifactsIgnoreRule : ISmartIgnoreRule
 		".hypothesis",
 		".ipynb_checkpoints",
 		".pyre"
-	};
+	];
 
 	public SmartIgnoreResult Evaluate(string rootPath)
 	{
