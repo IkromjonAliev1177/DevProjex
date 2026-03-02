@@ -136,7 +136,7 @@ function Resolve-ManifestRoot([string]$outDirectory, [string]$packageIdentifier,
 }
 
 function Update-LicenseInLocaleManifests([string]$manifestRoot, [string]$licenseValue) {
-    $localeFiles = Get-ChildItem -Path $manifestRoot -File -Filter "*.locale.*.yaml" -ErrorAction SilentlyContinue
+    $localeFiles = @(Get-ChildItem -Path $manifestRoot -File -Filter "*.locale.*.yaml" -ErrorAction SilentlyContinue)
     if ($null -eq $localeFiles -or $localeFiles.Count -eq 0) {
         return
     }
