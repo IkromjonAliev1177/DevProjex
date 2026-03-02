@@ -13,7 +13,7 @@ It’s designed for real projects where CLI output is noisy, IDE tools are unava
 ## Download 🚀
 
 **Download from Microsoft Store:**
-👉 [Download from Microsoft Store](https://apps.microsoft.com/detail/9ndq3nq5m354?hl=en-EN&gl=EN)
+👉 [Download from Microsoft Store](https://apps.microsoft.com/detail/9ndq3nq5m354)
 
 **Latest GitHub release:**
 👉 [https://github.com/Avazbek22/DevProjex/releases/latest](https://github.com/Avazbek22/DevProjex/releases/latest)
@@ -106,7 +106,7 @@ DevProjex is not tied to a specific language or IDE.
 * **Avalonia UI** (cross-platform)
 * Cleanly separated architecture (Core / Services / UI)
 * JSON-based resources (localization, icon mappings, presets)
-* 3050+ automated tests (unit + integration)
+* 5000+ automated tests (unit + integration)
 
 ---
 
