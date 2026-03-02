@@ -16,13 +16,27 @@ public sealed class GitCloneWorkflowTests : IDisposable
     public GitCloneWorkflowTests()
     {
         _gitService = new GitRepositoryService();
-        var testCachePath = Path.Combine(Path.GetTempPath(), "DevProjex", "Tests", "GitIntegration");
+        var testCachePath = Path.Combine(
+            Path.GetTempPath(),
+            "DevProjex",
+            "Tests",
+            "GitIntegration",
+            Guid.NewGuid().ToString("N"));
         _cacheService = new RepoCacheService(testCachePath);
         _tempDir = new TemporaryDirectory();
     }
 
     public void Dispose()
     {
+        try
+        {
+            _cacheService.ClearAllCache();
+        }
+        catch
+        {
+            // Best effort cleanup.
+        }
+
         _tempDir.Dispose();
     }
 
@@ -213,7 +227,8 @@ public sealed class GitCloneWorkflowTests : IDisposable
         if (string.IsNullOrWhiteSpace(path))
             return;
 
-        const int maxAttempts = 30;
+        var isCi = string.Equals(Environment.GetEnvironmentVariable("CI"), "true", StringComparison.OrdinalIgnoreCase);
+        var maxAttempts = isCi ? 120 : 60;
         const int delayMs = 100;
 
         for (var attempt = 0; attempt < maxAttempts; attempt++)

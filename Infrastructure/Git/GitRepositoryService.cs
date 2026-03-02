@@ -697,65 +697,18 @@ public sealed class GitRepositoryService : IGitRepositoryService
                 outputBuffer.ToString(),
                 errorBuffer.ToString());
         }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            // Cancellation must wait for git process shutdown to release file handles
-            // before callers attempt cache cleanup.
-            await EnsureProcessTerminatedAsync(process).ConfigureAwait(false);
-            throw;
-        }
-    }
-
-    private static async Task EnsureProcessTerminatedAsync(Process process)
-    {
-        if (process.HasExited)
-            return;
-
-        try
-        {
-            process.Kill(entireProcessTree: true);
-        }
-        catch
-        {
-            // Ignore kill errors - process may have already exited.
-        }
-
-        if (await WaitForExitWithTimeoutAsync(process, millisecondsTimeout: 5000).ConfigureAwait(false))
-            return;
-
-        // Fallback in case tree-kill was not fully honored by the OS/process state.
-        try
-        {
-            if (!process.HasExited)
-                process.Kill(entireProcessTree: false);
-        }
-        catch
-        {
-            // Ignore kill errors - process may have already exited.
-        }
-
-        await WaitForExitWithTimeoutAsync(process, millisecondsTimeout: 2000).ConfigureAwait(false);
-    }
-
-    private static async Task<bool> WaitForExitWithTimeoutAsync(Process process, int millisecondsTimeout)
-    {
-        if (process.HasExited)
-            return true;
-
-        using var timeoutCts = new CancellationTokenSource(millisecondsTimeout);
-
-        try
-        {
-            await process.WaitForExitAsync(timeoutCts.Token).ConfigureAwait(false);
-            return true;
-        }
         catch (OperationCanceledException)
         {
-            return process.HasExited;
-        }
-        catch (InvalidOperationException)
-        {
-            return true;
+            // Kill the process tree on cancellation
+            try
+            {
+                process.Kill(entireProcessTree: true);
+            }
+            catch
+            {
+                // Ignore kill errors - process might have already exited
+            }
+            throw;
         }
     }
 
