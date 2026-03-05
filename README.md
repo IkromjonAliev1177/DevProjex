@@ -1,5 +1,14 @@
 # DevProjex 📁🌳
 
+![Downloads](https://img.shields.io/github/downloads/Avazbek22/DevProjex/total)
+![Build](https://img.shields.io/github/actions/workflow/status/Avazbek22/DevProjex/dotnet.yml)
+![Release](https://img.shields.io/github/v/release/Avazbek22/DevProjex)
+![License](https://img.shields.io/github/license/Avazbek22/DevProjex)
+![.NET](https://img.shields.io/badge/.NET-10-purple)
+![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-green)
+![WinGet](https://img.shields.io/badge/winget-available-blue)
+![Repo size](https://img.shields.io/github/repo-size/Avazbek22/DevProjex)
+
 **Visual project context builder for humans and AI**
 
 DevProjex is a cross-platform desktop application for **quickly exploring folder/project structures**, selecting what matters, and preparing **clean, controlled context in ASCII or JSON** (tree, file contents, or both) for clipboard and file export.
