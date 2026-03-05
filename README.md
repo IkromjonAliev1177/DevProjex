@@ -2,7 +2,6 @@
 
 ![Downloads](https://img.shields.io/github/downloads/Avazbek22/DevProjex/total)
 ![Build](https://img.shields.io/github/actions/workflow/status/Avazbek22/DevProjex/dotnet.yml)
-![Release](https://img.shields.io/github/v/release/Avazbek22/DevProjex)
 ![License](https://img.shields.io/github/license/Avazbek22/DevProjex)
 ![.NET](https://img.shields.io/badge/.NET-10-purple)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-green)
