@@ -145,4 +145,4 @@ See `LICENSE` for details.
 
 ## Keywords 🔎
 
-project tree viewer, folder structure, context builder, AI prompt preparation, llm, clipboard export, avalonia ui, .net 10, cross-platform desktop app, repository visualization, developer tools
+project tree viewer, folder structure viewer, directory tree generator, project structure visualizer, repository tree viewer, source code tree generator, repository visualization tool, codebase explorer, codebase visualization, directory structure export, AI prompt preparation, LLM context builder, codebase context extraction, AI developer tools, repository inspection tool, developer productivity tools, Avalonia UI desktop app, .NET 10 application, cross-platform developer tool
