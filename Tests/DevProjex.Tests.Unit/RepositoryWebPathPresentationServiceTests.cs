@@ -2,6 +2,27 @@ namespace DevProjex.Tests.Unit;
 
 public sealed class RepositoryWebPathPresentationServiceTests
 {
+	[Theory]
+	[InlineData("https://github.com/user/repo.git", "https://github.com/user/repo")]
+	[InlineData("https://github.com/user/repo.git/", "https://github.com/user/repo")]
+	[InlineData("https://github.com/user/repo?tab=readme#top", "https://github.com/user/repo")]
+	[InlineData("https://user:token@github.com/user/repo.git?tab=readme#top", "https://github.com/user/repo")]
+	[InlineData("github.com/user/repo.git/", "github.com/user/repo")]
+	public void NormalizeForDisplay_ReturnsCleanRepositoryUrl(string repositoryUrl, string expected)
+	{
+		var normalized = RepositoryWebPathPresentationService.NormalizeForDisplay(repositoryUrl);
+
+		Assert.Equal(expected, normalized);
+	}
+
+	[Fact]
+	public void NormalizeForDisplay_ReturnsEmpty_ForNullOrWhitespace()
+	{
+		Assert.Equal(string.Empty, RepositoryWebPathPresentationService.NormalizeForDisplay(null!));
+		Assert.Equal(string.Empty, RepositoryWebPathPresentationService.NormalizeForDisplay(""));
+		Assert.Equal(string.Empty, RepositoryWebPathPresentationService.NormalizeForDisplay("   "));
+	}
+
 	[Fact]
 	public void TryCreate_ReturnsNull_ForInvalidInputs()
 	{

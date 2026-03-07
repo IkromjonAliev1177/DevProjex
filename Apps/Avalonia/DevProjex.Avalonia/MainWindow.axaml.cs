@@ -4822,10 +4822,14 @@ public partial class MainWindow : Window
         // For local folders: show full path
         if (_viewModel.IsGitMode && !string.IsNullOrEmpty(_currentRepositoryUrl))
         {
+            var displayRepositoryUrl = RepositoryWebPathPresentationService.NormalizeForDisplay(_currentRepositoryUrl!);
+            if (string.IsNullOrWhiteSpace(displayRepositoryUrl))
+                displayRepositoryUrl = _currentRepositoryUrl;
+
             var branchDisplay = !string.IsNullOrEmpty(_viewModel.CurrentBranch)
                 ? $" [{_viewModel.CurrentBranch}]"
                 : string.Empty;
-            _viewModel.Title = $"{MainWindowViewModel.BaseTitle} - {_currentRepositoryUrl}{branchDisplay}";
+            _viewModel.Title = $"{MainWindowViewModel.BaseTitle} - {displayRepositoryUrl}{branchDisplay}";
         }
         else
         {

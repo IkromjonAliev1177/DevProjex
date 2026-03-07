@@ -2,13 +2,21 @@ namespace DevProjex.Application.Services;
 
 public sealed class RepositoryWebPathPresentationService
 {
+    public static string NormalizeForDisplay(string repositoryUrl)
+    {
+        if (string.IsNullOrWhiteSpace(repositoryUrl))
+            return string.Empty;
+
+        return NormalizeRepositoryUrl(repositoryUrl);
+    }
+
     public ExportPathPresentation? TryCreate(string localRootPath, string repositoryUrl)
     {
         if (string.IsNullOrWhiteSpace(localRootPath) || string.IsNullOrWhiteSpace(repositoryUrl))
             return null;
 
         var normalizedRootPath = Path.GetFullPath(localRootPath);
-        if (!Uri.TryCreate(NormalizeRepositoryUrl(repositoryUrl), UriKind.Absolute, out var repoUri))
+        if (!Uri.TryCreate(NormalizeForDisplay(repositoryUrl), UriKind.Absolute, out var repoUri))
             return null;
 
         if (!repoUri.Scheme.Equals(Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase) &&
@@ -30,7 +38,12 @@ public sealed class RepositoryWebPathPresentationService
     {
         var normalized = repositoryUrl.Trim();
         if (!Uri.TryCreate(normalized, UriKind.Absolute, out var uri))
-            return normalized.TrimEnd('/');
+        {
+            var fallback = normalized.TrimEnd('/');
+            if (fallback.EndsWith(".git", StringComparison.OrdinalIgnoreCase))
+                fallback = fallback[..^4];
+            return fallback;
+        }
 
         var builder = new UriBuilder(uri)
         {
