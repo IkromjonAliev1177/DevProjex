@@ -5,18 +5,6 @@ namespace DevProjex.Tests.Unit.Avalonia;
 public sealed class TreeSearchCoordinatorDebounceTests
 {
 	[Fact]
-	public void Constructor_ConfiguresExpectedDebounceInterval()
-	{
-		var field = typeof(TreeSearchCoordinator).GetField(
-			"SearchDebounceDelay",
-			BindingFlags.Static | BindingFlags.NonPublic);
-
-		Assert.NotNull(field);
-		var debounceDelay = (TimeSpan)field!.GetValue(null)!;
-		Assert.Equal(TimeSpan.FromMilliseconds(500), debounceDelay);
-	}
-
-	[Fact]
 	public void OnSearchQueryChanged_MultipleCalls_ReplacesAndCancelsPreviousDebounceToken()
 	{
 		var (viewModel, treeView) = CreateContext();

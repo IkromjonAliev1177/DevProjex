@@ -756,24 +756,10 @@ public partial class MainWindow : Window
             var files = e.DataTransfer.TryGetFiles();
             if (files is null) return;
 
-            var folder = files
+            var localPaths = files
                 .Select(f => f.TryGetLocalPath())
-                .Where(p => !string.IsNullOrWhiteSpace(p) && Directory.Exists(p))
-                .FirstOrDefault();
-
-            if (string.IsNullOrWhiteSpace(folder))
-            {
-                // Maybe it's a file - try to get its directory
-                var file = files
-                    .Select(f => f.TryGetLocalPath())
-                    .Where(p => !string.IsNullOrWhiteSpace(p) && File.Exists(p))
-                    .FirstOrDefault();
-
-                if (!string.IsNullOrWhiteSpace(file))
-                {
-                    folder = Path.GetDirectoryName(file);
-                }
-            }
+                .ToList();
+            var folder = ResolveDropFolderPath(localPaths);
 
             if (!string.IsNullOrWhiteSpace(folder))
             {
@@ -5278,34 +5264,60 @@ public partial class MainWindow : Window
         }
     }
 
+    private static string? ResolveDropFolderPath(IEnumerable<string?> localPaths)
+    {
+        var pathList = localPaths.ToList();
+
+        var folder = pathList
+            .FirstOrDefault(path => !string.IsNullOrWhiteSpace(path) && Directory.Exists(path));
+        if (!string.IsNullOrWhiteSpace(folder))
+            return folder;
+
+        var file = pathList
+            .FirstOrDefault(path => !string.IsNullOrWhiteSpace(path) && File.Exists(path));
+
+        return string.IsNullOrWhiteSpace(file)
+            ? null
+            : Path.GetDirectoryName(file);
+    }
+
+    private static string BuildWindowTitle(
+        string? currentPath,
+        bool isGitMode,
+        string? currentRepositoryUrl,
+        string? currentBranch,
+        string? currentProjectDisplayName)
+    {
+        if (string.IsNullOrWhiteSpace(currentPath))
+            return MainWindowViewModel.BaseTitleWithAuthor;
+
+        if (isGitMode && !string.IsNullOrEmpty(currentRepositoryUrl))
+        {
+            var displayRepositoryUrl = RepositoryWebPathPresentationService.NormalizeForDisplay(currentRepositoryUrl);
+            if (string.IsNullOrWhiteSpace(displayRepositoryUrl))
+                displayRepositoryUrl = currentRepositoryUrl;
+
+            var branchDisplay = !string.IsNullOrEmpty(currentBranch)
+                ? $" [{currentBranch}]"
+                : string.Empty;
+            return $"{MainWindowViewModel.BaseTitle} - {displayRepositoryUrl}{branchDisplay}";
+        }
+
+        var displayPath = !string.IsNullOrEmpty(currentProjectDisplayName)
+            ? currentProjectDisplayName
+            : currentPath;
+
+        return $"{MainWindowViewModel.BaseTitle} - {displayPath}";
+    }
+
     private void UpdateTitle()
     {
-        if (string.IsNullOrWhiteSpace(_currentPath))
-        {
-            _viewModel.Title = MainWindowViewModel.BaseTitleWithAuthor;
-            return;
-        }
-
-        // For Git clones: show full URL + branch in square brackets
-        // For local folders: show full path
-        if (_viewModel.IsGitMode && !string.IsNullOrEmpty(_currentRepositoryUrl))
-        {
-            var displayRepositoryUrl = RepositoryWebPathPresentationService.NormalizeForDisplay(_currentRepositoryUrl!);
-            if (string.IsNullOrWhiteSpace(displayRepositoryUrl))
-                displayRepositoryUrl = _currentRepositoryUrl;
-
-            var branchDisplay = !string.IsNullOrEmpty(_viewModel.CurrentBranch)
-                ? $" [{_viewModel.CurrentBranch}]"
-                : string.Empty;
-            _viewModel.Title = $"{MainWindowViewModel.BaseTitle} - {displayRepositoryUrl}{branchDisplay}";
-        }
-        else
-        {
-            var displayPath = !string.IsNullOrEmpty(_currentProjectDisplayName)
-                ? _currentProjectDisplayName
-                : _currentPath;
-            _viewModel.Title = $"{MainWindowViewModel.BaseTitle} - {displayPath}";
-        }
+        _viewModel.Title = BuildWindowTitle(
+            _currentPath,
+            _viewModel.IsGitMode,
+            _currentRepositoryUrl,
+            _viewModel.CurrentBranch,
+            _currentProjectDisplayName);
     }
 
     private IgnoreRules BuildIgnoreRules(

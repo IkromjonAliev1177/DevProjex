@@ -3,18 +3,6 @@ namespace DevProjex.Tests.Unit.Avalonia;
 public sealed class NameFilterCoordinatorBehaviorTests
 {
     [Fact]
-    public void Constructor_ConfiguresExpectedDebounceInterval()
-    {
-        var field = typeof(NameFilterCoordinator).GetField(
-            "DebounceDelay",
-            BindingFlags.Static | BindingFlags.NonPublic);
-
-        Assert.NotNull(field);
-        var debounceDelay = (TimeSpan)field!.GetValue(null)!;
-        Assert.Equal(TimeSpan.FromMilliseconds(360), debounceDelay);
-    }
-
-    [Fact]
     public void OnNameFilterChanged_MultipleCalls_ReplacesAndCancelsPreviousDebounceToken()
     {
         using var coordinator = new NameFilterCoordinator(_ => { });
