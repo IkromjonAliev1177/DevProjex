@@ -37,7 +37,9 @@ public sealed class TreeSearchCoordinator : IDisposable
     private readonly List<TreeNodeViewModel> _lastComputedMatches = [];
     private readonly Dictionary<string, List<TreeNodeViewModel>> _queryMatchesCache =
         new(StringComparer.OrdinalIgnoreCase);
-    private readonly Queue<string> _queryMatchesCacheOrder = new();
+    private readonly LinkedList<string> _queryMatchesCacheLru = [];
+    private readonly Dictionary<string, LinkedListNode<string>> _queryMatchesCacheNodes =
+        new(StringComparer.OrdinalIgnoreCase);
     private readonly object _highlightCtsLock = new();
     private CancellationTokenSource? _highlightApplyCts;
     private int _searchMatchIndex = -1;
@@ -50,7 +52,7 @@ public sealed class TreeSearchCoordinator : IDisposable
     private int _bringIntoViewVersion;
     private int _searchExpansionEpoch;
     private bool _searchExpansionStateInitialized;
-    private const int SearchQueryCacheLimit = 4;
+    private const int SearchQueryCacheLimit = 8;
     private const int MaxCachedMatchCount = 4096;
     private const int HighlightBatchSize = 256;
     private const int SearchAutoExpandMatchCap = 2500;
@@ -199,7 +201,8 @@ public sealed class TreeSearchCoordinator : IDisposable
         _flatNodeIndex.Clear();
         _lastComputedMatches.Clear();
         _queryMatchesCache.Clear();
-        _queryMatchesCacheOrder.Clear();
+        _queryMatchesCacheLru.Clear();
+        _queryMatchesCacheNodes.Clear();
         _searchExpandedNodes.Clear();
         _nextSearchExpandedNodes.Clear();
         _searchSelfMatchedNodes.Clear();
@@ -234,7 +237,8 @@ public sealed class TreeSearchCoordinator : IDisposable
         _flatNodeIndex.Clear();
         _lastComputedMatches.Clear();
         _queryMatchesCache.Clear();
-        _queryMatchesCacheOrder.Clear();
+        _queryMatchesCacheLru.Clear();
+        _queryMatchesCacheNodes.Clear();
         _searchExpandedNodes.Clear();
         _nextSearchExpandedNodes.Clear();
         _searchSelfMatchedNodes.Clear();
@@ -518,7 +522,8 @@ public sealed class TreeSearchCoordinator : IDisposable
         _indexedRootCount = currentRootCount;
         _indexedFirstRoot = currentFirstRoot;
         _queryMatchesCache.Clear();
-        _queryMatchesCacheOrder.Clear();
+        _queryMatchesCacheLru.Clear();
+        _queryMatchesCacheNodes.Clear();
         _lastComputedQuery = null;
         _lastComputedMatches.Clear();
     }
@@ -535,16 +540,50 @@ public sealed class TreeSearchCoordinator : IDisposable
             return _lastComputedMatches;
         }
 
+        if (TryGetBestCachedPrefixMatches(query, out var cachedPrefixMatches))
+            return cachedPrefixMatches;
+
         return _flatNodeIndex;
     }
 
     private bool TryGetCachedMatches(string query, out List<TreeNodeViewModel> matches)
     {
         if (_queryMatchesCache.TryGetValue(query, out matches!))
+        {
+            if (_queryMatchesCacheNodes.TryGetValue(query, out var node))
+            {
+                _queryMatchesCacheLru.Remove(node);
+                _queryMatchesCacheLru.AddFirst(node);
+            }
+
             return true;
+        }
 
         matches = null!;
         return false;
+    }
+
+    private bool TryGetBestCachedPrefixMatches(string query, out List<TreeNodeViewModel> matches)
+    {
+        matches = null!;
+        string? bestPrefix = null;
+
+        foreach (var cachedQuery in _queryMatchesCache.Keys)
+        {
+            if (string.IsNullOrWhiteSpace(cachedQuery))
+                continue;
+
+            if (!query.StartsWith(cachedQuery, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            if (bestPrefix is null || cachedQuery.Length > bestPrefix.Length)
+                bestPrefix = cachedQuery;
+        }
+
+        if (bestPrefix is null)
+            return false;
+
+        return TryGetCachedMatches(bestPrefix, out matches);
     }
 
     private void CacheMatches(string query, List<TreeNodeViewModel> matches)
@@ -556,15 +595,30 @@ public sealed class TreeSearchCoordinator : IDisposable
             return;
 
         if (_queryMatchesCache.ContainsKey(query))
+        {
+            if (_queryMatchesCacheNodes.TryGetValue(query, out var existingNode))
+            {
+                _queryMatchesCacheLru.Remove(existingNode);
+                _queryMatchesCacheLru.AddFirst(existingNode);
+            }
+
             return;
+        }
 
         _queryMatchesCache[query] = matches;
-        _queryMatchesCacheOrder.Enqueue(query);
+        var node = new LinkedListNode<string>(query);
+        _queryMatchesCacheLru.AddFirst(node);
+        _queryMatchesCacheNodes[query] = node;
 
-        while (_queryMatchesCacheOrder.Count > SearchQueryCacheLimit)
+        while (_queryMatchesCacheLru.Count > SearchQueryCacheLimit)
         {
-            var oldestQuery = _queryMatchesCacheOrder.Dequeue();
-            _queryMatchesCache.Remove(oldestQuery);
+            var oldestNode = _queryMatchesCacheLru.Last;
+            if (oldestNode is null)
+                break;
+
+            _queryMatchesCacheLru.RemoveLast();
+            _queryMatchesCacheNodes.Remove(oldestNode.Value);
+            _queryMatchesCache.Remove(oldestNode.Value);
         }
     }
 

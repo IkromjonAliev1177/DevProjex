@@ -133,6 +133,10 @@ public partial class MainWindow : Window
     private TreeNodeDescriptor? _lastInteractiveFilteredRoot;
     private TreeNodeDescriptor? _lastInteractiveFilterBaseRoot;
     private string? _lastInteractiveFilterQuery;
+    private readonly Dictionary<string, TreeNodeDescriptor> _interactiveFilterQueryCache = new(StringComparer.OrdinalIgnoreCase);
+    private readonly LinkedList<string> _interactiveFilterQueryCacheLru = [];
+    private readonly Dictionary<string, LinkedListNode<string>> _interactiveFilterQueryCacheNodes = new(StringComparer.OrdinalIgnoreCase);
+    private const int InteractiveFilterQueryCacheLimit = 8;
     private string? _currentPath;
     private string? _currentProjectDisplayName;
     private string? _currentRepositoryUrl;
@@ -4840,22 +4844,41 @@ public partial class MainWindow : Window
             return true;
         }
 
-        // For incremental typing, filter from previous filtered snapshot to reduce work.
-        // On non-prefix edits (or stale cache), fall back to base tree for correctness.
-        var filterSourceRoot = baseTree.Root;
-        if (_lastInteractiveFilteredRoot is not null &&
-            _lastInteractiveFilterBaseRoot is not null &&
-            ReferenceEquals(_lastInteractiveFilterBaseRoot, baseTree.Root) &&
-            !string.IsNullOrWhiteSpace(_lastInteractiveFilterQuery) &&
-            nameFilter.StartsWith(_lastInteractiveFilterQuery, StringComparison.OrdinalIgnoreCase))
+        if (TryGetCachedInteractiveFilterRoot(nameFilter, out var cachedRoot))
         {
-            filterSourceRoot = _lastInteractiveFilteredRoot;
+            _lastInteractiveFilterBaseRoot = baseTree.Root;
+            _lastInteractiveFilteredRoot = cachedRoot;
+            _lastInteractiveFilterQuery = nameFilter;
+            result = new BuildTreeResult(
+                Root: cachedRoot,
+                RootAccessDenied: baseTree.RootAccessDenied,
+                HadAccessDenied: baseTree.HadAccessDenied);
+            return true;
+        }
+
+        // For incremental typing, prefer the narrowest known prefix source.
+        // This reduces traversal work while preserving correctness.
+        var filterSourceRoot = baseTree.Root;
+        if (_lastInteractiveFilterBaseRoot is not null &&
+            ReferenceEquals(_lastInteractiveFilterBaseRoot, baseTree.Root))
+        {
+            if (_lastInteractiveFilteredRoot is not null &&
+                !string.IsNullOrWhiteSpace(_lastInteractiveFilterQuery) &&
+                nameFilter.StartsWith(_lastInteractiveFilterQuery, StringComparison.OrdinalIgnoreCase))
+            {
+                filterSourceRoot = _lastInteractiveFilteredRoot;
+            }
+            else if (TryGetBestInteractiveFilterPrefixSource(nameFilter, out var prefixRoot))
+            {
+                filterSourceRoot = prefixRoot;
+            }
         }
 
         var filteredRoot = FilterTreeForNameQuery(filterSourceRoot, nameFilter, cancellationToken);
         _lastInteractiveFilterBaseRoot = baseTree.Root;
         _lastInteractiveFilteredRoot = filteredRoot;
         _lastInteractiveFilterQuery = nameFilter;
+        CacheInteractiveFilterRoot(nameFilter, filteredRoot);
 
         result = new BuildTreeResult(
             Root: filteredRoot,
@@ -4869,14 +4892,44 @@ public partial class MainWindow : Window
         string query,
         CancellationToken cancellationToken)
     {
-        var filteredChildren = new List<TreeNodeDescriptor>(root.Children.Count);
-        foreach (var child in root.Children)
+        List<TreeNodeDescriptor>? filteredChildren = null;
+        var originalChildren = root.Children;
+
+        for (var index = 0; index < originalChildren.Count; index++)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var filteredChild = FilterTreeNodeByName(child, query, cancellationToken);
-            if (filteredChild is not null)
+            var originalChild = originalChildren[index];
+            var filteredChild = FilterTreeNodeByName(originalChild, query, cancellationToken);
+
+            if (filteredChild is null)
+            {
+                if (filteredChildren is null)
+                {
+                    filteredChildren = new List<TreeNodeDescriptor>(Math.Min(originalChildren.Count, 16));
+                    for (var j = 0; j < index; j++)
+                        filteredChildren.Add(originalChildren[j]);
+                }
+
+                continue;
+            }
+
+            if (filteredChildren is not null)
+            {
                 filteredChildren.Add(filteredChild);
+                continue;
+            }
+
+            if (!ReferenceEquals(filteredChild, originalChild))
+            {
+                filteredChildren = new List<TreeNodeDescriptor>(Math.Min(originalChildren.Count, 16));
+                for (var j = 0; j < index; j++)
+                    filteredChildren.Add(originalChildren[j]);
+                filteredChildren.Add(filteredChild);
+            }
         }
+
+        if (filteredChildren is null)
+            return root;
 
         return root with { Children = filteredChildren };
     }
@@ -4887,6 +4940,79 @@ public partial class MainWindow : Window
         _lastInteractiveFilteredRoot = null;
         _lastInteractiveFilterBaseRoot = null;
         _lastInteractiveFilterQuery = null;
+        _interactiveFilterQueryCache.Clear();
+        _interactiveFilterQueryCacheLru.Clear();
+        _interactiveFilterQueryCacheNodes.Clear();
+    }
+
+    private bool TryGetCachedInteractiveFilterRoot(string query, out TreeNodeDescriptor root)
+    {
+        if (_interactiveFilterQueryCache.TryGetValue(query, out root!))
+        {
+            if (_interactiveFilterQueryCacheNodes.TryGetValue(query, out var node))
+            {
+                _interactiveFilterQueryCacheLru.Remove(node);
+                _interactiveFilterQueryCacheLru.AddFirst(node);
+            }
+
+            return true;
+        }
+
+        root = null!;
+        return false;
+    }
+
+    private bool TryGetBestInteractiveFilterPrefixSource(string query, out TreeNodeDescriptor root)
+    {
+        root = null!;
+        string? bestPrefix = null;
+
+        foreach (var cachedQuery in _interactiveFilterQueryCache.Keys)
+        {
+            if (string.IsNullOrWhiteSpace(cachedQuery))
+                continue;
+
+            if (!query.StartsWith(cachedQuery, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            if (bestPrefix is null || cachedQuery.Length > bestPrefix.Length)
+                bestPrefix = cachedQuery;
+        }
+
+        if (bestPrefix is null)
+            return false;
+
+        return TryGetCachedInteractiveFilterRoot(bestPrefix, out root);
+    }
+
+    private void CacheInteractiveFilterRoot(string query, TreeNodeDescriptor root)
+    {
+        if (string.IsNullOrWhiteSpace(query))
+            return;
+
+        _interactiveFilterQueryCache[query] = root;
+
+        if (_interactiveFilterQueryCacheNodes.TryGetValue(query, out var existingNode))
+        {
+            _interactiveFilterQueryCacheLru.Remove(existingNode);
+            _interactiveFilterQueryCacheLru.AddFirst(existingNode);
+            return;
+        }
+
+        var node = new LinkedListNode<string>(query);
+        _interactiveFilterQueryCacheLru.AddFirst(node);
+        _interactiveFilterQueryCacheNodes[query] = node;
+
+        while (_interactiveFilterQueryCacheNodes.Count > InteractiveFilterQueryCacheLimit)
+        {
+            var last = _interactiveFilterQueryCacheLru.Last;
+            if (last is null)
+                break;
+
+            _interactiveFilterQueryCacheLru.RemoveLast();
+            _interactiveFilterQueryCacheNodes.Remove(last.Value);
+            _interactiveFilterQueryCache.Remove(last.Value);
+        }
     }
 
     private static TreeNodeDescriptor? FilterTreeNodeByName(
@@ -4901,20 +5027,48 @@ public partial class MainWindow : Window
             return selfMatches ? node : null;
 
         List<TreeNodeDescriptor>? filteredChildren = null;
-        foreach (var child in node.Children)
-        {
-            var filteredChild = FilterTreeNodeByName(child, query, cancellationToken);
-            if (filteredChild is null)
-                continue;
+        var originalChildren = node.Children;
+        var matchedChildrenCount = 0;
 
-            filteredChildren ??= new List<TreeNodeDescriptor>(Math.Min(node.Children.Count, 8));
-            filteredChildren.Add(filteredChild);
+        for (var index = 0; index < originalChildren.Count; index++)
+        {
+            var originalChild = originalChildren[index];
+            var filteredChild = FilterTreeNodeByName(originalChild, query, cancellationToken);
+            if (filteredChild is null)
+            {
+                if (filteredChildren is null)
+                {
+                    filteredChildren = new List<TreeNodeDescriptor>(Math.Min(originalChildren.Count, 8));
+                    for (var j = 0; j < index; j++)
+                        filteredChildren.Add(originalChildren[j]);
+                }
+
+                continue;
+            }
+
+            matchedChildrenCount++;
+            if (filteredChildren is not null)
+            {
+                filteredChildren.Add(filteredChild);
+                continue;
+            }
+
+            if (!ReferenceEquals(filteredChild, originalChild))
+            {
+                filteredChildren = new List<TreeNodeDescriptor>(Math.Min(originalChildren.Count, 8));
+                for (var j = 0; j < index; j++)
+                    filteredChildren.Add(originalChildren[j]);
+                filteredChildren.Add(filteredChild);
+            }
         }
 
-        if (!selfMatches && filteredChildren is null)
+        if (!selfMatches && matchedChildrenCount == 0)
             return null;
 
-        return node with { Children = filteredChildren ?? [] };
+        if (filteredChildren is null)
+            return node;
+
+        return node with { Children = filteredChildren };
     }
 
     private async Task RefreshTreeAsync(bool interactiveFilter = false, CancellationToken cancellationToken = default)
