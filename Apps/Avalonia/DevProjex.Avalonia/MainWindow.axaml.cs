@@ -51,6 +51,8 @@ public partial class MainWindow : Window
         string Text,
         int LineCount);
 
+    private readonly record struct PreviewWarmupSnapshot(string Text, int LineCount);
+
     private readonly record struct TreeMetricsCacheKey(
         int TreeIdentity,
         TreeTextFormat Format,
@@ -149,6 +151,7 @@ public partial class MainWindow : Window
     private SearchBarView? _searchBar;
     private FilterBarView? _filterBar;
     private ScrollViewer? _previewTextScrollViewer;
+    private VirtualizedPreviewTextControl? _previewTextControl;
     private VirtualizedLineNumbersControl? _previewLineNumbersControl;
     private HashSet<string>? _filterExpansionSnapshot;
     private int _filterApplyVersion;
@@ -206,6 +209,9 @@ public partial class MainWindow : Window
     private static readonly TimeSpan PreviewBarAnimationDuration = TimeSpan.FromMilliseconds(250);
     private static readonly TimeSpan PreviewSegmentThumbAnimationDuration = TimeSpan.FromMilliseconds(220);
     private const double PanelIslandSpacing = 4.0;
+    private const int PreviewCacheCapacity = 4;
+    private const int PreviewWarmupFileLimit = 24;
+    private const int PreviewWarmupFileThreshold = 140;
 
     // Preview generation
     private CancellationTokenSource? _previewBuildCts;
@@ -217,7 +223,8 @@ public partial class MainWindow : Window
     private int _previewMemoryCleanupVersion;
     private CancellationTokenSource? _searchMemoryCleanupCts;
     private int _searchMemoryCleanupVersion;
-    private PreviewCacheEntry? _previewCacheEntry;
+    private readonly Dictionary<PreviewCacheKey, LinkedListNode<PreviewCacheEntry>> _previewCacheEntries = [];
+    private readonly LinkedList<PreviewCacheEntry> _previewCacheLru = [];
     private CancellationTokenSource? _previewModeSwitchCts;
     private int _previewModeSwitchVersion;
     private bool _previewModeSwitchInProgress;
@@ -340,7 +347,13 @@ public partial class MainWindow : Window
         _previewContentModeButton = this.FindControl<Button>("PreviewContentModeButton");
         _previewTreeAndContentModeButton = this.FindControl<Button>("PreviewTreeAndContentModeButton");
         _previewTextScrollViewer = this.FindControl<ScrollViewer>("PreviewTextScrollViewer");
+        _previewTextControl = this.FindControl<VirtualizedPreviewTextControl>("PreviewTextControl");
         _previewLineNumbersControl = this.FindControl<VirtualizedLineNumbersControl>("PreviewLineNumbersControl");
+        if (_previewTextScrollViewer is not null && _previewTextControl is not null)
+        {
+            _previewTextControl.VerticalOffset = Math.Max(0, _previewTextScrollViewer.Offset.Y);
+            _previewTextControl.ViewportHeight = Math.Max(0, _previewTextScrollViewer.Viewport.Height);
+        }
         _settingsContainer = this.FindControl<Border>("SettingsContainer");
         _settingsIsland = this.FindControl<Border>("SettingsIsland");
 
@@ -1432,7 +1445,16 @@ public partial class MainWindow : Window
         if (_previewScrollSyncActive)
             return;
 
-        if (sender is not ScrollViewer textScrollViewer || _previewLineNumbersControl is null)
+        if (sender is not ScrollViewer textScrollViewer)
+            return;
+
+        if (_previewTextControl is not null)
+        {
+            _previewTextControl.VerticalOffset = Math.Max(0, textScrollViewer.Offset.Y);
+            _previewTextControl.ViewportHeight = Math.Max(0, textScrollViewer.Viewport.Height);
+        }
+
+        if (_previewLineNumbersControl is null)
             return;
 
         _previewLineNumbersControl.ExtentHeight = Math.Max(0, textScrollViewer.Extent.Height);
@@ -1527,6 +1549,24 @@ public partial class MainWindow : Window
                 return;
             }
 
+            var warmupSnapshot = await TryBuildPreviewWarmupSnapshotAsync(
+                mode: selectedMode,
+                treeFormat: treeFormat,
+                hasSelection: hasSelection,
+                selectedPaths: selectedPaths,
+                currentPath: currentPath,
+                currentTreeRoot: currentTreeRoot,
+                pathPresentation: pathPresentation,
+                noTextContentText: noTextContentText,
+                noCheckedFilesText: noCheckedFilesText,
+                cancellationToken: cancellationToken);
+
+            if (warmupSnapshot is { } warmup &&
+                buildVersion == Volatile.Read(ref _previewBuildVersion))
+            {
+                ApplyPreviewText(warmup.Text, warmup.LineCount);
+            }
+
             // Run all heavy work in background thread
             var (previewText, lineCount) = await Task.Run(() =>
             {
@@ -1539,10 +1579,19 @@ public partial class MainWindow : Window
                 }
                 else if (selectedMode == PreviewContentMode.Content)
                 {
-                    var files = CollectOrderedPreviewFiles(
-                        selectedPaths: selectedPaths,
-                        hasSelection: hasSelection,
-                        treeRoot: currentTreeRoot);
+                    IReadOnlyList<string> files;
+                    if (hasSelection)
+                    {
+                        files = BuildOrderedSelectedFilePaths(selectedPaths);
+                    }
+                    else if (currentTreeRoot is not null)
+                    {
+                        files = GetOrBuildAllOrderedFilePaths(currentTreeRoot);
+                    }
+                    else
+                    {
+                        files = [];
+                    }
 
                     if (files.Count == 0)
                         text = hasSelection ? noCheckedFilesText : noTextContentText;
@@ -1608,6 +1657,239 @@ public partial class MainWindow : Window
         }
     }
 
+    private async Task<PreviewWarmupSnapshot?> TryBuildPreviewWarmupSnapshotAsync(
+        PreviewContentMode mode,
+        TreeTextFormat treeFormat,
+        bool hasSelection,
+        IReadOnlySet<string> selectedPaths,
+        string? currentPath,
+        TreeNodeDescriptor? currentTreeRoot,
+        ExportPathPresentation? pathPresentation,
+        string noTextContentText,
+        string noCheckedFilesText,
+        CancellationToken cancellationToken)
+    {
+        if (!ShouldBuildPreviewWarmup(mode, hasSelection, selectedPaths, currentTreeRoot))
+            return null;
+
+        return await Task.Run<PreviewWarmupSnapshot?>(() =>
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var files = CollectInitialPreviewFiles(
+                selectedPaths: selectedPaths,
+                hasSelection: hasSelection,
+                treeRoot: currentTreeRoot,
+                maxFileCount: PreviewWarmupFileLimit);
+
+            if (mode == PreviewContentMode.Content)
+            {
+                if (files.Count == 0)
+                {
+                    var fallbackText = hasSelection ? noCheckedFilesText : noTextContentText;
+                    return new PreviewWarmupSnapshot(
+                        fallbackText,
+                        CountPreviewLines(fallbackText));
+                }
+
+                var contentText = _contentExport.BuildAsync(
+                    files,
+                    cancellationToken,
+                    pathPresentation?.MapFilePath).GetAwaiter().GetResult();
+
+                if (string.IsNullOrWhiteSpace(contentText))
+                    contentText = noTextContentText;
+
+                return new PreviewWarmupSnapshot(
+                    contentText,
+                    CountPreviewLines(contentText));
+            }
+
+            if (mode == PreviewContentMode.TreeAndContent &&
+                !string.IsNullOrWhiteSpace(currentPath) &&
+                currentTreeRoot is not null)
+            {
+                var treeText = selectedPaths.Count > 0
+                    ? _treeExport.BuildSelectedTree(
+                        currentPath,
+                        currentTreeRoot,
+                        selectedPaths,
+                        treeFormat,
+                        pathPresentation?.DisplayRootPath,
+                        pathPresentation?.DisplayRootName)
+                    : _treeExport.BuildFullTree(
+                        currentPath,
+                        currentTreeRoot,
+                        treeFormat,
+                        pathPresentation?.DisplayRootPath,
+                        pathPresentation?.DisplayRootName);
+
+                if (selectedPaths.Count > 0 && string.IsNullOrWhiteSpace(treeText))
+                {
+                    treeText = _treeExport.BuildFullTree(
+                        currentPath,
+                        currentTreeRoot,
+                        treeFormat,
+                        pathPresentation?.DisplayRootPath,
+                        pathPresentation?.DisplayRootName);
+                }
+
+                if (string.IsNullOrWhiteSpace(treeText))
+                    return null;
+
+                if (files.Count == 0)
+                {
+                    return new PreviewWarmupSnapshot(
+                        treeText,
+                        CountPreviewLines(treeText));
+                }
+
+                var contentText = _contentExport.BuildAsync(
+                    files,
+                    cancellationToken,
+                    pathPresentation?.MapFilePath).GetAwaiter().GetResult();
+
+                if (string.IsNullOrWhiteSpace(contentText))
+                {
+                    return new PreviewWarmupSnapshot(
+                        treeText,
+                        CountPreviewLines(treeText));
+                }
+
+                var combinedBuilder = new StringBuilder(treeText.Length + contentText.Length + 16);
+                combinedBuilder.Append(treeText.TrimEnd('\r', '\n'));
+                combinedBuilder.AppendLine("\u00A0");
+                combinedBuilder.AppendLine("\u00A0");
+                combinedBuilder.Append(contentText);
+                var combinedText = combinedBuilder.ToString();
+
+                return new PreviewWarmupSnapshot(
+                    combinedText,
+                    CountPreviewLines(combinedText));
+            }
+
+            return null;
+        }, cancellationToken).ConfigureAwait(false);
+    }
+
+    private static bool ShouldBuildPreviewWarmup(
+        PreviewContentMode mode,
+        bool hasSelection,
+        IReadOnlySet<string> selectedPaths,
+        TreeNodeDescriptor? treeRoot)
+    {
+        if (mode == PreviewContentMode.Tree)
+            return false;
+
+        if (hasSelection)
+            return CountSelectedFilesUpToLimit(selectedPaths, PreviewWarmupFileThreshold) >= PreviewWarmupFileThreshold;
+
+        return CountTreeFilesUpToLimit(treeRoot, PreviewWarmupFileThreshold) >= PreviewWarmupFileThreshold;
+    }
+
+    private static int CountSelectedFilesUpToLimit(IReadOnlySet<string> selectedPaths, int maxCount)
+    {
+        if (maxCount <= 0)
+            return 0;
+
+        var count = 0;
+        foreach (var path in selectedPaths)
+        {
+            if (!File.Exists(path))
+                continue;
+
+            count++;
+            if (count >= maxCount)
+                break;
+        }
+
+        return count;
+    }
+
+    private static int CountTreeFilesUpToLimit(TreeNodeDescriptor? treeRoot, int maxCount)
+    {
+        if (treeRoot is null || maxCount <= 0)
+            return 0;
+
+        var count = 0;
+        var stack = new Stack<TreeNodeDescriptor>();
+        stack.Push(treeRoot);
+
+        while (stack.Count > 0 && count < maxCount)
+        {
+            var node = stack.Pop();
+            if (!node.IsDirectory)
+            {
+                count++;
+                continue;
+            }
+
+            for (var i = node.Children.Count - 1; i >= 0; i--)
+                stack.Push(node.Children[i]);
+        }
+
+        return count;
+    }
+
+    private static List<string> CollectInitialPreviewFiles(
+        IReadOnlySet<string> selectedPaths,
+        bool hasSelection,
+        TreeNodeDescriptor? treeRoot,
+        int maxFileCount)
+    {
+        if (maxFileCount <= 0)
+            return [];
+
+        var uniqueFiles = new HashSet<string>(PathComparer.Default);
+        if (hasSelection)
+        {
+            foreach (var path in selectedPaths)
+            {
+                if (!File.Exists(path))
+                    continue;
+
+                uniqueFiles.Add(path);
+            }
+        }
+        else if (treeRoot is not null)
+        {
+            CollectInitialPreviewFilesFromTree(treeRoot, uniqueFiles, maxFileCount);
+        }
+
+        if (uniqueFiles.Count == 0)
+            return [];
+
+        var files = new List<string>(uniqueFiles);
+        files.Sort(PathComparer.Default);
+        if (files.Count > maxFileCount)
+            files.RemoveRange(maxFileCount, files.Count - maxFileCount);
+
+        return files;
+    }
+
+    private static void CollectInitialPreviewFilesFromTree(
+        TreeNodeDescriptor node,
+        HashSet<string> uniqueFiles,
+        int maxFileCount)
+    {
+        if (uniqueFiles.Count >= maxFileCount)
+            return;
+
+        if (!node.IsDirectory)
+        {
+            if (File.Exists(node.FullPath))
+                uniqueFiles.Add(node.FullPath);
+            return;
+        }
+
+        foreach (var child in node.Children)
+        {
+            CollectInitialPreviewFilesFromTree(child, uniqueFiles, maxFileCount);
+            if (uniqueFiles.Count >= maxFileCount)
+                break;
+        }
+    }
+
     private void ApplyPreviewText(string text)
     {
         var effectiveText = string.IsNullOrEmpty(text)
@@ -1633,6 +1915,13 @@ public partial class MainWindow : Window
                 _previewLineNumbersControl.ExtentHeight = Math.Max(0, _previewTextScrollViewer.Extent.Height);
                 _previewLineNumbersControl.ViewportHeight = Math.Max(0, _previewTextScrollViewer.Viewport.Height);
             }
+        }
+
+        if (_previewTextControl is not null)
+        {
+            _previewTextControl.VerticalOffset = 0;
+            if (_previewTextScrollViewer is not null)
+                _previewTextControl.ViewportHeight = Math.Max(0, _previewTextScrollViewer.Viewport.Height);
         }
     }
 
@@ -1709,9 +1998,11 @@ public partial class MainWindow : Window
 
     private bool TryGetCachedPreview(PreviewCacheKey key, out PreviewCacheEntry cached)
     {
-        if (_previewCacheEntry is not null && _previewCacheEntry.Key == key)
+        if (_previewCacheEntries.TryGetValue(key, out var node))
         {
-            cached = _previewCacheEntry;
+            _previewCacheLru.Remove(node);
+            _previewCacheLru.AddFirst(node);
+            cached = node.Value;
             return true;
         }
 
@@ -1721,15 +2012,38 @@ public partial class MainWindow : Window
 
     private void CachePreview(PreviewCacheKey key, string text, int lineCount)
     {
-        _previewCacheEntry = new PreviewCacheEntry(
+        var normalizedEntry = new PreviewCacheEntry(
             Key: key,
             Text: text,
             LineCount: Math.Max(1, lineCount));
+
+        if (_previewCacheEntries.TryGetValue(key, out var existingNode))
+        {
+            existingNode.Value = normalizedEntry;
+            _previewCacheLru.Remove(existingNode);
+            _previewCacheLru.AddFirst(existingNode);
+            return;
+        }
+
+        var node = new LinkedListNode<PreviewCacheEntry>(normalizedEntry);
+        _previewCacheLru.AddFirst(node);
+        _previewCacheEntries[key] = node;
+
+        while (_previewCacheEntries.Count > PreviewCacheCapacity)
+        {
+            var last = _previewCacheLru.Last;
+            if (last is null)
+                break;
+
+            _previewCacheLru.RemoveLast();
+            _previewCacheEntries.Remove(last.Value.Key);
+        }
     }
 
     private void InvalidatePreviewCache()
     {
-        _previewCacheEntry = null;
+        _previewCacheEntries.Clear();
+        _previewCacheLru.Clear();
     }
 
     /// <summary>
@@ -5429,7 +5743,6 @@ public partial class MainWindow : Window
         _metricsDebounceTimer.Stop();
         _metricsDebounceTimer.Start();
 
-        InvalidatePreviewCache();
         SchedulePreviewRefresh();
     }
 
