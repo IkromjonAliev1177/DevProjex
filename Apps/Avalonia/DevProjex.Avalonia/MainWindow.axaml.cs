@@ -6123,7 +6123,8 @@ public partial class MainWindow : Window
         }
 
         // Capture state for background calculation
-        var hasAnyChecked = HasAnyCheckedNodes(treeRoot);
+        var selectedPaths = GetCheckedPaths();
+        var hasAnyChecked = selectedPaths.Count > 0;
         var hasCompleteMetricsBaseline = _hasCompleteMetricsBaseline;
         if (!ShouldProceedWithMetricsCalculation(hasAnyChecked, hasCompleteMetricsBaseline))
         {
@@ -6132,9 +6133,6 @@ public partial class MainWindow : Window
             return;
         }
 
-        var selectedPaths = hasAnyChecked
-            ? GetCheckedPaths()
-            : new HashSet<string>(PathComparer.Default);
         var treeFormat = GetCurrentTreeTextFormat();
         var currentTree = _currentTree;
         var currentPath = _currentPath;
@@ -6233,23 +6231,6 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Check if any node in the tree is explicitly checked.
-    /// </summary>
-    private static bool HasAnyCheckedNodes(TreeNodeViewModel root)
-    {
-        if (root.IsChecked == true)
-            return true;
-
-        foreach (var child in root.Children)
-        {
-            if (HasAnyCheckedNodes(child))
-                return true;
-        }
-
-        return false;
-    }
-
-    /// <summary>
     /// Full metrics require a completed baseline calculation.
     /// Selected metrics can be calculated independently.
     /// </summary>
@@ -6325,7 +6306,7 @@ public partial class MainWindow : Window
         }
 
         var orderedPaths = hasSelection
-            ? BuildOrderedSelectedFilePaths(selectedPaths)
+            ? BuildOrderedSelectedFilePaths(selectedPaths, ensureExists: false)
             : GetOrBuildAllOrderedFilePaths(_currentTree.Root);
 
         if (orderedPaths.Count == 0)
@@ -6393,13 +6374,17 @@ public partial class MainWindow : Window
         }
     }
 
-    private static List<string> BuildOrderedSelectedFilePaths(IReadOnlySet<string> selectedPaths)
+    private static List<string> BuildOrderedSelectedFilePaths(
+        IReadOnlySet<string> selectedPaths,
+        bool ensureExists = true)
     {
         var uniquePaths = new HashSet<string>(PathComparer.Default);
         foreach (var path in selectedPaths)
         {
-            if (File.Exists(path))
-                uniquePaths.Add(path);
+            if (ensureExists && !File.Exists(path))
+                continue;
+
+            uniquePaths.Add(path);
         }
 
         var orderedPaths = new List<string>(uniquePaths.Count);

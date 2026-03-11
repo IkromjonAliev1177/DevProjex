@@ -151,7 +151,9 @@ public sealed class TreeBuilder : ITreeBuilder
 		var ignore = options.IgnoreRules;
 		if (isDir)
 		{
-			var directoryGitIgnore = ignore.EvaluateGitIgnore(entry.FullName, isDirectory: true, name);
+			var directoryGitIgnore = ignore.UseGitIgnore
+				? ignore.EvaluateGitIgnore(entry.FullName, isDirectory: true, name)
+				: IgnoreRules.GitIgnoreEvaluation.NotIgnored;
 			if (ShouldSkipDirectory(entry, ignore, directoryGitIgnore))
 				return null;
 
@@ -201,7 +203,9 @@ public sealed class TreeBuilder : ITreeBuilder
 			return dirNode;
 		}
 
-		var fileGitIgnore = ignore.EvaluateGitIgnore(entry.FullName, isDirectory: false, name);
+		var fileGitIgnore = ignore.UseGitIgnore
+			? ignore.EvaluateGitIgnore(entry.FullName, isDirectory: false, name)
+			: IgnoreRules.GitIgnoreEvaluation.NotIgnored;
 		if (ShouldSkipFile(entry, ignore, shouldApplySmartIgnoreForFiles, fileGitIgnore))
 			return null;
 

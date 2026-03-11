@@ -66,14 +66,26 @@ public sealed class FileSystemScanner : IFileSystemScanner, IFileSystemScannerAd
 		cancellationToken.ThrowIfCancellationRequested();
 
 		var names = new List<string>();
+		var useGitIgnore = rules.UseGitIgnore;
 
 		if (string.IsNullOrWhiteSpace(rootPath) || !Directory.Exists(rootPath))
 			return new ScanResult<List<string>>(names, false, false);
 
-		string[] dirs;
 		try
 		{
-			dirs = Directory.GetDirectories(rootPath);
+			foreach (var dir in Directory.EnumerateDirectories(rootPath))
+			{
+				cancellationToken.ThrowIfCancellationRequested();
+
+				var dirName = Path.GetFileName(dir);
+				var directoryGitIgnore = useGitIgnore
+					? rules.EvaluateGitIgnore(dir, isDirectory: true, dirName)
+					: IgnoreRules.GitIgnoreEvaluation.NotIgnored;
+				if (ShouldSkipDirectoryByName(dirName, dir, rules, directoryGitIgnore))
+					continue;
+
+				names.Add(dirName);
+			}
 		}
 		catch (OperationCanceledException)
 		{
@@ -86,18 +98,6 @@ public sealed class FileSystemScanner : IFileSystemScanner, IFileSystemScannerAd
 		catch
 		{
 			return new ScanResult<List<string>>(names, false, false);
-		}
-
-		foreach (var dir in dirs)
-		{
-			cancellationToken.ThrowIfCancellationRequested();
-
-			var dirName = Path.GetFileName(dir);
-			var directoryGitIgnore = rules.EvaluateGitIgnore(dir, isDirectory: true, dirName);
-			if (ShouldSkipDirectoryByName(dirName, dir, rules, directoryGitIgnore))
-				continue;
-
-			names.Add(dirName);
 		}
 
 		names.Sort(StringComparer.OrdinalIgnoreCase);
@@ -199,6 +199,7 @@ public sealed class FileSystemScanner : IFileSystemScanner, IFileSystemScannerAd
 		cancellationToken.ThrowIfCancellationRequested();
 
 		var uniqueExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+		var useGitIgnore = rules.UseGitIgnore;
 		if (string.IsNullOrWhiteSpace(rootPath) || !Directory.Exists(rootPath))
 		{
 			return new ScanResult<ExtensionsScanData>(
@@ -228,10 +229,24 @@ public sealed class FileSystemScanner : IFileSystemScanner, IFileSystemScannerAd
 			if (collectIgnoreOptionCounts && isRootDirectory && includeRootDirectoryInCounts)
 				AccumulateDirectoryIgnoreOptionCounts(dir, Path.GetFileName(dir), ref directoryCounts);
 
-			string[] subDirs;
 			try
 			{
-				subDirs = Directory.GetDirectories(dir);
+				foreach (var sd in Directory.EnumerateDirectories(dir))
+				{
+					cancellationToken.ThrowIfCancellationRequested();
+
+					var dirName = Path.GetFileName(sd);
+					if (collectIgnoreOptionCounts)
+						AccumulateDirectoryIgnoreOptionCounts(sd, dirName, ref directoryCounts);
+
+					var directoryGitIgnore = useGitIgnore
+						? rules.EvaluateGitIgnore(sd, isDirectory: true, dirName)
+						: IgnoreRules.GitIgnoreEvaluation.NotIgnored;
+					if (ShouldSkipDirectoryByName(dirName, sd, rules, directoryGitIgnore))
+						continue;
+
+					pending.Push((sd, currentDirectoryIndex, IsRootDirectory: false));
+				}
 			}
 			catch (OperationCanceledException)
 			{
@@ -250,21 +265,6 @@ public sealed class FileSystemScanner : IFileSystemScanner, IFileSystemScannerAd
 			{
 				continue;
 			}
-
-			foreach (var sd in subDirs)
-			{
-				cancellationToken.ThrowIfCancellationRequested();
-
-				var dirName = Path.GetFileName(sd);
-				if (collectIgnoreOptionCounts)
-					AccumulateDirectoryIgnoreOptionCounts(sd, dirName, ref directoryCounts);
-
-				var directoryGitIgnore = rules.EvaluateGitIgnore(sd, isDirectory: true, dirName);
-				if (ShouldSkipDirectoryByName(dirName, sd, rules, directoryGitIgnore))
-					continue;
-
-				pending.Push((sd, currentDirectoryIndex, IsRootDirectory: false));
-			}
 		}
 
 		var mergeLock = new object();
@@ -282,10 +282,31 @@ public sealed class FileSystemScanner : IFileSystemScanner, IFileSystemScannerAd
 				var dir = directories[index].Path;
 				var shouldApplySmartIgnoreForFiles = rules.ShouldApplySmartIgnore(dir, isDirectory: true);
 
-				string[] files;
+				var localCounts = default(MutableIgnoreOptionCounts);
+				var hasVisibleFiles = false;
 				try
 				{
-					files = Directory.GetFiles(dir);
+					foreach (var file in Directory.EnumerateFiles(dir))
+					{
+						cancellationToken.ThrowIfCancellationRequested();
+
+						var name = Path.GetFileName(file);
+						if (collectIgnoreOptionCounts)
+							AccumulateFileIgnoreOptionCounts(file, name, ref localCounts);
+
+						var fileGitIgnore = useGitIgnore
+							? rules.EvaluateGitIgnore(file, isDirectory: false, name)
+							: IgnoreRules.GitIgnoreEvaluation.NotIgnored;
+						if (ShouldSkipFileByName(name, file, rules, shouldApplySmartIgnoreForFiles, fileGitIgnore))
+							continue;
+
+						hasVisibleFiles = true;
+						var ext = Path.GetExtension(name);
+						if (IsExtensionlessFileName(name))
+							uniqueExtensions.Add(name);
+						else if (!string.IsNullOrWhiteSpace(ext))
+							uniqueExtensions.Add(ext);
+					}
 				}
 				catch (OperationCanceledException)
 				{
@@ -300,28 +321,6 @@ public sealed class FileSystemScanner : IFileSystemScanner, IFileSystemScannerAd
 				catch
 				{
 					continue;
-				}
-
-				var localCounts = default(MutableIgnoreOptionCounts);
-				var hasVisibleFiles = false;
-				foreach (var file in files)
-				{
-					cancellationToken.ThrowIfCancellationRequested();
-
-					var name = Path.GetFileName(file);
-					if (collectIgnoreOptionCounts)
-						AccumulateFileIgnoreOptionCounts(file, name, ref localCounts);
-
-					var fileGitIgnore = rules.EvaluateGitIgnore(file, isDirectory: false, name);
-					if (ShouldSkipFileByName(name, file, rules, shouldApplySmartIgnoreForFiles, fileGitIgnore))
-						continue;
-
-					hasVisibleFiles = true;
-					var ext = Path.GetExtension(name);
-					if (IsExtensionlessFileName(name))
-						uniqueExtensions.Add(name);
-					else if (!string.IsNullOrWhiteSpace(ext))
-						uniqueExtensions.Add(ext);
 				}
 
 				hasVisibleFilesByDirectory[index] = hasVisibleFiles;
@@ -348,10 +347,30 @@ public sealed class FileSystemScanner : IFileSystemScanner, IFileSystemScannerAd
 					var dir = directories[index].Path;
 					var shouldApplySmartIgnoreForFiles = rules.ShouldApplySmartIgnore(dir, isDirectory: true);
 
-					string[] files;
+					var hasVisibleFiles = false;
 					try
 					{
-						files = Directory.GetFiles(dir);
+						foreach (var file in Directory.EnumerateFiles(dir))
+						{
+							parallelOptions.CancellationToken.ThrowIfCancellationRequested();
+
+							var name = Path.GetFileName(file);
+							if (collectIgnoreOptionCounts)
+								AccumulateFileIgnoreOptionCounts(file, name, ref localState.Counts);
+
+							var fileGitIgnore = useGitIgnore
+								? rules.EvaluateGitIgnore(file, isDirectory: false, name)
+								: IgnoreRules.GitIgnoreEvaluation.NotIgnored;
+							if (ShouldSkipFileByName(name, file, rules, shouldApplySmartIgnoreForFiles, fileGitIgnore))
+								continue;
+
+							hasVisibleFiles = true;
+							var ext = Path.GetExtension(name);
+							if (IsExtensionlessFileName(name))
+								localState.Extensions.Add(name);
+							else if (!string.IsNullOrWhiteSpace(ext))
+								localState.Extensions.Add(ext);
+						}
 					}
 					catch (OperationCanceledException)
 					{
@@ -366,27 +385,6 @@ public sealed class FileSystemScanner : IFileSystemScanner, IFileSystemScannerAd
 					catch
 					{
 						return localState;
-					}
-
-					var hasVisibleFiles = false;
-					foreach (var file in files)
-					{
-						parallelOptions.CancellationToken.ThrowIfCancellationRequested();
-
-						var name = Path.GetFileName(file);
-						if (collectIgnoreOptionCounts)
-							AccumulateFileIgnoreOptionCounts(file, name, ref localState.Counts);
-
-						var fileGitIgnore = rules.EvaluateGitIgnore(file, isDirectory: false, name);
-						if (ShouldSkipFileByName(name, file, rules, shouldApplySmartIgnoreForFiles, fileGitIgnore))
-							continue;
-
-						hasVisibleFiles = true;
-						var ext = Path.GetExtension(name);
-						if (IsExtensionlessFileName(name))
-							localState.Extensions.Add(name);
-						else if (!string.IsNullOrWhiteSpace(ext))
-							localState.Extensions.Add(ext);
 					}
 
 					hasVisibleFilesByDirectory[index] = hasVisibleFiles;
@@ -451,6 +449,7 @@ public sealed class FileSystemScanner : IFileSystemScanner, IFileSystemScannerAd
 		cancellationToken.ThrowIfCancellationRequested();
 
 		var exts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+		var useGitIgnore = rules.UseGitIgnore;
 		if (string.IsNullOrWhiteSpace(rootPath) || !Directory.Exists(rootPath))
 		{
 			return new ScanResult<ExtensionsScanData>(
@@ -459,10 +458,30 @@ public sealed class FileSystemScanner : IFileSystemScanner, IFileSystemScannerAd
 				HadAccessDenied: false);
 		}
 
-		string[] files;
+		var counts = default(MutableIgnoreOptionCounts);
+		var shouldApplySmartIgnoreForFiles = rules.ShouldApplySmartIgnore(rootPath, isDirectory: true);
 		try
 		{
-			files = Directory.GetFiles(rootPath);
+			foreach (var file in Directory.EnumerateFiles(rootPath))
+			{
+				cancellationToken.ThrowIfCancellationRequested();
+
+				var name = Path.GetFileName(file);
+				if (collectIgnoreOptionCounts)
+					AccumulateFileIgnoreOptionCounts(file, name, ref counts);
+
+				var fileGitIgnore = useGitIgnore
+					? rules.EvaluateGitIgnore(file, isDirectory: false, name)
+					: IgnoreRules.GitIgnoreEvaluation.NotIgnored;
+				if (ShouldSkipFileByName(name, file, rules, shouldApplySmartIgnoreForFiles, fileGitIgnore))
+					continue;
+
+				var ext = Path.GetExtension(name);
+				if (IsExtensionlessFileName(name))
+					exts.Add(name);
+				else if (!string.IsNullOrWhiteSpace(ext))
+					exts.Add(ext);
+			}
 		}
 		catch (OperationCanceledException)
 		{
@@ -481,27 +500,6 @@ public sealed class FileSystemScanner : IFileSystemScanner, IFileSystemScannerAd
 				new ExtensionsScanData(exts, IgnoreOptionCounts.Empty),
 				RootAccessDenied: false,
 				HadAccessDenied: false);
-		}
-
-		var counts = default(MutableIgnoreOptionCounts);
-		var shouldApplySmartIgnoreForFiles = rules.ShouldApplySmartIgnore(rootPath, isDirectory: true);
-		foreach (var file in files)
-		{
-			cancellationToken.ThrowIfCancellationRequested();
-
-			var name = Path.GetFileName(file);
-			if (collectIgnoreOptionCounts)
-				AccumulateFileIgnoreOptionCounts(file, name, ref counts);
-
-			var fileGitIgnore = rules.EvaluateGitIgnore(file, isDirectory: false, name);
-			if (ShouldSkipFileByName(name, file, rules, shouldApplySmartIgnoreForFiles, fileGitIgnore))
-				continue;
-
-			var ext = Path.GetExtension(name);
-			if (IsExtensionlessFileName(name))
-				exts.Add(name);
-			else if (!string.IsNullOrWhiteSpace(ext))
-				exts.Add(ext);
 		}
 
 		return new ScanResult<ExtensionsScanData>(
