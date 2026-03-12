@@ -299,6 +299,18 @@
           </Button>
         </StackPanel>
 
+        <StackPanel Grid.Column="1"
+                    Orientation="Horizontal"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    IsVisible="{Binding CenteredPreviewSelectionMetricsVisible}">
+          <TextBlock Text="{Binding StatusPreviewSelectionStatsText}"
+                     FontSize="12"
+                     Foreground="{DynamicResource AppTextBrush}"
+                     Opacity="0.88"
+                     VerticalAlignment="Center" />
+        </StackPanel>
+
         <!-- Right: Content metrics -->
         <StackPanel Grid.Column="2"
                     Orientation="Horizontal"

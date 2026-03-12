@@ -10,6 +10,7 @@ namespace DevProjex.Avalonia.Controls;
 public sealed class VirtualizedPreviewTextControl : Control
 {
     public event EventHandler? CopiedToClipboard;
+    public event EventHandler? PreviewSelectionChanged;
 
     public static readonly StyledProperty<string> TextProperty =
         AvaloniaProperty.Register<VirtualizedPreviewTextControl, string>(nameof(Text), string.Empty);
@@ -246,6 +247,20 @@ public sealed class VirtualizedPreviewTextControl : Control
         _isSelecting = false;
         StopSelectionAutoScroll();
         ClearSelectionState(invalidateVisual: true);
+    }
+
+    public string GetSelectedText() => BuildSelectedText();
+
+    public bool TryGetSelectionRange(out PreviewSelectionRange selectionRange)
+    {
+        if (!TryGetNormalizedSelection(out var start, out var end))
+        {
+            selectionRange = default;
+            return false;
+        }
+
+        selectionRange = new PreviewSelectionRange(start.Line, start.Column, end.Line, end.Column);
+        return true;
     }
 
     public bool TryHandleViewportSelectionStart(IPointer pointer, Point viewportPoint, KeyModifiers keyModifiers)
@@ -650,10 +665,13 @@ public sealed class VirtualizedPreviewTextControl : Control
 
         var x = Math.Max(0, point.X - LeftPadding);
         var lineText = GetLineText(lineNumber);
+        var lineWidth = ResolveDistanceFromColumn(lineText, lineText.Length, typeface);
         var column = ResolveColumnFromDistance(lineText, x, typeface);
         return new SelectionHitResult(
             new SelectionPosition(lineNumber, column),
-            SelectionHitKind.Text);
+            x > lineWidth + 1.0
+                ? SelectionHitKind.TrailingArea
+                : SelectionHitKind.Text);
     }
 
     private int ResolveColumnFromDistance(string lineText, double distance, Typeface typeface)
@@ -704,6 +722,7 @@ public sealed class VirtualizedPreviewTextControl : Control
 
         _selectionActive = position;
         InvalidateVisual();
+        PreviewSelectionChanged?.Invoke(this, EventArgs.Empty);
     }
 
     private void ClearSelectionState(bool invalidateVisual)
@@ -714,6 +733,9 @@ public sealed class VirtualizedPreviewTextControl : Control
 
         if (invalidateVisual && hadState)
             InvalidateVisual();
+
+        if (hadState)
+            PreviewSelectionChanged?.Invoke(this, EventArgs.Empty);
     }
 
     private bool TryGetNormalizedSelection(out SelectionPosition start, out SelectionPosition end)
@@ -788,6 +810,7 @@ public sealed class VirtualizedPreviewTextControl : Control
         _selectionAnchor = new SelectionPosition(1, 0);
         _selectionActive = new SelectionPosition(lastLine, lastLineLength);
         InvalidateVisual();
+        PreviewSelectionChanged?.Invoke(this, EventArgs.Empty);
     }
 
     private string BuildSelectedText()
@@ -1060,8 +1083,12 @@ public sealed class VirtualizedPreviewTextControl : Control
 
     private bool TryStartSelection(IPointer pointer, Point documentPoint, KeyModifiers keyModifiers)
     {
+        var previousAnchor = _selectionAnchor;
+        var previousActive = _selectionActive;
         var hit = HitTestSelection(documentPoint);
-        if (!keyModifiers.HasFlag(KeyModifiers.Shift) && hit.Kind == SelectionHitKind.Empty)
+        if (!keyModifiers.HasFlag(KeyModifiers.Shift) &&
+            (hit.Kind == SelectionHitKind.Empty ||
+             (hit.Kind == SelectionHitKind.TrailingArea && HasSelection)))
         {
             if (HasSelection)
                 ClearSelection();
@@ -1071,12 +1098,16 @@ public sealed class VirtualizedPreviewTextControl : Control
 
         var selectionPosition = hit.Position;
         if (!keyModifiers.HasFlag(KeyModifiers.Shift) || _selectionAnchor is null)
-            _selectionAnchor = selectionPosition;
+        _selectionAnchor = selectionPosition;
 
         UpdateSelectionActivePosition(selectionPosition);
         _isSelecting = true;
         pointer.Capture(this);
         UpdateSelectionAutoScrollState();
+
+        if (previousAnchor != _selectionAnchor && previousActive == _selectionActive)
+            PreviewSelectionChanged?.Invoke(this, EventArgs.Empty);
+
         return true;
     }
 
@@ -1202,7 +1233,8 @@ public sealed class VirtualizedPreviewTextControl : Control
     private enum SelectionHitKind
     {
         Empty = 0,
-        Text = 1
+        Text = 1,
+        TrailingArea = 2
     }
 
     private sealed class VisibleTextWindow

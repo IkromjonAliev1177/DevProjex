@@ -88,9 +88,11 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
     private double _aboutPopoverMaxHeight = 380;
     private string _statusTreeStatsText = string.Empty;
     private string _statusContentStatsText = string.Empty;
+    private string _statusPreviewSelectionStatsText = string.Empty;
     private string _statusOperationText = string.Empty;
     private bool _statusBusy;
     private bool _statusMetricsVisible;
+    private bool _statusPreviewSelectionVisible;
     private bool _statusProgressIsIndeterminate = true;
     private double _statusProgressValue;
 
@@ -171,6 +173,17 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         }
     }
 
+    public string StatusPreviewSelectionStatsText
+    {
+        get => _statusPreviewSelectionStatsText;
+        set
+        {
+            if (_statusPreviewSelectionStatsText == value) return;
+            _statusPreviewSelectionStatsText = value;
+            RaisePropertyChanged();
+        }
+    }
+
     public bool StatusBusy
     {
         get => _statusBusy;
@@ -181,6 +194,7 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
             RaisePropertyChanged();
             RaisePropertyChanged(nameof(StatusProgressVisible));
             RaisePropertyChanged(nameof(StatusProgressPercentVisible));
+            RaisePropertyChanged(nameof(CenteredPreviewSelectionMetricsVisible));
             // Also update IsIndeterminate since it depends on StatusBusy
             // This stops the indeterminate animation when progress bar is hidden
             RaisePropertyChanged(nameof(StatusProgressIsIndeterminate));
@@ -446,6 +460,20 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
             RaisePropertyChanged();
         }
     }
+
+    public bool StatusPreviewSelectionVisible
+    {
+        get => _statusPreviewSelectionVisible;
+        set
+        {
+            if (_statusPreviewSelectionVisible == value) return;
+            _statusPreviewSelectionVisible = value;
+            RaisePropertyChanged();
+            RaisePropertyChanged(nameof(CenteredPreviewSelectionMetricsVisible));
+        }
+    }
+
+    public bool CenteredPreviewSelectionMetricsVisible => _statusPreviewSelectionVisible && !_statusBusy;
 
     public int PreviewLineCount
     {

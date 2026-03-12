@@ -7,6 +7,7 @@ using Avalonia.Animation;
 using Avalonia.Animation.Easings;
 using Avalonia.Platform.Storage;
 using DevProjex.Application;
+using DevProjex.Application.Preview;
 using DevProjex.Avalonia.Controls;
 using DevProjex.Avalonia.Coordinators;
 using DevProjex.Avalonia.Services;
@@ -48,6 +49,13 @@ public partial class MainWindow : Window
 
     private readonly record struct PreviewWarmupSnapshot(string Text, int LineCount);
     private readonly record struct PreviewBuildResult(IPreviewTextDocument Document);
+    private readonly record struct PreviewSelectionMetricsSnapshot(
+        IPreviewTextDocument Document,
+        PreviewSelectionRange SelectionRange);
+    private readonly record struct StatusMetricLabels(
+        string LinesPrefix,
+        string CharsPrefix,
+        string TokensPrefix);
 
     private readonly record struct TreeMetricsCacheKey(
         int TreeIdentity,
@@ -241,11 +249,15 @@ public partial class MainWindow : Window
     private readonly object _metricsComputationCacheLock = new();
     private CancellationTokenSource? _metricsCalculationCts;
     private DispatcherTimer? _metricsDebounceTimer;
+    private CancellationTokenSource? _previewSelectionMetricsCts;
+    private DispatcherTimer? _previewSelectionMetricsDebounceTimer;
 
     private readonly Dictionary<string, FileMetricsData> _fileMetricsCache = new(StringComparer.OrdinalIgnoreCase);
     private volatile bool _isBackgroundMetricsActive;
     private int _metricsRecalcVersion;
+    private int _previewSelectionMetricsVersion;
     private const double CompactStatusMetricsThresholdWidth = 1050;
+    private static readonly TimeSpan PreviewSelectionMetricsDebounceInterval = TimeSpan.FromMilliseconds(80);
     private int _lastStatusTreeLines;
     private int _lastStatusTreeChars;
     private int _lastStatusTreeTokens;
@@ -253,6 +265,8 @@ public partial class MainWindow : Window
     private int _lastStatusContentChars;
     private int _lastStatusContentTokens;
     private bool _hasStatusMetricsSnapshot;
+    private ExportOutputMetrics _lastPreviewSelectionMetrics = ExportOutputMetrics.Empty;
+    private bool _hasPreviewSelectionMetricsSnapshot;
     private CancellationTokenSource? _recalculateMetricsCts;
     private bool _hasTreeMetricsCache;
     private TreeMetricsCacheKey _treeMetricsCacheKey;
@@ -356,6 +370,7 @@ public partial class MainWindow : Window
             _previewTextControl.ViewportHeight = Math.Max(0, _previewTextScrollViewer.Viewport.Height);
             _previewTextControl.ViewportWidth = Math.Max(0, _previewTextScrollViewer.Viewport.Width);
             _previewTextControl.CopiedToClipboard += OnPreviewCopiedToClipboard;
+            _previewTextControl.PreviewSelectionChanged += OnPreviewSelectionChanged;
         }
         _settingsContainer = this.FindControl<Border>("SettingsContainer");
         _settingsIsland = this.FindControl<Border>("SettingsIsland");
@@ -535,6 +550,11 @@ public partial class MainWindow : Window
         // Unsubscribe from tree pointer events
         if (_treeView is not null)
             _treeView.PointerEntered -= OnTreePointerEntered;
+        if (_previewTextControl is not null)
+        {
+            _previewTextControl.CopiedToClipboard -= OnPreviewCopiedToClipboard;
+            _previewTextControl.PreviewSelectionChanged -= OnPreviewSelectionChanged;
+        }
 
         // Unsubscribe from tunneled/bubbled events
         RemoveHandler(PointerWheelChangedEvent, OnWindowPointerWheelChanged);
@@ -556,6 +576,13 @@ public partial class MainWindow : Window
         {
             _metricsDebounceTimer.Stop();
             _metricsDebounceTimer.Tick -= OnMetricsDebounceTimerTick;
+        }
+        _previewSelectionMetricsCts?.Cancel();
+        _previewSelectionMetricsCts?.Dispose();
+        if (_previewSelectionMetricsDebounceTimer is not null)
+        {
+            _previewSelectionMetricsDebounceTimer.Stop();
+            _previewSelectionMetricsDebounceTimer.Tick -= OnPreviewSelectionMetricsDebounceTick;
         }
 
         _previewBuildCts?.Cancel();
@@ -661,6 +688,8 @@ public partial class MainWindow : Window
             _viewModel.UpdateHelpPopoverMaxSize(rect.Size);
             if (_hasStatusMetricsSnapshot && _viewModel.StatusMetricsVisible)
                 RenderStatusBarMetrics();
+            if (_hasPreviewSelectionMetricsSnapshot)
+                RenderPreviewSelectionMetrics();
             if (_viewModel.IsPreviewMode && !_previewModeSwitchInProgress)
                 UpdatePreviewSegmentThumbPosition(animate: false);
         }
@@ -993,6 +1022,8 @@ public partial class MainWindow : Window
     {
         _viewModel.UpdateLocalization();
         RecalculateMetricsAsync(); // Update metrics text with new localization
+        if (_hasPreviewSelectionMetricsSnapshot)
+            RenderPreviewSelectionMetrics();
         if (_viewModel.IsPreviewMode)
             SchedulePreviewRefresh(immediate: true);
         UpdateTitle();
@@ -1510,6 +1541,11 @@ public partial class MainWindow : Window
             _toastService.Show(_localization["Toast.Copy.Preview"]);
     }
 
+    private void OnPreviewSelectionChanged(object? sender, EventArgs e)
+    {
+        SchedulePreviewSelectionMetricsUpdate();
+    }
+
     private async Task RefreshPreviewAsync()
     {
         if (!_previewRefreshRequested || !_viewModel.IsProjectLoaded || !_viewModel.IsPreviewMode)
@@ -1911,6 +1947,7 @@ public partial class MainWindow : Window
 
     private void ApplyPreviewDocument(IPreviewTextDocument document, int lineCount)
     {
+        ClearPreviewSelectionMetrics();
         var previousDocument = _viewModel.PreviewDocument;
         _viewModel.PreviewDocument = document;
         _viewModel.PreviewText = string.Empty;
@@ -1945,6 +1982,7 @@ public partial class MainWindow : Window
 
     private void ClearPreviewDocument()
     {
+        ClearPreviewSelectionMetrics();
         var previousDocument = _viewModel.PreviewDocument;
         _viewModel.PreviewDocument = null;
         _viewModel.PreviewText = string.Empty;
@@ -2452,6 +2490,7 @@ public partial class MainWindow : Window
         await AnimatePreviewBarAsync(show: false);
 
         _viewModel.IsPreviewMode = false;
+        ClearPreviewSelectionMetrics();
         RestoreSearchAndFilterAfterPreview();
         ClearPreviewMemory();
         SchedulePreviewMemoryCleanup(force: true);
@@ -6500,26 +6539,244 @@ public partial class MainWindow : Window
 
     private void RenderStatusBarMetrics()
     {
-        // Format: [Lines: X | Chars: X | ~Tokens: X]
+        _viewModel.StatusTreeStatsText = FormatStatusMetricsText(
+            new ExportOutputMetrics(_lastStatusTreeLines, _lastStatusTreeChars, _lastStatusTreeTokens),
+            useCompactMode: true);
+        _viewModel.StatusContentStatsText = FormatStatusMetricsText(
+            new ExportOutputMetrics(_lastStatusContentLines, _lastStatusContentChars, _lastStatusContentTokens),
+            useCompactMode: true);
+    }
+
+    private void RenderPreviewSelectionMetrics()
+    {
+        if (!_hasPreviewSelectionMetricsSnapshot)
+        {
+            _viewModel.StatusPreviewSelectionVisible = false;
+            _viewModel.StatusPreviewSelectionStatsText = string.Empty;
+            return;
+        }
+
+        _viewModel.StatusPreviewSelectionStatsText = FormatStatusMetricsText(
+            _lastPreviewSelectionMetrics,
+            useCompactMode: false);
+        _viewModel.StatusPreviewSelectionVisible = true;
+    }
+
+    private string FormatStatusMetricsText(ExportOutputMetrics metrics, bool useCompactMode)
+    {
+        var labels = BuildStatusMetricLabels();
+        if (useCompactMode && ShouldUseCompactStatusMetrics())
+            return $"[{labels.LinesPrefix} {FormatNumber(metrics.Lines)}]";
+
+        return $"[{labels.LinesPrefix} {FormatNumber(metrics.Lines)} | {labels.CharsPrefix} {FormatNumber(metrics.Chars)} | {labels.TokensPrefix} {FormatNumber(metrics.Tokens)}]";
+    }
+
+    private StatusMetricLabels BuildStatusMetricLabels()
+    {
         var linesLabel = _localization.Format("Status.Metric.Lines", "{0}");
         var charsLabel = _localization.Format("Status.Metric.Chars", "{0}");
         var tokensLabel = _localization.Format("Status.Metric.Tokens", "{0}");
 
-        // Extract format pattern (e.g., "Lines: {0}" -> "Lines:")
-        var linesPrefix = linesLabel.Replace("{0}", "").Trim();
-        var charsPrefix = charsLabel.Replace("{0}", "").Trim();
-        var tokensPrefix = tokensLabel.Replace("{0}", "").Trim();
+        return new StatusMetricLabels(
+            linesLabel.Replace("{0}", string.Empty).Trim(),
+            charsLabel.Replace("{0}", string.Empty).Trim(),
+            tokensLabel.Replace("{0}", string.Empty).Trim());
+    }
 
-        var useCompactMetrics = Bounds.Width > 0 && Bounds.Width <= CompactStatusMetricsThresholdWidth;
-        if (useCompactMetrics)
+    private bool ShouldUseCompactStatusMetrics() =>
+        Bounds.Width > 0 && Bounds.Width <= CompactStatusMetricsThresholdWidth;
+
+    private void SchedulePreviewSelectionMetricsUpdate(bool immediate = false)
+    {
+        if (!_viewModel.IsPreviewMode || _previewTextControl is null)
         {
-            _viewModel.StatusTreeStatsText = $"[{linesPrefix} {FormatNumber(_lastStatusTreeLines)}]";
-            _viewModel.StatusContentStatsText = $"[{linesPrefix} {FormatNumber(_lastStatusContentLines)}]";
+            ClearPreviewSelectionMetrics();
             return;
         }
 
-        _viewModel.StatusTreeStatsText = $"[{linesPrefix} {FormatNumber(_lastStatusTreeLines)} | {charsPrefix} {FormatNumber(_lastStatusTreeChars)} | {tokensPrefix} {FormatNumber(_lastStatusTreeTokens)}]";
-        _viewModel.StatusContentStatsText = $"[{linesPrefix} {FormatNumber(_lastStatusContentLines)} | {charsPrefix} {FormatNumber(_lastStatusContentChars)} | {tokensPrefix} {FormatNumber(_lastStatusContentTokens)}]";
+        if (!_previewTextControl.TryGetSelectionRange(out _))
+        {
+            ClearPreviewSelectionMetrics();
+            return;
+        }
+
+        if (immediate)
+        {
+            _previewSelectionMetricsDebounceTimer?.Stop();
+            RecalculatePreviewSelectionMetricsAsync();
+            return;
+        }
+
+        if (_previewSelectionMetricsDebounceTimer is null)
+        {
+            _previewSelectionMetricsDebounceTimer = new DispatcherTimer
+            {
+                Interval = PreviewSelectionMetricsDebounceInterval
+            };
+            _previewSelectionMetricsDebounceTimer.Tick += OnPreviewSelectionMetricsDebounceTick;
+        }
+
+        _previewSelectionMetricsDebounceTimer.Stop();
+        _previewSelectionMetricsDebounceTimer.Start();
+    }
+
+    private void OnPreviewSelectionMetricsDebounceTick(object? sender, EventArgs e)
+    {
+        _previewSelectionMetricsDebounceTimer?.Stop();
+        RecalculatePreviewSelectionMetricsAsync();
+    }
+
+    private void RecalculatePreviewSelectionMetricsAsync()
+    {
+        if (!TryCapturePreviewSelectionMetricsSnapshot(out var snapshot))
+        {
+            ClearPreviewSelectionMetrics();
+            return;
+        }
+
+        if (TryGetCachedPreviewSelectionMetrics(snapshot, out var cachedMetrics))
+        {
+            _previewSelectionMetricsDebounceTimer?.Stop();
+            var previousCts = Interlocked.Exchange(ref _previewSelectionMetricsCts, null);
+            previousCts?.Cancel();
+            previousCts?.Dispose();
+            Interlocked.Increment(ref _previewSelectionMetricsVersion);
+            _lastPreviewSelectionMetrics = cachedMetrics;
+            _hasPreviewSelectionMetricsSnapshot = true;
+            RenderPreviewSelectionMetrics();
+            return;
+        }
+
+        var metricsCts = ReplaceCancellationSource(ref _previewSelectionMetricsCts);
+        var token = metricsCts.Token;
+        var version = Interlocked.Increment(ref _previewSelectionMetricsVersion);
+
+        _ = RecalculatePreviewSelectionMetricsCoreAsync(snapshot, metricsCts, token, version);
+    }
+
+    private async Task RecalculatePreviewSelectionMetricsCoreAsync(
+        PreviewSelectionMetricsSnapshot snapshot,
+        CancellationTokenSource metricsCts,
+        CancellationToken cancellationToken,
+        int version)
+    {
+        try
+        {
+            var metrics = await Task.Run(
+                () => PreviewSelectionMetricsCalculator.Calculate(
+                    snapshot.Document,
+                    snapshot.SelectionRange,
+                    cancellationToken),
+                cancellationToken);
+
+            if (cancellationToken.IsCancellationRequested)
+                return;
+
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                if (cancellationToken.IsCancellationRequested ||
+                    version != Volatile.Read(ref _previewSelectionMetricsVersion))
+                {
+                    return;
+                }
+
+                if (!TryCapturePreviewSelectionMetricsSnapshot(out var currentSnapshot) ||
+                    !ReferenceEquals(currentSnapshot.Document, snapshot.Document) ||
+                    currentSnapshot.SelectionRange != snapshot.SelectionRange)
+                {
+                    return;
+                }
+
+                _lastPreviewSelectionMetrics = metrics;
+                _hasPreviewSelectionMetricsSnapshot = metrics != ExportOutputMetrics.Empty;
+                RenderPreviewSelectionMetrics();
+            }, DispatcherPriority.Background);
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (ObjectDisposedException)
+        {
+        }
+        finally
+        {
+            DisposeIfCurrent(ref _previewSelectionMetricsCts, metricsCts);
+        }
+    }
+
+    private bool TryCapturePreviewSelectionMetricsSnapshot(out PreviewSelectionMetricsSnapshot snapshot)
+    {
+        snapshot = default;
+
+        if (!_viewModel.IsPreviewMode || _previewTextControl is null)
+            return false;
+
+        var document = _previewTextControl.Document ?? _viewModel.PreviewDocument;
+        if (document is null)
+            return false;
+
+        if (!_previewTextControl.TryGetSelectionRange(out var selectionRange))
+            return false;
+
+        snapshot = new PreviewSelectionMetricsSnapshot(document, selectionRange);
+        return true;
+    }
+
+    private bool TryGetCachedPreviewSelectionMetrics(
+        PreviewSelectionMetricsSnapshot snapshot,
+        out ExportOutputMetrics metrics)
+    {
+        metrics = ExportOutputMetrics.Empty;
+
+        if (!_hasStatusMetricsSnapshot || !IsFullDocumentSelection(snapshot))
+            return false;
+
+        metrics = _viewModel.SelectedPreviewContentMode switch
+        {
+            PreviewContentMode.Tree => new ExportOutputMetrics(
+                _lastStatusTreeLines,
+                _lastStatusTreeChars,
+                _lastStatusTreeTokens),
+            PreviewContentMode.Content => new ExportOutputMetrics(
+                _lastStatusContentLines,
+                _lastStatusContentChars,
+                _lastStatusContentTokens),
+            PreviewContentMode.TreeAndContent => AddMetrics(
+                new ExportOutputMetrics(_lastStatusTreeLines, _lastStatusTreeChars, _lastStatusTreeTokens),
+                new ExportOutputMetrics(_lastStatusContentLines, _lastStatusContentChars, _lastStatusContentTokens)),
+            _ => ExportOutputMetrics.Empty
+        };
+
+        return metrics != ExportOutputMetrics.Empty;
+    }
+
+    private static bool IsFullDocumentSelection(PreviewSelectionMetricsSnapshot snapshot)
+    {
+        var selectionRange = snapshot.SelectionRange.Normalize();
+        if (selectionRange.StartLine != 1 || selectionRange.StartColumn != 0)
+            return false;
+
+        var lastLine = Math.Max(1, snapshot.Document.LineCount);
+        var lastLineLength = snapshot.Document.GetLineText(lastLine).Length;
+        return selectionRange.EndLine == lastLine &&
+               selectionRange.EndColumn == lastLineLength;
+    }
+
+    private static ExportOutputMetrics AddMetrics(ExportOutputMetrics left, ExportOutputMetrics right) =>
+        new(left.Lines + right.Lines, left.Chars + right.Chars, left.Tokens + right.Tokens);
+
+    private void ClearPreviewSelectionMetrics()
+    {
+        _previewSelectionMetricsDebounceTimer?.Stop();
+        var previousCts = Interlocked.Exchange(ref _previewSelectionMetricsCts, null);
+        previousCts?.Cancel();
+        previousCts?.Dispose();
+        Interlocked.Increment(ref _previewSelectionMetricsVersion);
+
+        _lastPreviewSelectionMetrics = ExportOutputMetrics.Empty;
+        _hasPreviewSelectionMetricsSnapshot = false;
+        _viewModel.StatusPreviewSelectionVisible = false;
+        _viewModel.StatusPreviewSelectionStatsText = string.Empty;
     }
 
     /// <summary>
