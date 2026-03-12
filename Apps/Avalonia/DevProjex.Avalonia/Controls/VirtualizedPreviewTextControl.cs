@@ -9,6 +9,8 @@ namespace DevProjex.Avalonia.Controls;
 /// </summary>
 public sealed class VirtualizedPreviewTextControl : Control
 {
+    public event EventHandler? CopiedToClipboard;
+
     public static readonly StyledProperty<string> TextProperty =
         AvaloniaProperty.Register<VirtualizedPreviewTextControl, string>(nameof(Text), string.Empty);
 
@@ -763,6 +765,7 @@ public sealed class VirtualizedPreviewTextControl : Control
             return;
 
         await clipboard.SetTextAsync(selectedText);
+        CopiedToClipboard?.Invoke(this, EventArgs.Empty);
     }
 
     public void SelectAll()

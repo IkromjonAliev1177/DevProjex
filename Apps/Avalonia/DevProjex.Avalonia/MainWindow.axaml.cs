@@ -355,6 +355,7 @@ public partial class MainWindow : Window
             _previewTextControl.VerticalOffset = Math.Max(0, _previewTextScrollViewer.Offset.Y);
             _previewTextControl.ViewportHeight = Math.Max(0, _previewTextScrollViewer.Viewport.Height);
             _previewTextControl.ViewportWidth = Math.Max(0, _previewTextScrollViewer.Viewport.Width);
+            _previewTextControl.CopiedToClipboard += OnPreviewCopiedToClipboard;
         }
         _settingsContainer = this.FindControl<Border>("SettingsContainer");
         _settingsIsland = this.FindControl<Border>("SettingsIsland");
@@ -1501,6 +1502,12 @@ public partial class MainWindow : Window
             _previewTextControl.ClearSelection();
 
         e.Handled = true;
+    }
+
+    private void OnPreviewCopiedToClipboard(object? sender, EventArgs e)
+    {
+        if (_viewModel.IsPreviewMode)
+            _toastService.Show(_localization["Toast.Copy.Preview"]);
     }
 
     private async Task RefreshPreviewAsync()

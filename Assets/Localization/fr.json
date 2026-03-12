@@ -14,6 +14,7 @@
   "Toast.Copy.Tree": "Arborescence copiée",
   "Toast.Copy.Content": "Contenu copié",
   "Toast.Copy.TreeAndContent": "Arborescence et contenu copiés",
+  "Toast.Copy.Preview": "Copié",
   "Toast.Export.Tree": "Arborescence exportée dans un fichier",
   "Toast.Export.Content": "Contenu exporté dans un fichier",
   "Toast.Export.TreeAndContent": "Arborescence et contenu exportés dans un fichier",

@@ -14,6 +14,7 @@
   "Toast.Copy.Tree": "Дерево скопировано",
   "Toast.Copy.Content": "Содержимое скопировано",
   "Toast.Copy.TreeAndContent": "Дерево и содержимое скопированы",
+  "Toast.Copy.Preview": "Скопировано",
   "Toast.Export.Tree": "Дерево экспортировано в файл",
   "Toast.Export.Content": "Содержимое экспортировано в файл",
   "Toast.Export.TreeAndContent": "Дерево и содержимое экспортированы в файл",
