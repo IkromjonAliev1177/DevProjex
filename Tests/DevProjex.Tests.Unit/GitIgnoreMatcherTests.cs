@@ -160,9 +160,14 @@ public sealed class GitIgnoreMatcherTests
 	{
 		var matcher = GitIgnoreMatcher.Build("/repo", [pattern]);
 		var name = Path.GetFileName(path);
-		// On Windows, the matcher is case-insensitive, so adjust expectations
-		if (OperatingSystem.IsWindows() && pattern == "[a-z]" && path == "/repo/M")
+		// Windows and macOS use case-insensitive regex matching for gitignore rules.
+		if ((OperatingSystem.IsWindows() || OperatingSystem.IsMacOS()) &&
+			pattern == "[a-z]" &&
+			path == "/repo/M")
+		{
 			expected = true;
+		}
+
 		Assert.Equal(expected, matcher.IsIgnored(path, false, name));
 	}
 

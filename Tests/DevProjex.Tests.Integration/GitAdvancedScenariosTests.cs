@@ -296,8 +296,8 @@ public class GitAdvancedScenariosTests : IAsyncLifetime
         if (!await _gitService.IsGitAvailableAsync())
             return;
 
-        // Arrange - invalid path with illegal characters
-        var invalidPath = Path.Combine(_tempDir.Path, "invalid<>path");
+        // Use an OS-invalid target path so the scenario remains cross-platform.
+        var invalidPath = CreateInvalidClonePath();
 
         // Act
         var result = await _gitService.CloneAsync(TestRepoUrl, invalidPath);
@@ -305,6 +305,14 @@ public class GitAdvancedScenariosTests : IAsyncLifetime
         // Assert
         Assert.False(result.Success);
         Assert.NotNull(result.ErrorMessage);
+    }
+
+    private string CreateInvalidClonePath()
+    {
+        if (OperatingSystem.IsWindows())
+            return Path.Combine(_tempDir.Path, "invalid<>path");
+
+        return _tempDir.Path + "\0invalid";
     }
 
     [Fact]
