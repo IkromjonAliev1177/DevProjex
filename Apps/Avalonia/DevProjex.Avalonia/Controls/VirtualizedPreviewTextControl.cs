@@ -1237,23 +1237,15 @@ public sealed class VirtualizedPreviewTextControl : Control
         TrailingArea = 2
     }
 
-    private sealed class VisibleTextWindow
+    private sealed class VisibleTextWindow(int firstLine, int lastLine, string text)
     {
-        private readonly int[] _lineStarts;
+        private readonly int[] _lineStarts = BuildLineStarts(firstLine, lastLine, text);
 
-        public VisibleTextWindow(int firstLine, int lastLine, string text)
-        {
-            FirstLine = firstLine;
-            LastLine = lastLine;
-            Text = text;
-            _lineStarts = BuildLineStarts(firstLine, lastLine, text);
-        }
+        public int FirstLine { get; } = firstLine;
 
-        public int FirstLine { get; }
+        public int LastLine { get; } = lastLine;
 
-        public int LastLine { get; }
-
-        public string Text { get; }
+        public string Text { get; } = text;
 
         public SelectionPosition Clamp(SelectionPosition position)
         {
