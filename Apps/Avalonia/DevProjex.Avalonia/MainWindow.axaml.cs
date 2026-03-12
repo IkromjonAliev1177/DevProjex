@@ -351,8 +351,10 @@ public partial class MainWindow : Window
         _previewLineNumbersControl = this.FindControl<VirtualizedLineNumbersControl>("PreviewLineNumbersControl");
         if (_previewTextScrollViewer is not null && _previewTextControl is not null)
         {
+            _previewTextScrollViewer.Cursor = new Cursor(StandardCursorType.Ibeam);
             _previewTextControl.VerticalOffset = Math.Max(0, _previewTextScrollViewer.Offset.Y);
             _previewTextControl.ViewportHeight = Math.Max(0, _previewTextScrollViewer.Viewport.Height);
+            _previewTextControl.ViewportWidth = Math.Max(0, _previewTextScrollViewer.Viewport.Width);
         }
         _settingsContainer = this.FindControl<Border>("SettingsContainer");
         _settingsIsland = this.FindControl<Border>("SettingsIsland");
@@ -1438,6 +1440,7 @@ public partial class MainWindow : Window
         {
             _previewTextControl.VerticalOffset = Math.Max(0, textScrollViewer.Offset.Y);
             _previewTextControl.ViewportHeight = Math.Max(0, textScrollViewer.Viewport.Height);
+            _previewTextControl.ViewportWidth = Math.Max(0, textScrollViewer.Viewport.Width);
         }
 
         if (_previewLineNumbersControl is null)
@@ -1485,7 +1488,19 @@ public partial class MainWindow : Window
             }
         }
 
-        _previewTextControl?.ClearSelection();
+        if (_previewTextControl is null)
+            return;
+
+        var viewportPoint = e.GetPosition(_previewTextScrollViewer);
+        var handledByPreview = _previewTextControl.TryHandleViewportSelectionStart(
+            e.Pointer,
+            viewportPoint,
+            e.KeyModifiers);
+
+        if (!handledByPreview)
+            _previewTextControl.ClearSelection();
+
+        e.Handled = true;
     }
 
     private async Task RefreshPreviewAsync()
@@ -1911,7 +1926,10 @@ public partial class MainWindow : Window
         {
             _previewTextControl.VerticalOffset = 0;
             if (_previewTextScrollViewer is not null)
+            {
                 _previewTextControl.ViewportHeight = Math.Max(0, _previewTextScrollViewer.Viewport.Height);
+                _previewTextControl.ViewportWidth = Math.Max(0, _previewTextScrollViewer.Viewport.Width);
+            }
         }
 
         if (!ReferenceEquals(previousDocument, document))

@@ -21,6 +21,9 @@ public sealed class VirtualizedPreviewTextControl : Control
     public static readonly StyledProperty<double> ViewportHeightProperty =
         AvaloniaProperty.Register<VirtualizedPreviewTextControl, double>(nameof(ViewportHeight));
 
+    public static readonly StyledProperty<double> ViewportWidthProperty =
+        AvaloniaProperty.Register<VirtualizedPreviewTextControl, double>(nameof(ViewportWidth));
+
     public static readonly StyledProperty<double> TopPaddingProperty =
         AvaloniaProperty.Register<VirtualizedPreviewTextControl, double>(nameof(TopPadding), 10.0);
 
@@ -76,6 +79,8 @@ public sealed class VirtualizedPreviewTextControl : Control
     private MenuItem? _copyMenuItem;
     private MenuItem? _selectAllMenuItem;
     private MenuItem? _clearSelectionMenuItem;
+    private static readonly global::Avalonia.Input.Cursor PreviewTextCursor =
+        new(global::Avalonia.Input.StandardCursorType.Ibeam);
 
     static VirtualizedPreviewTextControl()
     {
@@ -84,6 +89,7 @@ public sealed class VirtualizedPreviewTextControl : Control
             DocumentProperty,
             VerticalOffsetProperty,
             ViewportHeightProperty,
+            ViewportWidthProperty,
             TopPaddingProperty,
             BottomPaddingProperty,
             LeftPaddingProperty,
@@ -98,6 +104,7 @@ public sealed class VirtualizedPreviewTextControl : Control
         AffectsMeasure<VirtualizedPreviewTextControl>(
             TextProperty,
             DocumentProperty,
+            ViewportWidthProperty,
             TopPaddingProperty,
             BottomPaddingProperty,
             LeftPaddingProperty,
@@ -153,6 +160,12 @@ public sealed class VirtualizedPreviewTextControl : Control
     {
         get => GetValue(ViewportHeightProperty);
         set => SetValue(ViewportHeightProperty, value);
+    }
+
+    public double ViewportWidth
+    {
+        get => GetValue(ViewportWidthProperty);
+        set => SetValue(ViewportWidthProperty, value);
     }
 
     public double TopPadding
@@ -220,6 +233,7 @@ public sealed class VirtualizedPreviewTextControl : Control
     public VirtualizedPreviewTextControl()
     {
         Focusable = true;
+        Cursor = PreviewTextCursor;
         RebuildTextLayoutMetadata();
     }
 
@@ -230,11 +244,24 @@ public sealed class VirtualizedPreviewTextControl : Control
         ClearSelectionState(invalidateVisual: true);
     }
 
+    public bool TryHandleViewportSelectionStart(IPointer pointer, Point viewportPoint, KeyModifiers keyModifiers)
+    {
+        Focus();
+
+        var scrollViewer = GetOwnerScrollViewer();
+        var documentPoint = scrollViewer is not null
+            ? new Point(scrollViewer.Offset.X + viewportPoint.X, scrollViewer.Offset.Y + viewportPoint.Y)
+            : viewportPoint;
+
+        _selectionPointerViewportPoint = viewportPoint;
+        return TryStartSelection(pointer, documentPoint, keyModifiers);
+    }
+
     protected override Size MeasureOverride(Size availableSize)
     {
         var typeface = ResolveTypeface();
         var lineHeight = ResolveLineHeight(typeface);
-        var width = CalculateRequiredWidth(typeface);
+        var width = Math.Max(CalculateRequiredWidth(typeface), Math.Ceiling(Math.Max(0, ViewportWidth)));
         var height = Math.Ceiling(TopPadding + BottomPadding + (ResolveLineCount() * lineHeight));
 
         return new Size(Math.Max(1, width), Math.Max(1, height));
@@ -303,26 +330,7 @@ public sealed class VirtualizedPreviewTextControl : Control
 
         Focus();
         CaptureSelectionPointer(e);
-
-        var documentPoint = e.GetPosition(this);
-        var hit = HitTestSelection(documentPoint);
-        if (!e.KeyModifiers.HasFlag(KeyModifiers.Shift) && hit.Kind == SelectionHitKind.Empty)
-        {
-            if (HasSelection)
-                ClearSelection();
-
-            e.Handled = true;
-            return;
-        }
-
-        var selectionPosition = hit.Position;
-        if (!e.KeyModifiers.HasFlag(KeyModifiers.Shift) || _selectionAnchor is null)
-            _selectionAnchor = selectionPosition;
-
-        UpdateSelectionActivePosition(selectionPosition);
-        _isSelecting = true;
-        e.Pointer.Capture(this);
-        UpdateSelectionAutoScrollState();
+        TryStartSelection(e.Pointer, e.GetPosition(this), e.KeyModifiers);
         e.Handled = true;
     }
 
@@ -596,10 +604,9 @@ public sealed class VirtualizedPreviewTextControl : Control
         var x = Math.Max(0, point.X - LeftPadding);
         var lineText = GetLineText(lineNumber);
         var column = ResolveColumnFromDistance(lineText, x, typeface);
-        var isWithinTextBounds = IsWithinRenderedTextBounds(lineText, x, typeface);
         return new SelectionHitResult(
             new SelectionPosition(lineNumber, column),
-            isWithinTextBounds ? SelectionHitKind.Text : SelectionHitKind.Empty);
+            SelectionHitKind.Text);
     }
 
     private int ResolveColumnFromDistance(string lineText, double distance, Typeface typeface)
@@ -812,26 +819,6 @@ public sealed class VirtualizedPreviewTextControl : Control
             TextBrush ?? Brushes.White);
     }
 
-    private bool IsWithinRenderedTextBounds(string lineText, double distance, Typeface typeface)
-    {
-        if (distance <= 0)
-            return false;
-
-        if (string.IsNullOrEmpty(lineText))
-            return false;
-
-        var layout = new TextLayout(
-            lineText,
-            typeface,
-            TextFontSize,
-            TextBrush ?? Brushes.White);
-        if (layout.TextLines.Count == 0)
-            return false;
-
-        var endDistance = layout.TextLines[0].GetDistanceFromCharacterHit(new CharacterHit(lineText.Length, 0));
-        return distance <= endDistance + 0.5;
-    }
-
     private void EnsureContextMenu()
     {
         if (_contextMenu is not null)
@@ -983,6 +970,28 @@ public sealed class VirtualizedPreviewTextControl : Control
         _selectionPointerViewportPoint = scrollViewer is not null
             ? e.GetPosition(scrollViewer)
             : e.GetPosition(this);
+    }
+
+    private bool TryStartSelection(IPointer pointer, Point documentPoint, KeyModifiers keyModifiers)
+    {
+        var hit = HitTestSelection(documentPoint);
+        if (!keyModifiers.HasFlag(KeyModifiers.Shift) && hit.Kind == SelectionHitKind.Empty)
+        {
+            if (HasSelection)
+                ClearSelection();
+
+            return false;
+        }
+
+        var selectionPosition = hit.Position;
+        if (!keyModifiers.HasFlag(KeyModifiers.Shift) || _selectionAnchor is null)
+            _selectionAnchor = selectionPosition;
+
+        UpdateSelectionActivePosition(selectionPosition);
+        _isSelecting = true;
+        pointer.Capture(this);
+        UpdateSelectionAutoScrollState();
+        return true;
     }
 
     private void UpdateSelectionAutoScrollState()
