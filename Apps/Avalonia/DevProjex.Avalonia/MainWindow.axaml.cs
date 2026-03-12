@@ -1462,6 +1462,32 @@ public partial class MainWindow : Window
         }
     }
 
+    private void OnPreviewScrollViewerPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (_previewTextScrollViewer is null ||
+            !e.GetCurrentPoint(_previewTextScrollViewer).Properties.IsLeftButtonPressed)
+        {
+            return;
+        }
+
+        if (e.Source is Visual sourceVisual)
+        {
+            if (sourceVisual is VirtualizedPreviewTextControl ||
+                sourceVisual.FindAncestorOfType<VirtualizedPreviewTextControl>() is not null)
+            {
+                return;
+            }
+
+            if (sourceVisual is ScrollBar or Thumb or RepeatButton ||
+                sourceVisual.FindAncestorOfType<ScrollBar>() is not null)
+            {
+                return;
+            }
+        }
+
+        _previewTextControl?.ClearSelection();
+    }
+
     private async Task RefreshPreviewAsync()
     {
         if (!_previewRefreshRequested || !_viewModel.IsProjectLoaded || !_viewModel.IsPreviewMode)
@@ -3745,6 +3771,12 @@ public partial class MainWindow : Window
 
     private void FocusPreviewSurface()
     {
+        if (_previewTextControl is not null && _previewTextControl.Focusable)
+        {
+            _previewTextControl.Focus();
+            return;
+        }
+
         if (_previewTextScrollViewer is not null && _previewTextScrollViewer.Focusable)
         {
             _previewTextScrollViewer.Focus();

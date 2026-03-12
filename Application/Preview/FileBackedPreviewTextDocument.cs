@@ -28,6 +28,22 @@ public sealed class FileBackedPreviewTextDocument(
 
     public long CharacterCount { get; } = characterCount;
 
+    public string GetLineText(int lineNumber)
+    {
+        ThrowIfDisposed();
+
+        if (lineOffsets.Length == 0)
+            return string.Empty;
+
+        var normalizedLine = Math.Clamp(lineNumber, 1, LineCount);
+        var startOffset = lineOffsets[normalizedLine - 1];
+        var endOffset = normalizedLine < LineCount
+            ? lineOffsets[normalizedLine]
+            : fileLength;
+
+        return ReadTextRange(startOffset, endOffset);
+    }
+
     public string GetLineRangeText(int firstLine, int lastLine)
     {
         ThrowIfDisposed();
@@ -45,25 +61,7 @@ public sealed class FileBackedPreviewTextDocument(
             ? lineOffsets[normalizedLastLine]
             : fileLength;
 
-        var byteCount = checked((int)Math.Max(0, endOffset - startOffset));
-        if (byteCount == 0)
-            return string.Empty;
-
-        var buffer = ArrayPool<byte>.Shared.Rent(byteCount);
-        try
-        {
-            var bytesRead = ReadBytes(startOffset, buffer, byteCount);
-            if (bytesRead > 0 && buffer[bytesRead - 1] == (byte)'\n')
-                bytesRead--;
-
-            return bytesRead == 0
-                ? string.Empty
-                : Utf8WithoutBom.GetString(buffer, 0, bytesRead);
-        }
-        finally
-        {
-            ArrayPool<byte>.Shared.Return(buffer);
-        }
+        return ReadTextRange(startOffset, endOffset);
     }
 
     public void Dispose()
@@ -110,6 +108,32 @@ public sealed class FileBackedPreviewTextDocument(
             }
 
             return totalBytesRead;
+        }
+    }
+
+    private string ReadTextRange(long startOffset, long endOffset)
+    {
+        var byteCount = checked((int)Math.Max(0, endOffset - startOffset));
+        if (byteCount == 0)
+            return string.Empty;
+
+        var buffer = ArrayPool<byte>.Shared.Rent(byteCount);
+        try
+        {
+            var bytesRead = ReadBytes(startOffset, buffer, byteCount);
+            if (bytesRead > 0 && buffer[bytesRead - 1] == (byte)'\n')
+                bytesRead--;
+
+            if (bytesRead > 0 && buffer[bytesRead - 1] == (byte)'\r')
+                bytesRead--;
+
+            return bytesRead == 0
+                ? string.Empty
+                : Utf8WithoutBom.GetString(buffer, 0, bytesRead);
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
         }
     }
 

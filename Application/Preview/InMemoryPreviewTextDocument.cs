@@ -19,6 +19,15 @@ public sealed class InMemoryPreviewTextDocument : IPreviewTextDocument
 
     public long CharacterCount => _text.Length;
 
+    public string GetLineText(int lineNumber)
+    {
+        if (_text.Length == 0)
+            return string.Empty;
+
+        var normalizedLine = Math.Clamp(lineNumber, 1, _lineCount) - 1;
+        return GetLineSlice(_text, _lineStarts, normalizedLine).ToString();
+    }
+
     public string GetLineRangeText(int firstLine, int lastLine)
     {
         if (_text.Length == 0)
@@ -35,7 +44,10 @@ public sealed class InMemoryPreviewTextDocument : IPreviewTextDocument
 
         for (var lineIndex = normalizedFirstLine - 1; lineIndex <= normalizedLastLine - 1; lineIndex++)
         {
-            AppendLineSlice(builder, _text, _lineStarts, lineIndex);
+            var line = GetLineSlice(_text, _lineStarts, lineIndex);
+            if (!line.IsEmpty)
+                builder.Append(line);
+
             if (lineIndex < normalizedLastLine - 1)
                 builder.Append('\n');
         }
@@ -78,10 +90,10 @@ public sealed class InMemoryPreviewTextDocument : IPreviewTextDocument
         return (Math.Max(1, lineStarts.Count), maxLineLength);
     }
 
-    private static void AppendLineSlice(StringBuilder builder, string text, IReadOnlyList<int> lineStarts, int lineIndex)
+    private static ReadOnlySpan<char> GetLineSlice(string text, IReadOnlyList<int> lineStarts, int lineIndex)
     {
         if (lineIndex < 0 || lineIndex >= lineStarts.Count)
-            return;
+            return ReadOnlySpan<char>.Empty;
 
         var start = lineStarts[lineIndex];
         var nextStart = lineIndex + 1 < lineStarts.Count
@@ -95,7 +107,8 @@ public sealed class InMemoryPreviewTextDocument : IPreviewTextDocument
         if (endExclusive > start && text[endExclusive - 1] == '\r')
             endExclusive--;
 
-        if (endExclusive > start)
-            builder.Append(text.AsSpan(start, endExclusive - start));
+        return endExclusive > start
+            ? text.AsSpan(start, endExclusive - start)
+            : ReadOnlySpan<char>.Empty;
     }
 }

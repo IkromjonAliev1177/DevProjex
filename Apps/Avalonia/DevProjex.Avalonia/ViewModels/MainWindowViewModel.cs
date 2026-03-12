@@ -982,6 +982,9 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
     public string PreviewModeTreeAndContent { get; private set; } = string.Empty;
     public string PreviewLoadingText { get; private set; } = string.Empty;
     public string PreviewNoDataText { get; private set; } = string.Empty;
+    public string PreviewSelectionCopy { get; private set; } = string.Empty;
+    public string PreviewSelectionSelectAll { get; private set; } = string.Empty;
+    public string PreviewSelectionClear { get; private set; } = string.Empty;
 
     // StatusBar labels
     public string StatusTreeLabel { get; private set; } = string.Empty;
@@ -1092,6 +1095,9 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         PreviewModeTreeAndContent = _localization["Preview.Mode.TreeAndContent"];
         PreviewLoadingText = _localization["Preview.Loading"];
         PreviewNoDataText = _localization["Preview.NoData"];
+        PreviewSelectionCopy = _localization["Preview.Selection.Copy"];
+        PreviewSelectionSelectAll = _localization["Preview.Selection.SelectAll"];
+        PreviewSelectionClear = _localization["Preview.Selection.Clear"];
 
         // StatusBar labels
         StatusTreeLabel = _localization["Status.Tree.Label"];
@@ -1214,6 +1220,9 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         RaisePropertyChanged(nameof(PreviewModeTreeAndContent));
         RaisePropertyChanged(nameof(PreviewLoadingText));
         RaisePropertyChanged(nameof(PreviewNoDataText));
+        RaisePropertyChanged(nameof(PreviewSelectionCopy));
+        RaisePropertyChanged(nameof(PreviewSelectionSelectAll));
+        RaisePropertyChanged(nameof(PreviewSelectionClear));
 
         // StatusBar labels
         RaisePropertyChanged(nameof(StatusTreeLabel));

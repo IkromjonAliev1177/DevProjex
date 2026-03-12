@@ -11,5 +11,7 @@ public interface IPreviewTextDocument : IDisposable
 
     long CharacterCount { get; }
 
+    string GetLineText(int lineNumber);
+
     string GetLineRangeText(int firstLine, int lastLine);
 }
