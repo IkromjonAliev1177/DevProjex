@@ -1,6 +1,10 @@
 namespace DevProjex.Avalonia.Coordinators;
 
-public sealed class TreeSearchCoordinator : IDisposable
+public sealed class TreeSearchCoordinator(
+    MainWindowViewModel viewModel,
+    TreeView treeView,
+    Action? onSearchApplied = null)
+    : IDisposable
 {
     private enum BringIntoViewResult
     {
@@ -18,9 +22,6 @@ public sealed class TreeSearchCoordinator : IDisposable
         DispatcherPriority.Background
     ];
 
-    private readonly MainWindowViewModel _viewModel;
-    private readonly TreeView _treeView;
-    private readonly Action? _onSearchApplied;
     private static readonly TimeSpan SearchDebounceDelay = TimeSpan.FromMilliseconds(500);
     private readonly object _searchCtsLock = new();
     private CancellationTokenSource? _searchDebounceCts;
@@ -64,13 +65,6 @@ public sealed class TreeSearchCoordinator : IDisposable
     private IBrush? _cachedNormalForeground;
     private IBrush? _cachedCurrentBackground;
     private ThemeVariant? _cachedTheme;
-
-    public TreeSearchCoordinator(MainWindowViewModel viewModel, TreeView treeView, Action? onSearchApplied = null)
-    {
-        _viewModel = viewModel;
-        _treeView = treeView;
-        _onSearchApplied = onSearchApplied;
-    }
 
     private async Task RunSearchDebounceAsync(int version, CancellationToken debounceToken)
     {
@@ -143,7 +137,7 @@ public sealed class TreeSearchCoordinator : IDisposable
             _searchCts?.Cancel();
         }
 
-        var query = _viewModel.SearchQuery ?? string.Empty;
+        var query = viewModel.SearchQuery ?? string.Empty;
         if (string.IsNullOrWhiteSpace(query))
         {
             if (!normalizeTreeWhenEmptyQuery)
@@ -180,7 +174,7 @@ public sealed class TreeSearchCoordinator : IDisposable
     public void UpdateHighlights(string? query)
     {
         var (highlightBackground, highlightForeground, normalForeground, currentBackground) = GetSearchHighlightBrushes();
-        TreeNodeViewModel.ForEachDescendant(_viewModel.TreeNodes, node =>
+        TreeNodeViewModel.ForEachDescendant(viewModel.TreeNodes, node =>
             node.UpdateSearchHighlight(query, highlightBackground, highlightForeground, normalForeground, currentBackground));
     }
 
@@ -268,7 +262,7 @@ public sealed class TreeSearchCoordinator : IDisposable
 
     public void RefreshThemeHighlights()
     {
-        UpdateHighlights(_viewModel.SearchQuery);
+        UpdateHighlights(viewModel.SearchQuery);
     }
 
     private void SelectSearchMatch()
@@ -281,7 +275,7 @@ public sealed class TreeSearchCoordinator : IDisposable
         SelectTreeNode(node);
         UpdateCurrentSearchMatch(node);
         BringNodeIntoView(node);
-        _treeView.Focus();
+        treeView.Focus();
     }
 
     private async Task RunSearchAsync(int version, CancellationToken token)
@@ -296,7 +290,7 @@ public sealed class TreeSearchCoordinator : IDisposable
                 if (token.IsCancellationRequested || version != Volatile.Read(ref _searchVersion))
                     return;
 
-                query = _viewModel.SearchQuery ?? string.Empty;
+                query = viewModel.SearchQuery ?? string.Empty;
                 EnsureSearchIndexCurrent();
                 sourceNodes = CreateSearchSource(query);
             }, DispatcherPriority.Background);
@@ -347,7 +341,7 @@ public sealed class TreeSearchCoordinator : IDisposable
         {
             CancelPendingHighlightApply();
             ClearHighlightsIfNeeded();
-            foreach (var node in _viewModel.TreeNodes)
+            foreach (var node in viewModel.TreeNodes)
             {
                 // When search is cleared, restore root visibility and collapse descendants.
                 node.IsExpanded = true;
@@ -398,7 +392,7 @@ public sealed class TreeSearchCoordinator : IDisposable
         _lastComputedQuery = query;
         _lastComputedMatches.Clear();
         _lastComputedMatches.AddRange(_searchMatches);
-        _onSearchApplied?.Invoke();
+        onSearchApplied?.Invoke();
     }
 
     private List<TreeNodeViewModel> CollectMatches(
@@ -501,7 +495,7 @@ public sealed class TreeSearchCoordinator : IDisposable
     private void SeedExpandedNodesSnapshot()
     {
         _searchExpandedNodes.Clear();
-        TreeNodeViewModel.ForEachDescendant(_viewModel.TreeNodes, node =>
+        TreeNodeViewModel.ForEachDescendant(viewModel.TreeNodes, node =>
         {
             if (node.Children.Count > 0 && node.IsExpanded)
                 _searchExpandedNodes.Add(node);
@@ -510,14 +504,14 @@ public sealed class TreeSearchCoordinator : IDisposable
 
     private void EnsureSearchIndexCurrent()
     {
-        var currentRootCount = _viewModel.TreeNodes.Count;
-        var currentFirstRoot = currentRootCount > 0 ? _viewModel.TreeNodes[0] : null;
+        var currentRootCount = viewModel.TreeNodes.Count;
+        var currentFirstRoot = currentRootCount > 0 ? viewModel.TreeNodes[0] : null;
 
         if (_indexedRootCount == currentRootCount && ReferenceEquals(_indexedFirstRoot, currentFirstRoot))
             return;
 
         _flatNodeIndex.Clear();
-        TreeNodeViewModel.ForEachDescendant(_viewModel.TreeNodes, node => _flatNodeIndex.Add(node));
+        TreeNodeViewModel.ForEachDescendant(viewModel.TreeNodes, node => _flatNodeIndex.Add(node));
 
         _indexedRootCount = currentRootCount;
         _indexedFirstRoot = currentFirstRoot;
@@ -630,7 +624,7 @@ public sealed class TreeSearchCoordinator : IDisposable
 
     private void SelectTreeNode(TreeNodeViewModel node)
     {
-        _treeView.SelectedItem = node;
+        treeView.SelectedItem = node;
         node.IsSelected = true;
     }
 
@@ -639,7 +633,7 @@ public sealed class TreeSearchCoordinator : IDisposable
         if (ReferenceEquals(_currentSearchMatch, node))
             return;
 
-        var query = _viewModel.SearchQuery;
+        var query = viewModel.SearchQuery;
         var (highlightBackground, highlightForeground, normalForeground, currentBackground) = GetSearchHighlightBrushes();
 
         if (_currentSearchMatch is not null)
@@ -686,7 +680,7 @@ public sealed class TreeSearchCoordinator : IDisposable
 
         var (highlightBackground, highlightForeground, normalForeground, currentBackground) = GetSearchHighlightBrushes();
 
-        TreeNodeViewModel.ForEachDescendant(_viewModel.TreeNodes, node =>
+        TreeNodeViewModel.ForEachDescendant(viewModel.TreeNodes, node =>
         {
             if (!node.HasHighlightedDisplay && !node.IsCurrentSearchMatch)
                 return;
@@ -858,13 +852,13 @@ public sealed class TreeSearchCoordinator : IDisposable
 
     private bool TryGetContainer(TreeNodeViewModel node, out TreeViewItem? container)
     {
-        if (_treeView.ContainerFromItem(node) is TreeViewItem directContainer)
+        if (treeView.ContainerFromItem(node) is TreeViewItem directContainer)
         {
             container = directContainer;
             return true;
         }
 
-        container = _treeView.FindDescendantOfType<TreeViewItem>(
+        container = treeView.FindDescendantOfType<TreeViewItem>(
             includeSelf: false,
             visual => ReferenceEquals(visual.DataContext, node));
         return container is not null;
@@ -887,7 +881,7 @@ public sealed class TreeSearchCoordinator : IDisposable
 
     private bool IsContainerVisibleInViewport(TreeViewItem container)
     {
-        var scrollViewer = _treeView.FindDescendantOfType<ScrollViewer>(
+        var scrollViewer = treeView.FindDescendantOfType<ScrollViewer>(
             includeSelf: false,
             visual => visual is ScrollViewer);
         if (scrollViewer is null)

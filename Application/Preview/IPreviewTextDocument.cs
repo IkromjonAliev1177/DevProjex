@@ -1,0 +1,15 @@
+namespace DevProjex.Application.Preview;
+
+/// <summary>
+/// Provides line-based access to preview text without requiring a single giant in-memory string.
+/// </summary>
+public interface IPreviewTextDocument : IDisposable
+{
+    int LineCount { get; }
+
+    int MaxLineLength { get; }
+
+    long CharacterCount { get; }
+
+    string GetLineRangeText(int firstLine, int lastLine);
+}

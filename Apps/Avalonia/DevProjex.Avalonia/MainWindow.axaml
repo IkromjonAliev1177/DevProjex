@@ -651,7 +651,7 @@
                                   VerticalScrollBarVisibility="Auto"
                                   ScrollChanged="OnPreviewTextScrollChanged">
                       <controls:VirtualizedPreviewTextControl Name="PreviewTextControl"
-                                                              Text="{Binding PreviewText}"
+                                                              Document="{Binding PreviewDocument}"
                                                               TextFontFamily="{Binding SelectedFontFamily}"
                                                               TextFontSize="{Binding PreviewFontSize}"
                                                               TextBrush="{DynamicResource AppTextBrush}"

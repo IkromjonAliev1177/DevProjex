@@ -61,6 +61,7 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
     private bool _isPreviewMode;
     private bool _isPreviewLoading;
     private string _previewText = string.Empty;
+    private IPreviewTextDocument? _previewDocument;
     private int _previewLineCount = 1;
 
     // Theme intensity sliders (0-100)
@@ -431,6 +432,17 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         {
             if (_previewText == value) return;
             _previewText = value;
+            RaisePropertyChanged();
+        }
+    }
+
+    public IPreviewTextDocument? PreviewDocument
+    {
+        get => _previewDocument;
+        set
+        {
+            if (ReferenceEquals(_previewDocument, value)) return;
+            _previewDocument = value;
             RaisePropertyChanged();
         }
     }
@@ -1320,6 +1332,8 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         ToastItems.Clear();
 
         // Clear large strings
+        _previewDocument?.Dispose();
+        _previewDocument = null;
         _previewText = string.Empty;
         _previewLineCount = 1;
     }

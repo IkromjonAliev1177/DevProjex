@@ -576,18 +576,11 @@ public sealed class FileSystemScanner : IFileSystemScanner, IFileSystemScannerAd
 		public MutableIgnoreOptionCounts Counts;
 	}
 
-	private struct DirectoryScanNode
+	private struct DirectoryScanNode(string path, int parentIndex, bool isAccessDenied)
 	{
-		public DirectoryScanNode(string path, int parentIndex, bool isAccessDenied)
-		{
-			Path = path;
-			ParentIndex = parentIndex;
-			IsAccessDenied = isAccessDenied;
-		}
-
-		public string Path { get; }
-		public int ParentIndex { get; }
-		public bool IsAccessDenied { get; set; }
+		public string Path { get; } = path;
+		public int ParentIndex { get; } = parentIndex;
+		public bool IsAccessDenied { get; set; } = isAccessDenied;
 	}
 
 	private struct MutableIgnoreOptionCounts

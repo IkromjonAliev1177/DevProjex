@@ -2,12 +2,16 @@ namespace DevProjex.Avalonia.Controls;
 
 /// <summary>
 /// Draws only visible preview text lines for large payloads.
-/// This avoids creating and layouting a huge TextBlock visual tree.
+/// Rendering stays virtualized while the underlying document can be either in-memory
+/// or file-backed, which keeps preview RAM bounded for huge repositories.
 /// </summary>
 public sealed class VirtualizedPreviewTextControl : Control
 {
     public static readonly StyledProperty<string> TextProperty =
         AvaloniaProperty.Register<VirtualizedPreviewTextControl, string>(nameof(Text), string.Empty);
+
+    public static readonly StyledProperty<IPreviewTextDocument?> DocumentProperty =
+        AvaloniaProperty.Register<VirtualizedPreviewTextControl, IPreviewTextDocument?>(nameof(Document));
 
     public static readonly StyledProperty<double> VerticalOffsetProperty =
         AvaloniaProperty.Register<VirtualizedPreviewTextControl, double>(nameof(VerticalOffset));
@@ -42,11 +46,16 @@ public sealed class VirtualizedPreviewTextControl : Control
     private readonly List<int> _lineStarts = [0];
     private int _lineCount = 1;
     private int _maxLineLength;
+    private IPreviewTextDocument? _cachedRangeDocument;
+    private int _cachedRangeFirstLine;
+    private int _cachedRangeLastLine;
+    private string _cachedRangeText = string.Empty;
 
     static VirtualizedPreviewTextControl()
     {
         AffectsRender<VirtualizedPreviewTextControl>(
             TextProperty,
+            DocumentProperty,
             VerticalOffsetProperty,
             ViewportHeightProperty,
             TopPaddingProperty,
@@ -59,6 +68,7 @@ public sealed class VirtualizedPreviewTextControl : Control
 
         AffectsMeasure<VirtualizedPreviewTextControl>(
             TextProperty,
+            DocumentProperty,
             TopPaddingProperty,
             BottomPaddingProperty,
             LeftPaddingProperty,
@@ -70,12 +80,23 @@ public sealed class VirtualizedPreviewTextControl : Control
         {
             control.RebuildTextLayoutMetadata();
         });
+
+        DocumentProperty.Changed.AddClassHandler<VirtualizedPreviewTextControl>((control, _) =>
+        {
+            control.RebuildTextLayoutMetadata();
+        });
     }
 
     public string Text
     {
         get => GetValue(TextProperty);
         set => SetValue(TextProperty, value);
+    }
+
+    public IPreviewTextDocument? Document
+    {
+        get => GetValue(DocumentProperty);
+        set => SetValue(DocumentProperty, value);
     }
 
     public double VerticalOffset
@@ -142,7 +163,7 @@ public sealed class VirtualizedPreviewTextControl : Control
         var typeface = ResolveTypeface();
         var lineHeight = ResolveLineHeight(typeface);
         var width = CalculateRequiredWidth(typeface);
-        var height = Math.Ceiling(TopPadding + BottomPadding + (_lineCount * lineHeight));
+        var height = Math.Ceiling(TopPadding + BottomPadding + (ResolveLineCount() * lineHeight));
 
         return new Size(Math.Max(1, width), Math.Max(1, height));
     }
@@ -151,7 +172,8 @@ public sealed class VirtualizedPreviewTextControl : Control
     {
         base.Render(context);
 
-        if (_lineCount <= 0)
+        var lineCount = ResolveLineCount();
+        if (lineCount <= 0)
             return;
 
         var typeface = ResolveTypeface();
@@ -163,10 +185,10 @@ public sealed class VirtualizedPreviewTextControl : Control
         var viewportHeight = ViewportHeight > 0 ? ViewportHeight : Bounds.Height;
         var firstVisibleLine = Math.Max(1, (int)Math.Floor((viewportTop - TopPadding) / lineHeight) + 1);
         var visibleLineCount = Math.Max(1, (int)Math.Ceiling(viewportHeight / lineHeight));
-        var lastVisibleLine = Math.Min(_lineCount, firstVisibleLine + visibleLineCount - 1);
+        var lastVisibleLine = Math.Min(lineCount, firstVisibleLine + visibleLineCount - 1);
 
         firstVisibleLine = Math.Max(1, firstVisibleLine - RenderBufferLines);
-        lastVisibleLine = Math.Min(_lineCount, lastVisibleLine + RenderBufferLines);
+        lastVisibleLine = Math.Min(lineCount, lastVisibleLine + RenderBufferLines);
         if (lastVisibleLine < firstVisibleLine)
             return;
 
@@ -180,6 +202,24 @@ public sealed class VirtualizedPreviewTextControl : Control
     }
 
     private void RebuildTextLayoutMetadata()
+    {
+        ResetVisibleRangeCache();
+
+        if (Document is { } document)
+        {
+            _lineStarts.Clear();
+            _lineStarts.Add(0);
+            _lineCount = Math.Max(1, document.LineCount);
+            _maxLineLength = Math.Max(0, document.MaxLineLength);
+            InvalidateMeasure();
+            InvalidateVisual();
+            return;
+        }
+
+        RebuildStringMetadata();
+    }
+
+    private void RebuildStringMetadata()
     {
         _lineStarts.Clear();
         _lineStarts.Add(0);
@@ -222,6 +262,23 @@ public sealed class VirtualizedPreviewTextControl : Control
 
     private string BuildVisibleLinesText(int firstVisibleLine, int lastVisibleLine)
     {
+        if (Document is { } document)
+        {
+            if (ReferenceEquals(_cachedRangeDocument, document) &&
+                _cachedRangeFirstLine == firstVisibleLine &&
+                _cachedRangeLastLine == lastVisibleLine)
+            {
+                return _cachedRangeText;
+            }
+
+            var rangeText = document.GetLineRangeText(firstVisibleLine, lastVisibleLine);
+            _cachedRangeDocument = document;
+            _cachedRangeFirstLine = firstVisibleLine;
+            _cachedRangeLastLine = lastVisibleLine;
+            _cachedRangeText = rangeText;
+            return rangeText;
+        }
+
         var text = Text ?? string.Empty;
         if (text.Length == 0)
             return string.Empty;
@@ -261,6 +318,8 @@ public sealed class VirtualizedPreviewTextControl : Control
             builder.Append(text.AsSpan(start, endExclusive - start));
     }
 
+    private int ResolveLineCount() => Document?.LineCount ?? _lineCount;
+
     private Typeface ResolveTypeface() =>
         new(TextFontFamily ?? FontFamily.Default, FontStyle.Normal, FontWeight.Normal);
 
@@ -268,7 +327,7 @@ public sealed class VirtualizedPreviewTextControl : Control
     {
         var sample = BuildFormattedText("W", typeface);
         var glyphWidth = Math.Max(1.0, sample.Width);
-        var contentWidth = _maxLineLength * glyphWidth;
+        var contentWidth = (Document?.MaxLineLength ?? _maxLineLength) * glyphWidth;
         return Math.Ceiling(LeftPadding + contentWidth + RightPadding);
     }
 
@@ -287,5 +346,13 @@ public sealed class VirtualizedPreviewTextControl : Control
             typeface,
             TextFontSize,
             TextBrush ?? Brushes.White);
+    }
+
+    private void ResetVisibleRangeCache()
+    {
+        _cachedRangeDocument = null;
+        _cachedRangeFirstLine = 0;
+        _cachedRangeLastLine = 0;
+        _cachedRangeText = string.Empty;
     }
 }

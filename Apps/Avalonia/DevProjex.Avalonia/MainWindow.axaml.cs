@@ -46,12 +46,8 @@ public partial class MainWindow : Window
         int SelectedCount,
         int SelectedHash);
 
-    private sealed record PreviewCacheEntry(
-        PreviewCacheKey Key,
-        string Text,
-        int LineCount);
-
     private readonly record struct PreviewWarmupSnapshot(string Text, int LineCount);
+    private readonly record struct PreviewBuildResult(IPreviewTextDocument Document);
 
     private readonly record struct TreeMetricsCacheKey(
         int TreeIdentity,
@@ -110,6 +106,7 @@ public partial class MainWindow : Window
     private readonly TreeExportService _treeExport;
     private readonly SelectedContentExportService _contentExport;
     private readonly TreeAndContentExportService _treeAndContentExport;
+    private readonly PreviewDocumentBuilder _previewDocumentBuilder;
     private readonly RepositoryWebPathPresentationService _repositoryWebPathPresentationService;
     private readonly TextFileExportService _textFileExport;
     private readonly IToastService _toastService;
@@ -213,7 +210,6 @@ public partial class MainWindow : Window
     private static readonly TimeSpan PreviewBarAnimationDuration = TimeSpan.FromMilliseconds(250);
     private static readonly TimeSpan PreviewSegmentThumbAnimationDuration = TimeSpan.FromMilliseconds(220);
     private const double PanelIslandSpacing = 4.0;
-    private const int PreviewCacheCapacity = 4;
     private const int PreviewWarmupFileLimit = 24;
     private const int PreviewWarmupFileThreshold = 140;
 
@@ -227,8 +223,7 @@ public partial class MainWindow : Window
     private int _previewMemoryCleanupVersion;
     private CancellationTokenSource? _searchMemoryCleanupCts;
     private int _searchMemoryCleanupVersion;
-    private readonly Dictionary<PreviewCacheKey, LinkedListNode<PreviewCacheEntry>> _previewCacheEntries = [];
-    private readonly LinkedList<PreviewCacheEntry> _previewCacheLru = [];
+    private PreviewCacheKey? _cachedPreviewKey;
     private CancellationTokenSource? _previewModeSwitchCts;
     private int _previewModeSwitchVersion;
     private bool _previewModeSwitchInProgress;
@@ -304,6 +299,7 @@ public partial class MainWindow : Window
         _treeExport = services.TreeExportService;
         _contentExport = services.ContentExportService;
         _treeAndContentExport = services.TreeAndContentExportService;
+        _previewDocumentBuilder = services.PreviewDocumentBuilder;
         _repositoryWebPathPresentationService = services.RepositoryWebPathPresentationService;
         _textFileExport = services.TextFileExportService;
         _toastService = services.ToastService;
@@ -1503,8 +1499,7 @@ public partial class MainWindow : Window
             {
                 // Keep old content visible during thumb animation and clear it only
                 // after preview progress becomes visible for a smoother sequence.
-                _viewModel.PreviewText = string.Empty;
-                _viewModel.PreviewLineCount = 1;
+                ClearPreviewDocument();
                 _clearPreviewBeforeNextRefresh = false;
             }
 
@@ -1526,14 +1521,16 @@ public partial class MainWindow : Window
                 treeFormat: treeFormat,
                 selectedPaths: selectedPaths);
 
-            if (TryGetCachedPreview(previewKey, out var cachedPreview))
+            if (IsCurrentPreviewCacheHit(previewKey) && _viewModel.PreviewDocument is { } currentPreviewDocument)
             {
                 if (buildVersion == Volatile.Read(ref _previewBuildVersion))
                 {
-                    ApplyPreviewText(cachedPreview.Text, cachedPreview.LineCount);
+                    ApplyPreviewDocument(currentPreviewDocument);
                     _previewRefreshRequested = false;
                     SchedulePreviewMemoryCleanup(
-                        force: ShouldForcePreviewMemoryCleanup(cachedPreview.Text.Length, cachedPreview.LineCount));
+                        force: ShouldForcePreviewMemoryCleanup(
+                            currentPreviewDocument.CharacterCount,
+                            currentPreviewDocument.LineCount));
                 }
 
                 return;
@@ -1558,70 +1555,33 @@ public partial class MainWindow : Window
             }
 
             // Run all heavy work in background thread
-            var (previewText, lineCount) = await Task.Run(() =>
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-
-                string text;
-                if (selectedMode == PreviewContentMode.Tree)
-                {
-                    text = BuildTreeTextForSelection(selectedPaths, treeFormat);
-                }
-                else if (selectedMode == PreviewContentMode.Content)
-                {
-                    IReadOnlyList<string> files;
-                    if (hasSelection)
-                    {
-                        files = BuildOrderedSelectedFilePaths(selectedPaths);
-                    }
-                    else if (currentTreeRoot is not null)
-                    {
-                        files = GetOrBuildAllOrderedFilePaths(currentTreeRoot);
-                    }
-                    else
-                    {
-                        files = [];
-                    }
-
-                    if (files.Count == 0)
-                        text = hasSelection ? noCheckedFilesText : noTextContentText;
-                    else
-                        text = _contentExport.BuildAsync(
-                            files,
-                            cancellationToken,
-                            pathPresentation?.MapFilePath).GetAwaiter().GetResult();
-
-                    if (string.IsNullOrWhiteSpace(text))
-                        text = noTextContentText;
-                }
-                else
-                {
-                    text = currentPath != null && currentTreeRoot != null
-                        ? _treeAndContentExport.BuildAsync(
-                            currentPath,
-                            currentTreeRoot,
-                            selectedPaths,
-                            treeFormat,
-                            cancellationToken,
-                            pathPresentation).GetAwaiter().GetResult()
-                        : noTextContentText;
-                }
-
-                cancellationToken.ThrowIfCancellationRequested();
-
-                var effectiveText = string.IsNullOrEmpty(text) ? noDataText : text;
-                var lines = CountPreviewLines(effectiveText);
-
-                return (effectiveText, lines);
-            }, cancellationToken);
+            var previewResult = await Task.Run(() =>
+                BuildPreviewDocument(
+                    selectedMode,
+                    selectedPaths,
+                    hasSelection,
+                    treeFormat,
+                    noCheckedFilesText,
+                    noTextContentText,
+                    noDataText,
+                    currentPath,
+                    currentTreeRoot,
+                    pathPresentation,
+                    cancellationToken),
+                cancellationToken);
 
             if (buildVersion != Volatile.Read(ref _previewBuildVersion))
+            {
+                previewResult.Document.Dispose();
                 return;
+            }
 
-            CachePreview(previewKey, previewText, lineCount);
-            ApplyPreviewText(previewText, lineCount);
+            CachePreview(previewKey);
+            ApplyPreviewDocument(previewResult.Document);
             _previewRefreshRequested = false;
-            SchedulePreviewMemoryCleanup(force: ShouldForcePreviewMemoryCleanup(previewText.Length, lineCount));
+            SchedulePreviewMemoryCleanup(force: ShouldForcePreviewMemoryCleanup(
+                previewResult.Document.CharacterCount,
+                previewResult.Document.LineCount));
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -1631,6 +1591,7 @@ public partial class MainWindow : Window
         {
             if (buildVersion == Volatile.Read(ref _previewBuildVersion))
             {
+                InvalidatePreviewCache();
                 ApplyPreviewText(ex.Message);
                 SchedulePreviewMemoryCleanup(force: false);
             }
@@ -1891,7 +1852,20 @@ public partial class MainWindow : Window
 
     private void ApplyPreviewText(string text, int lineCount)
     {
-        _viewModel.PreviewText = text;
+        InvalidatePreviewCache();
+        ApplyPreviewDocument(_previewDocumentBuilder.CreateInMemory(text), lineCount);
+    }
+
+    private void ApplyPreviewDocument(IPreviewTextDocument document)
+    {
+        ApplyPreviewDocument(document, document.LineCount);
+    }
+
+    private void ApplyPreviewDocument(IPreviewTextDocument document, int lineCount)
+    {
+        var previousDocument = _viewModel.PreviewDocument;
+        _viewModel.PreviewDocument = document;
+        _viewModel.PreviewText = string.Empty;
         _viewModel.PreviewLineCount = Math.Max(1, lineCount);
 
         // Reset both preview scroll viewers to top-left when content changes.
@@ -1913,6 +1887,18 @@ public partial class MainWindow : Window
             if (_previewTextScrollViewer is not null)
                 _previewTextControl.ViewportHeight = Math.Max(0, _previewTextScrollViewer.Viewport.Height);
         }
+
+        if (!ReferenceEquals(previousDocument, document))
+            previousDocument?.Dispose();
+    }
+
+    private void ClearPreviewDocument()
+    {
+        var previousDocument = _viewModel.PreviewDocument;
+        _viewModel.PreviewDocument = null;
+        _viewModel.PreviewText = string.Empty;
+        _viewModel.PreviewLineCount = 1;
+        previousDocument?.Dispose();
     }
 
     private static int CountPreviewLines(string text)
@@ -1925,6 +1911,93 @@ public partial class MainWindow : Window
         }
 
         return lineCount;
+    }
+
+    private PreviewBuildResult BuildPreviewDocument(
+        PreviewContentMode selectedMode,
+        IReadOnlySet<string> selectedPaths,
+        bool hasSelection,
+        TreeTextFormat treeFormat,
+        string noCheckedFilesText,
+        string noTextContentText,
+        string noDataText,
+        string? currentPath,
+        TreeNodeDescriptor? currentTreeRoot,
+        ExportPathPresentation? pathPresentation,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (selectedMode == PreviewContentMode.Tree)
+        {
+            var treePreviewText = BuildTreeTextForSelection(selectedPaths, treeFormat);
+            var effectiveTreeText = string.IsNullOrEmpty(treePreviewText) ? noDataText : treePreviewText;
+            return new PreviewBuildResult(_previewDocumentBuilder.CreateInMemory(effectiveTreeText));
+        }
+
+        var files = hasSelection
+            ? BuildOrderedSelectedFilePaths(selectedPaths)
+            : currentTreeRoot is not null
+                ? GetOrBuildAllOrderedFilePaths(currentTreeRoot)
+                : [];
+
+        if (selectedMode == PreviewContentMode.Content)
+        {
+            if (files.Count == 0)
+            {
+                var fallbackText = hasSelection ? noCheckedFilesText : noTextContentText;
+                return new PreviewBuildResult(_previewDocumentBuilder.CreateInMemory(fallbackText));
+            }
+
+            var contentDocument = _previewDocumentBuilder.BuildContentDocumentAsync(
+                files,
+                cancellationToken,
+                pathPresentation?.MapFilePath).GetAwaiter().GetResult();
+
+            return new PreviewBuildResult(contentDocument ?? _previewDocumentBuilder.CreateInMemory(noTextContentText));
+        }
+
+        if (string.IsNullOrWhiteSpace(currentPath) || currentTreeRoot is null)
+            return new PreviewBuildResult(_previewDocumentBuilder.CreateInMemory(noTextContentText));
+
+        var treeText = selectedPaths.Count > 0
+            ? _treeExport.BuildSelectedTree(
+                currentPath,
+                currentTreeRoot,
+                selectedPaths,
+                treeFormat,
+                pathPresentation?.DisplayRootPath,
+                pathPresentation?.DisplayRootName)
+            : _treeExport.BuildFullTree(
+                currentPath,
+                currentTreeRoot,
+                treeFormat,
+                pathPresentation?.DisplayRootPath,
+                pathPresentation?.DisplayRootName);
+
+        if (selectedPaths.Count > 0 && string.IsNullOrWhiteSpace(treeText))
+        {
+            treeText = _treeExport.BuildFullTree(
+                currentPath,
+                currentTreeRoot,
+                treeFormat,
+                pathPresentation?.DisplayRootPath,
+                pathPresentation?.DisplayRootName);
+        }
+
+        if (string.IsNullOrWhiteSpace(treeText))
+            return new PreviewBuildResult(_previewDocumentBuilder.CreateInMemory(noDataText));
+
+        if (files.Count == 0)
+            return new PreviewBuildResult(_previewDocumentBuilder.CreateInMemory(treeText));
+
+        var document = _previewDocumentBuilder.BuildTreeAndContentDocumentAsync(
+            treeText,
+            files,
+            cancellationToken,
+            pathPresentation?.MapFilePath).GetAwaiter().GetResult();
+
+        return new PreviewBuildResult(document);
     }
 
     private static List<string> CollectOrderedPreviewFiles(
@@ -1986,54 +2059,14 @@ public partial class MainWindow : Window
         return hash.ToHashCode();
     }
 
-    private bool TryGetCachedPreview(PreviewCacheKey key, out PreviewCacheEntry cached)
-    {
-        if (_previewCacheEntries.TryGetValue(key, out var node))
-        {
-            _previewCacheLru.Remove(node);
-            _previewCacheLru.AddFirst(node);
-            cached = node.Value;
-            return true;
-        }
+    private bool IsCurrentPreviewCacheHit(PreviewCacheKey key)
+        => _cachedPreviewKey == key && _viewModel.PreviewDocument is not null;
 
-        cached = null!;
-        return false;
-    }
-
-    private void CachePreview(PreviewCacheKey key, string text, int lineCount)
-    {
-        var normalizedEntry = new PreviewCacheEntry(
-            Key: key,
-            Text: text,
-            LineCount: Math.Max(1, lineCount));
-
-        if (_previewCacheEntries.TryGetValue(key, out var existingNode))
-        {
-            existingNode.Value = normalizedEntry;
-            _previewCacheLru.Remove(existingNode);
-            _previewCacheLru.AddFirst(existingNode);
-            return;
-        }
-
-        var node = new LinkedListNode<PreviewCacheEntry>(normalizedEntry);
-        _previewCacheLru.AddFirst(node);
-        _previewCacheEntries[key] = node;
-
-        while (_previewCacheEntries.Count > PreviewCacheCapacity)
-        {
-            var last = _previewCacheLru.Last;
-            if (last is null)
-                break;
-
-            _previewCacheLru.RemoveLast();
-            _previewCacheEntries.Remove(last.Value.Key);
-        }
-    }
+    private void CachePreview(PreviewCacheKey key) => _cachedPreviewKey = key;
 
     private void InvalidatePreviewCache()
     {
-        _previewCacheEntries.Clear();
-        _previewCacheLru.Clear();
+        _cachedPreviewKey = null;
     }
 
     /// <summary>
@@ -2052,9 +2085,9 @@ public partial class MainWindow : Window
         }
     }
 
-    private static bool ShouldForcePreviewMemoryCleanup(int textLength, int lineCount)
+    private static bool ShouldForcePreviewMemoryCleanup(long textLength, int lineCount)
     {
-        const int heavyTextThreshold = 1_500_000;
+        const long heavyTextThreshold = 1_500_000;
         const int heavyLineThreshold = 35_000;
         return textLength >= heavyTextThreshold || lineCount >= heavyLineThreshold;
     }
@@ -2388,9 +2421,8 @@ public partial class MainWindow : Window
 
     private void ClearPreviewMemory()
     {
-        _viewModel.PreviewText = string.Empty;
-        _viewModel.PreviewLineCount = 1;
         InvalidatePreviewCache();
+        ClearPreviewDocument();
     }
 
     /// <summary>
@@ -4786,8 +4818,7 @@ public partial class MainWindow : Window
         _viewModel.StatusMetricsVisible = false;
         _viewModel.StatusTreeStatsText = string.Empty;
         _viewModel.StatusContentStatsText = string.Empty;
-        _viewModel.PreviewText = string.Empty;
-        _viewModel.PreviewLineCount = 1;
+        ClearPreviewDocument();
         _viewModel.IsPreviewLoading = false;
         InvalidatePreviewCache();
         InvalidateComputedMetricsCaches();
