@@ -205,6 +205,39 @@ public sealed class MainWindowViewModelTests
     }
 
     [Fact]
+    public void CenteredPreviewSelectionMetricsVisible_IsTrue_WhenSelectionVisibleAndNotBusy()
+    {
+        var viewModel = CreateViewModel();
+
+        viewModel.StatusPreviewSelectionVisible = true;
+        viewModel.StatusBusy = false;
+
+        Assert.True(viewModel.CenteredPreviewSelectionMetricsVisible);
+    }
+
+    [Fact]
+    public void CenteredPreviewSelectionMetricsVisible_IsFalse_WhenBusy()
+    {
+        var viewModel = CreateViewModel();
+
+        viewModel.StatusPreviewSelectionVisible = true;
+        viewModel.StatusBusy = true;
+
+        Assert.False(viewModel.CenteredPreviewSelectionMetricsVisible);
+    }
+
+    [Fact]
+    public void CenteredPreviewSelectionMetricsVisible_IsFalse_WhenSelectionMetricsHidden()
+    {
+        var viewModel = CreateViewModel();
+
+        viewModel.StatusPreviewSelectionVisible = false;
+        viewModel.StatusBusy = false;
+
+        Assert.False(viewModel.CenteredPreviewSelectionMetricsVisible);
+    }
+
+    [Fact]
     public void IsMicaEnabled_SetTrue_DisablesOtherEffects()
     {
         var viewModel = CreateViewModel();

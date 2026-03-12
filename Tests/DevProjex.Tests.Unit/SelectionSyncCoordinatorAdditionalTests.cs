@@ -1,4 +1,6 @@
-﻿namespace DevProjex.Tests.Unit;
+using DevProjex.Avalonia.Coordinators;
+
+namespace DevProjex.Tests.Unit;
 
 public sealed class SelectionSyncCoordinatorAdditionalTests
 {
@@ -492,11 +494,10 @@ private static SelectionSyncCoordinator CreateCoordinator(
 	[Fact]
 	public void ShouldClearCachesForCurrentPath_WithPreparedTargetProfile_ReturnsFalse()
 	{
-		var coordinator = CreateCoordinator(CreateViewModel());
-		SetPrivateField(coordinator, "_lastLoadedPath", "C:\\ProjectA");
-		SetPrivateField(coordinator, "_preparedSelectionPath", "C:\\ProjectB");
-
-		var result = InvokeShouldClearCachesForCurrentPath(coordinator, "C:\\ProjectB");
+		var result = SelectionSyncCoordinatorPolicy.ShouldClearCachesForCurrentPath(
+			"C:\\ProjectA",
+			"C:\\ProjectB",
+			"C:\\ProjectB");
 
 		Assert.False(result);
 	}
@@ -504,11 +505,10 @@ private static SelectionSyncCoordinator CreateCoordinator(
 	[Fact]
 	public void ShouldClearCachesForCurrentPath_PathSwitchWithoutPreparedProfile_ReturnsTrue()
 	{
-		var coordinator = CreateCoordinator(CreateViewModel());
-		SetPrivateField(coordinator, "_lastLoadedPath", "C:\\ProjectA");
-		SetPrivateField(coordinator, "_preparedSelectionPath", null);
-
-		var result = InvokeShouldClearCachesForCurrentPath(coordinator, "C:\\ProjectB");
+		var result = SelectionSyncCoordinatorPolicy.ShouldClearCachesForCurrentPath(
+			"C:\\ProjectA",
+			null,
+			"C:\\ProjectB");
 
 		Assert.True(result);
 	}
@@ -516,11 +516,10 @@ private static SelectionSyncCoordinator CreateCoordinator(
 	[Fact]
 	public void ShouldClearCachesForCurrentPath_NoLastLoadedPath_ReturnsFalse()
 	{
-		var coordinator = CreateCoordinator(CreateViewModel());
-		SetPrivateField(coordinator, "_lastLoadedPath", null);
-		SetPrivateField(coordinator, "_preparedSelectionPath", null);
-
-		var result = InvokeShouldClearCachesForCurrentPath(coordinator, "C:\\ProjectA");
+		var result = SelectionSyncCoordinatorPolicy.ShouldClearCachesForCurrentPath(
+			null,
+			null,
+			"C:\\ProjectA");
 
 		Assert.False(result);
 	}
@@ -528,11 +527,10 @@ private static SelectionSyncCoordinator CreateCoordinator(
 	[Fact]
 	public void ShouldClearCachesForCurrentPath_SamePath_ReturnsFalse()
 	{
-		var coordinator = CreateCoordinator(CreateViewModel());
-		SetPrivateField(coordinator, "_lastLoadedPath", "C:\\ProjectA");
-		SetPrivateField(coordinator, "_preparedSelectionPath", null);
-
-		var result = InvokeShouldClearCachesForCurrentPath(coordinator, "C:\\ProjectA");
+		var result = SelectionSyncCoordinatorPolicy.ShouldClearCachesForCurrentPath(
+			"C:\\ProjectA",
+			null,
+			"C:\\ProjectA");
 
 		Assert.False(result);
 	}
@@ -540,11 +538,10 @@ private static SelectionSyncCoordinator CreateCoordinator(
 	[Fact]
 	public void ShouldClearCachesForCurrentPath_PreparedPathForAnotherProject_ReturnsTrue()
 	{
-		var coordinator = CreateCoordinator(CreateViewModel());
-		SetPrivateField(coordinator, "_lastLoadedPath", "C:\\ProjectA");
-		SetPrivateField(coordinator, "_preparedSelectionPath", "C:\\ProjectC");
-
-		var result = InvokeShouldClearCachesForCurrentPath(coordinator, "C:\\ProjectB");
+		var result = SelectionSyncCoordinatorPolicy.ShouldClearCachesForCurrentPath(
+			"C:\\ProjectA",
+			"C:\\ProjectC",
+			"C:\\ProjectB");
 
 		Assert.True(result);
 	}
@@ -552,11 +549,10 @@ private static SelectionSyncCoordinator CreateCoordinator(
 	[Fact]
 	public void ShouldClearCachesForCurrentPath_PreparedPathCaseDifference_UsesPlatformComparer()
 	{
-		var coordinator = CreateCoordinator(CreateViewModel());
-		SetPrivateField(coordinator, "_lastLoadedPath", "C:\\ProjectA");
-		SetPrivateField(coordinator, "_preparedSelectionPath", "c:\\projectb");
-
-		var result = InvokeShouldClearCachesForCurrentPath(coordinator, "C:\\ProjectB");
+		var result = SelectionSyncCoordinatorPolicy.ShouldClearCachesForCurrentPath(
+			"C:\\ProjectA",
+			"c:\\projectb",
+			"C:\\ProjectB");
 
 		Assert.Equal(!OperatingSystem.IsWindows(), result);
 	}
@@ -564,10 +560,9 @@ private static SelectionSyncCoordinator CreateCoordinator(
 	[Fact]
 	public void ShouldSkipRefreshForPreparedPath_PreparedForAnotherProject_ReturnsTrue()
 	{
-		var coordinator = CreateCoordinator(CreateViewModel());
-		SetPrivateField(coordinator, "_preparedSelectionPath", "C:\\TargetProject");
-
-		var shouldSkip = InvokeShouldSkipRefreshForPreparedPath(coordinator, "C:\\AnotherProject");
+		var shouldSkip = SelectionSyncCoordinatorPolicy.ShouldSkipRefreshForPreparedPath(
+			"C:\\TargetProject",
+			"C:\\AnotherProject");
 
 		Assert.True(shouldSkip);
 	}
@@ -575,10 +570,9 @@ private static SelectionSyncCoordinator CreateCoordinator(
 	[Fact]
 	public void ShouldSkipRefreshForPreparedPath_PreparedForCurrentProject_ReturnsFalse()
 	{
-		var coordinator = CreateCoordinator(CreateViewModel());
-		SetPrivateField(coordinator, "_preparedSelectionPath", "C:\\TargetProject");
-
-		var shouldSkip = InvokeShouldSkipRefreshForPreparedPath(coordinator, "C:\\TargetProject");
+		var shouldSkip = SelectionSyncCoordinatorPolicy.ShouldSkipRefreshForPreparedPath(
+			"C:\\TargetProject",
+			"C:\\TargetProject");
 
 		Assert.False(shouldSkip);
 	}
@@ -717,24 +711,6 @@ private static SelectionSyncCoordinator CreateCoordinator(
 		return new StubLocalizationCatalog(data);
 	}
 
-	private static bool InvokeShouldClearCachesForCurrentPath(SelectionSyncCoordinator coordinator, string path)
-	{
-		var method = typeof(SelectionSyncCoordinator).GetMethod(
-			"ShouldClearCachesForCurrentPath",
-			BindingFlags.NonPublic | BindingFlags.Instance);
-		Assert.NotNull(method);
-		return (bool)method.Invoke(coordinator, [path])!;
-	}
-
-	private static bool InvokeShouldSkipRefreshForPreparedPath(SelectionSyncCoordinator coordinator, string path)
-	{
-		var method = typeof(SelectionSyncCoordinator).GetMethod(
-			"ShouldSkipRefreshForPreparedPath",
-			BindingFlags.NonPublic | BindingFlags.Instance);
-		Assert.NotNull(method);
-		return (bool)method.Invoke(coordinator, [path])!;
-	}
-
 	private static void SetPrivateField(SelectionSyncCoordinator coordinator, string fieldName, string? value)
 	{
 		var field = typeof(SelectionSyncCoordinator).GetField(
@@ -771,4 +747,5 @@ private static SelectionSyncCoordinator CreateCoordinator(
 		return (HashSet<string>)field.GetValue(coordinator)!;
 	}
 }
+
 

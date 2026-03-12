@@ -39,23 +39,11 @@ public partial class MainWindow : Window
 
     private sealed record IgnoreOptionSnapshot(IgnoreOptionId Id, string Label, bool IsChecked);
 
-    private sealed record PreviewCacheKey(
-        string? ProjectPath,
-        int TreeIdentity,
-        PreviewContentMode Mode,
-        TreeTextFormat TreeFormat,
-        int SelectedCount,
-        int SelectedHash);
-
     private readonly record struct PreviewWarmupSnapshot(string Text, int LineCount);
     private readonly record struct PreviewBuildResult(IPreviewTextDocument Document);
     private readonly record struct PreviewSelectionMetricsSnapshot(
         IPreviewTextDocument Document,
         PreviewSelectionRange SelectionRange);
-    private readonly record struct StatusMetricLabels(
-        string LinesPrefix,
-        string CharsPrefix,
-        string TokensPrefix);
 
     private readonly record struct TreeMetricsCacheKey(
         int TreeIdentity,
@@ -219,7 +207,6 @@ public partial class MainWindow : Window
     private static readonly TimeSpan PreviewSegmentThumbAnimationDuration = TimeSpan.FromMilliseconds(220);
     private const double PanelIslandSpacing = 4.0;
     private const int PreviewWarmupFileLimit = 24;
-    private const int PreviewWarmupFileThreshold = 140;
 
     // Preview generation
     private CancellationTokenSource? _previewBuildCts;
@@ -231,7 +218,7 @@ public partial class MainWindow : Window
     private int _previewMemoryCleanupVersion;
     private CancellationTokenSource? _searchMemoryCleanupCts;
     private int _searchMemoryCleanupVersion;
-    private PreviewCacheKey? _cachedPreviewKey;
+    private PreviewCacheKeyData? _cachedPreviewKey;
     private CancellationTokenSource? _previewModeSwitchCts;
     private int _previewModeSwitchVersion;
     private bool _previewModeSwitchInProgress;
@@ -1598,7 +1585,7 @@ public partial class MainWindow : Window
             var currentTreeRoot = _currentTree?.Root;
             var noDataText = _viewModel.PreviewNoDataText;
             var pathPresentation = CreateExportPathPresentation();
-            var previewKey = BuildPreviewCacheKey(
+            var previewKey = PreviewFileCollectionPolicy.BuildPreviewCacheKey(
                 projectPath: currentPath,
                 treeRoot: currentTreeRoot,
                 mode: selectedMode,
@@ -1612,7 +1599,7 @@ public partial class MainWindow : Window
                     ApplyPreviewDocument(currentPreviewDocument);
                     _previewRefreshRequested = false;
                     SchedulePreviewMemoryCleanup(
-                        force: ShouldForcePreviewMemoryCleanup(
+                        force: PreviewFileCollectionPolicy.ShouldForcePreviewMemoryCleanup(
                             currentPreviewDocument.CharacterCount,
                             currentPreviewDocument.LineCount));
                 }
@@ -1663,7 +1650,7 @@ public partial class MainWindow : Window
             CachePreview(previewKey);
             ApplyPreviewDocument(previewResult.Document);
             _previewRefreshRequested = false;
-            SchedulePreviewMemoryCleanup(force: ShouldForcePreviewMemoryCleanup(
+            SchedulePreviewMemoryCleanup(force: PreviewFileCollectionPolicy.ShouldForcePreviewMemoryCleanup(
                 previewResult.Document.CharacterCount,
                 previewResult.Document.LineCount));
         }
@@ -1704,14 +1691,14 @@ public partial class MainWindow : Window
         string noCheckedFilesText,
         CancellationToken cancellationToken)
     {
-        if (!ShouldBuildPreviewWarmup(mode, hasSelection, selectedPaths, currentTreeRoot))
+        if (!PreviewWarmupPolicy.ShouldBuildPreviewWarmup(mode, hasSelection, selectedPaths, currentTreeRoot))
             return null;
 
         return await Task.Run<PreviewWarmupSnapshot?>(() =>
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            var files = CollectInitialPreviewFiles(
+            var files = PreviewWarmupPolicy.CollectInitialPreviewFiles(
                 selectedPaths: selectedPaths,
                 hasSelection: hasSelection,
                 treeRoot: currentTreeRoot,
@@ -1724,7 +1711,7 @@ public partial class MainWindow : Window
                     var fallbackText = hasSelection ? noCheckedFilesText : noTextContentText;
                     return new PreviewWarmupSnapshot(
                         fallbackText,
-                        CountPreviewLines(fallbackText));
+                        PreviewFileCollectionPolicy.CountPreviewLines(fallbackText));
                 }
 
                 var contentText = _contentExport.BuildAsync(
@@ -1737,7 +1724,7 @@ public partial class MainWindow : Window
 
                 return new PreviewWarmupSnapshot(
                     contentText,
-                    CountPreviewLines(contentText));
+                    PreviewFileCollectionPolicy.CountPreviewLines(contentText));
             }
 
             if (mode == PreviewContentMode.TreeAndContent &&
@@ -1776,7 +1763,7 @@ public partial class MainWindow : Window
                 {
                     return new PreviewWarmupSnapshot(
                         treeText,
-                        CountPreviewLines(treeText));
+                        PreviewFileCollectionPolicy.CountPreviewLines(treeText));
                 }
 
                 var contentText = _contentExport.BuildAsync(
@@ -1788,7 +1775,7 @@ public partial class MainWindow : Window
                 {
                     return new PreviewWarmupSnapshot(
                         treeText,
-                        CountPreviewLines(treeText));
+                        PreviewFileCollectionPolicy.CountPreviewLines(treeText));
                 }
 
                 var combinedBuilder = new StringBuilder(treeText.Length + contentText.Length + 16);
@@ -1800,7 +1787,7 @@ public partial class MainWindow : Window
 
                 return new PreviewWarmupSnapshot(
                     combinedText,
-                    CountPreviewLines(combinedText));
+                    PreviewFileCollectionPolicy.CountPreviewLines(combinedText));
             }
 
             return null;
@@ -1811,119 +1798,8 @@ public partial class MainWindow : Window
         PreviewContentMode mode,
         bool hasSelection,
         IReadOnlySet<string> selectedPaths,
-        TreeNodeDescriptor? treeRoot)
-    {
-        if (mode == PreviewContentMode.Tree)
-            return false;
-
-        if (hasSelection)
-            return CountSelectedFilesUpToLimit(selectedPaths, PreviewWarmupFileThreshold) >= PreviewWarmupFileThreshold;
-
-        return CountTreeFilesUpToLimit(treeRoot, PreviewWarmupFileThreshold) >= PreviewWarmupFileThreshold;
-    }
-
-    private static int CountSelectedFilesUpToLimit(IReadOnlySet<string> selectedPaths, int maxCount)
-    {
-        if (maxCount <= 0)
-            return 0;
-
-        var count = 0;
-        foreach (var path in selectedPaths)
-        {
-            if (!File.Exists(path))
-                continue;
-
-            count++;
-            if (count >= maxCount)
-                break;
-        }
-
-        return count;
-    }
-
-    private static int CountTreeFilesUpToLimit(TreeNodeDescriptor? treeRoot, int maxCount)
-    {
-        if (treeRoot is null || maxCount <= 0)
-            return 0;
-
-        var count = 0;
-        var stack = new Stack<TreeNodeDescriptor>();
-        stack.Push(treeRoot);
-
-        while (stack.Count > 0 && count < maxCount)
-        {
-            var node = stack.Pop();
-            if (!node.IsDirectory)
-            {
-                count++;
-                continue;
-            }
-
-            for (var i = node.Children.Count - 1; i >= 0; i--)
-                stack.Push(node.Children[i]);
-        }
-
-        return count;
-    }
-
-    private static List<string> CollectInitialPreviewFiles(
-        IReadOnlySet<string> selectedPaths,
-        bool hasSelection,
-        TreeNodeDescriptor? treeRoot,
-        int maxFileCount)
-    {
-        if (maxFileCount <= 0)
-            return [];
-
-        var uniqueFiles = new HashSet<string>(PathComparer.Default);
-        if (hasSelection)
-        {
-            foreach (var path in selectedPaths)
-            {
-                if (!File.Exists(path))
-                    continue;
-
-                uniqueFiles.Add(path);
-            }
-        }
-        else if (treeRoot is not null)
-        {
-            CollectInitialPreviewFilesFromTree(treeRoot, uniqueFiles, maxFileCount);
-        }
-
-        if (uniqueFiles.Count == 0)
-            return [];
-
-        var files = new List<string>(uniqueFiles);
-        files.Sort(PathComparer.Default);
-        if (files.Count > maxFileCount)
-            files.RemoveRange(maxFileCount, files.Count - maxFileCount);
-
-        return files;
-    }
-
-    private static void CollectInitialPreviewFilesFromTree(
-        TreeNodeDescriptor node,
-        HashSet<string> uniqueFiles,
-        int maxFileCount)
-    {
-        if (uniqueFiles.Count >= maxFileCount)
-            return;
-
-        if (!node.IsDirectory)
-        {
-            if (File.Exists(node.FullPath))
-                uniqueFiles.Add(node.FullPath);
-            return;
-        }
-
-        foreach (var child in node.Children)
-        {
-            CollectInitialPreviewFilesFromTree(child, uniqueFiles, maxFileCount);
-            if (uniqueFiles.Count >= maxFileCount)
-                break;
-        }
-    }
+        TreeNodeDescriptor? treeRoot) =>
+        PreviewWarmupPolicy.ShouldBuildPreviewWarmup(mode, hasSelection, selectedPaths, treeRoot);
 
     private void ApplyPreviewText(string text)
     {
@@ -1931,7 +1807,7 @@ public partial class MainWindow : Window
             ? _viewModel.PreviewNoDataText
             : text;
 
-        ApplyPreviewText(effectiveText, CountPreviewLines(effectiveText));
+        ApplyPreviewText(effectiveText, PreviewFileCollectionPolicy.CountPreviewLines(effectiveText));
     }
 
     private void ApplyPreviewText(string text, int lineCount)
@@ -1990,17 +1866,7 @@ public partial class MainWindow : Window
         previousDocument?.Dispose();
     }
 
-    private static int CountPreviewLines(string text)
-    {
-        var lineCount = 1;
-        foreach (var ch in text)
-        {
-            if (ch == '\n')
-                lineCount++;
-        }
-
-        return lineCount;
-    }
+    private static int CountPreviewLines(string text) => PreviewFileCollectionPolicy.CountPreviewLines(text);
 
     private PreviewBuildResult BuildPreviewDocument(
         PreviewContentMode selectedMode,
@@ -2092,66 +1958,32 @@ public partial class MainWindow : Window
     private static List<string> CollectOrderedPreviewFiles(
         IReadOnlySet<string> selectedPaths,
         bool hasSelection,
-        TreeNodeDescriptor? treeRoot)
-    {
-        var uniqueFiles = new HashSet<string>(PathComparer.Default);
+        TreeNodeDescriptor? treeRoot) =>
+        PreviewFileCollectionPolicy.CollectOrderedPreviewFiles(selectedPaths, hasSelection, treeRoot);
 
-        if (hasSelection)
-        {
-            foreach (var path in selectedPaths)
-            {
-                if (File.Exists(path))
-                    uniqueFiles.Add(path);
-            }
-        }
-        else if (treeRoot is not null)
-        {
-            foreach (var path in EnumerateFilePaths(treeRoot))
-                uniqueFiles.Add(path);
-        }
-
-        var files = new List<string>(uniqueFiles.Count);
-        files.AddRange(uniqueFiles);
-        files.Sort(PathComparer.Default);
-        return files;
-    }
-
-    private static PreviewCacheKey BuildPreviewCacheKey(
+    private static PreviewCacheKeyData BuildPreviewCacheKey(
         string? projectPath,
         TreeNodeDescriptor? treeRoot,
         PreviewContentMode mode,
         TreeTextFormat treeFormat,
         IReadOnlySet<string> selectedPaths)
     {
-        return new PreviewCacheKey(
+        return new PreviewCacheKeyData(
             ProjectPath: projectPath,
             TreeIdentity: treeRoot is null ? 0 : RuntimeHelpers.GetHashCode(treeRoot),
             Mode: mode,
             TreeFormat: treeFormat,
             SelectedCount: selectedPaths.Count,
-            SelectedHash: BuildPathSetHash(selectedPaths));
+            SelectedHash: PreviewFileCollectionPolicy.BuildPathSetHash(selectedPaths));
     }
 
-    private static int BuildPathSetHash(IReadOnlySet<string> selectedPaths)
-    {
-        if (selectedPaths.Count == 0)
-            return 0;
+    private static int BuildPathSetHash(IReadOnlySet<string> selectedPaths) =>
+        PreviewFileCollectionPolicy.BuildPathSetHash(selectedPaths);
 
-        var ordered = new List<string>(selectedPaths.Count);
-        ordered.AddRange(selectedPaths);
-        ordered.Sort(PathComparer.Default);
-
-        var hash = new HashCode();
-        foreach (var path in ordered)
-            hash.Add(path, PathComparer.Default);
-
-        return hash.ToHashCode();
-    }
-
-    private bool IsCurrentPreviewCacheHit(PreviewCacheKey key)
+    private bool IsCurrentPreviewCacheHit(PreviewCacheKeyData key)
         => _cachedPreviewKey == key && _viewModel.PreviewDocument is not null;
 
-    private void CachePreview(PreviewCacheKey key) => _cachedPreviewKey = key;
+    private void CachePreview(PreviewCacheKeyData key) => _cachedPreviewKey = key;
 
     private void InvalidatePreviewCache()
     {
@@ -2174,12 +2006,8 @@ public partial class MainWindow : Window
         }
     }
 
-    private static bool ShouldForcePreviewMemoryCleanup(long textLength, int lineCount)
-    {
-        const long heavyTextThreshold = 1_500_000;
-        const int heavyLineThreshold = 35_000;
-        return textLength >= heavyTextThreshold || lineCount >= heavyLineThreshold;
-    }
+    private static bool ShouldForcePreviewMemoryCleanup(long textLength, int lineCount) =>
+        PreviewFileCollectionPolicy.ShouldForcePreviewMemoryCleanup(textLength, lineCount);
 
     private async Task<bool> TryExportTextToFileAsync(
         string content,
@@ -5836,20 +5664,8 @@ public partial class MainWindow : Window
         return ordered;
     }
 
-    private static IEnumerable<string> EnumerateFilePaths(TreeNodeDescriptor node)
-    {
-        if (!node.IsDirectory)
-        {
-            yield return node.FullPath;
-            yield break;
-        }
-
-        foreach (var child in node.Children)
-        {
-            foreach (var path in EnumerateFilePaths(child))
-                yield return path;
-        }
-    }
+    private static IEnumerable<string> EnumerateFilePaths(TreeNodeDescriptor node) =>
+        PreviewFileCollectionPolicy.EnumerateFilePaths(node);
 
     private static void CollectChecked(TreeNodeViewModel node, HashSet<string> selected)
     {
@@ -6257,7 +6073,7 @@ public partial class MainWindow : Window
         var selectedPaths = GetCheckedPaths();
         var hasAnyChecked = selectedPaths.Count > 0;
         var hasCompleteMetricsBaseline = _hasCompleteMetricsBaseline;
-        if (!ShouldProceedWithMetricsCalculation(hasAnyChecked, hasCompleteMetricsBaseline))
+        if (!MetricsCalculationPolicy.ShouldProceedWithMetricsCalculation(hasAnyChecked, hasCompleteMetricsBaseline))
         {
             UpdateStatusBarMetrics(0, 0, 0, 0, 0, 0);
             DisposeIfCurrent(ref _recalculateMetricsCts, recalcCts);
@@ -6366,7 +6182,7 @@ public partial class MainWindow : Window
     /// Selected metrics can be calculated independently.
     /// </summary>
     private static bool ShouldProceedWithMetricsCalculation(bool hasAnyCheckedNodes, bool hasCompleteMetricsBaseline) =>
-        hasAnyCheckedNodes || hasCompleteMetricsBaseline;
+        MetricsCalculationPolicy.ShouldProceedWithMetricsCalculation(hasAnyCheckedNodes, hasCompleteMetricsBaseline);
 
     /// <summary>
     /// Calculates tree metrics from actual tree export output in the currently selected format.
@@ -6385,7 +6201,7 @@ public partial class MainWindow : Window
             ? 0
             : HashCode.Combine(pathPresentation.DisplayRootPath, pathPresentation.DisplayRootName);
         var selectedCount = hasSelection ? selectedPaths.Count : 0;
-        var selectedHash = hasSelection ? BuildPathSetHash(selectedPaths) : 0;
+        var selectedHash = hasSelection ? PreviewFileCollectionPolicy.BuildPathSetHash(selectedPaths) : 0;
         var cacheKey = new TreeMetricsCacheKey(
             TreeIdentity: RuntimeHelpers.GetHashCode(_currentTree.Root),
             Format: format,
@@ -6423,7 +6239,7 @@ public partial class MainWindow : Window
 
         var pathMapper = CreateExportPathPresentation()?.MapFilePath;
         var selectedCount = hasSelection ? selectedPaths.Count : 0;
-        var selectedHash = hasSelection ? BuildPathSetHash(selectedPaths) : 0;
+        var selectedHash = hasSelection ? PreviewFileCollectionPolicy.BuildPathSetHash(selectedPaths) : 0;
         var cacheKey = new ContentMetricsCacheKey(
             TreeIdentity: RuntimeHelpers.GetHashCode(_currentTree.Root),
             SelectedCount: selectedCount,
@@ -6437,7 +6253,7 @@ public partial class MainWindow : Window
         }
 
         var orderedPaths = hasSelection
-            ? BuildOrderedSelectedFilePaths(selectedPaths, ensureExists: false)
+            ? PreviewFileCollectionPolicy.BuildOrderedSelectedFilePaths(selectedPaths, ensureExists: false)
             : GetOrBuildAllOrderedFilePaths(_currentTree.Root);
 
         if (orderedPaths.Count == 0)
@@ -6490,7 +6306,7 @@ public partial class MainWindow : Window
         }
 
         var uniquePaths = new HashSet<string>(PathComparer.Default);
-        foreach (var path in EnumerateFilePaths(treeRoot))
+        foreach (var path in PreviewFileCollectionPolicy.EnumerateFilePaths(treeRoot))
             uniquePaths.Add(path);
 
         var orderedPaths = new List<string>(uniquePaths.Count);
@@ -6507,22 +6323,8 @@ public partial class MainWindow : Window
 
     private static List<string> BuildOrderedSelectedFilePaths(
         IReadOnlySet<string> selectedPaths,
-        bool ensureExists = true)
-    {
-        var uniquePaths = new HashSet<string>(PathComparer.Default);
-        foreach (var path in selectedPaths)
-        {
-            if (ensureExists && !File.Exists(path))
-                continue;
-
-            uniquePaths.Add(path);
-        }
-
-        var orderedPaths = new List<string>(uniquePaths.Count);
-        orderedPaths.AddRange(uniquePaths);
-        orderedPaths.Sort(PathComparer.Default);
-        return orderedPaths;
-    }
+        bool ensureExists = true) =>
+        PreviewFileCollectionPolicy.BuildOrderedSelectedFilePaths(selectedPaths, ensureExists);
 
     /// <summary>
     /// Update status bar with calculated metrics.
@@ -6543,12 +6345,16 @@ public partial class MainWindow : Window
 
     private void RenderStatusBarMetrics()
     {
-        _viewModel.StatusTreeStatsText = FormatStatusMetricsText(
+        var labels = BuildStatusMetricLabels();
+        var useCompactMode = ShouldUseCompactStatusMetrics();
+        _viewModel.StatusTreeStatsText = PreviewSelectionMetricsPolicy.FormatStatusMetricsText(
             new ExportOutputMetrics(_lastStatusTreeLines, _lastStatusTreeChars, _lastStatusTreeTokens),
-            useCompactMode: true);
-        _viewModel.StatusContentStatsText = FormatStatusMetricsText(
+            labels,
+            useCompactMode);
+        _viewModel.StatusContentStatsText = PreviewSelectionMetricsPolicy.FormatStatusMetricsText(
             new ExportOutputMetrics(_lastStatusContentLines, _lastStatusContentChars, _lastStatusContentTokens),
-            useCompactMode: true);
+            labels,
+            useCompactMode);
     }
 
     private void RenderPreviewSelectionMetrics()
@@ -6560,19 +6366,11 @@ public partial class MainWindow : Window
             return;
         }
 
-        _viewModel.StatusPreviewSelectionStatsText = FormatStatusMetricsText(
+        _viewModel.StatusPreviewSelectionStatsText = PreviewSelectionMetricsPolicy.FormatStatusMetricsText(
             _lastPreviewSelectionMetrics,
+            BuildStatusMetricLabels(),
             useCompactMode: false);
         _viewModel.StatusPreviewSelectionVisible = true;
-    }
-
-    private string FormatStatusMetricsText(ExportOutputMetrics metrics, bool useCompactMode)
-    {
-        var labels = BuildStatusMetricLabels();
-        if (useCompactMode && ShouldUseCompactStatusMetrics())
-            return $"[{labels.LinesPrefix} {FormatNumber(metrics.Lines)}]";
-
-        return $"[{labels.LinesPrefix} {FormatNumber(metrics.Lines)} | {labels.CharsPrefix} {FormatNumber(metrics.Chars)} | {labels.TokensPrefix} {FormatNumber(metrics.Tokens)}]";
     }
 
     private StatusMetricLabels BuildStatusMetricLabels()
@@ -6730,44 +6528,15 @@ public partial class MainWindow : Window
         PreviewSelectionMetricsSnapshot snapshot,
         out ExportOutputMetrics metrics)
     {
-        metrics = ExportOutputMetrics.Empty;
-
-        if (!_hasStatusMetricsSnapshot || !IsFullDocumentSelection(snapshot))
-            return false;
-
-        metrics = _viewModel.SelectedPreviewContentMode switch
-        {
-            PreviewContentMode.Tree => new ExportOutputMetrics(
-                _lastStatusTreeLines,
-                _lastStatusTreeChars,
-                _lastStatusTreeTokens),
-            PreviewContentMode.Content => new ExportOutputMetrics(
-                _lastStatusContentLines,
-                _lastStatusContentChars,
-                _lastStatusContentTokens),
-            PreviewContentMode.TreeAndContent => AddMetrics(
-                new ExportOutputMetrics(_lastStatusTreeLines, _lastStatusTreeChars, _lastStatusTreeTokens),
-                new ExportOutputMetrics(_lastStatusContentLines, _lastStatusContentChars, _lastStatusContentTokens)),
-            _ => ExportOutputMetrics.Empty
-        };
-
-        return metrics != ExportOutputMetrics.Empty;
+        return PreviewSelectionMetricsPolicy.TryGetCachedMetrics(
+            _hasStatusMetricsSnapshot,
+            _viewModel.SelectedPreviewContentMode,
+            snapshot.Document,
+            snapshot.SelectionRange,
+            new ExportOutputMetrics(_lastStatusTreeLines, _lastStatusTreeChars, _lastStatusTreeTokens),
+            new ExportOutputMetrics(_lastStatusContentLines, _lastStatusContentChars, _lastStatusContentTokens),
+            out metrics);
     }
-
-    private static bool IsFullDocumentSelection(PreviewSelectionMetricsSnapshot snapshot)
-    {
-        var selectionRange = snapshot.SelectionRange.Normalize();
-        if (selectionRange.StartLine != 1 || selectionRange.StartColumn != 0)
-            return false;
-
-        var lastLine = Math.Max(1, snapshot.Document.LineCount);
-        var lastLineLength = snapshot.Document.GetLineText(lastLine).Length;
-        return selectionRange.EndLine == lastLine &&
-               selectionRange.EndColumn == lastLineLength;
-    }
-
-    private static ExportOutputMetrics AddMetrics(ExportOutputMetrics left, ExportOutputMetrics right) =>
-        new(left.Lines + right.Lines, left.Chars + right.Chars, left.Tokens + right.Tokens);
 
     private void ClearPreviewSelectionMetrics()
     {
@@ -6781,19 +6550,6 @@ public partial class MainWindow : Window
         _hasPreviewSelectionMetricsSnapshot = false;
         _viewModel.StatusPreviewSelectionVisible = false;
         _viewModel.StatusPreviewSelectionStatsText = string.Empty;
-    }
-
-    /// <summary>
-    /// Format large numbers with K/M suffixes for readability.
-    /// </summary>
-    private static string FormatNumber(int value)
-    {
-        return value switch
-        {
-            >= 1_000_000 => $"{value / 1_000_000.0:F1}M",
-            >= 10_000 => $"{value / 1_000.0:F1}K",
-            _ => value.ToString("N0")
-        };
     }
 
     private static bool IsDefinitelyBinaryByExtensionForMetricsWarmup(string path)

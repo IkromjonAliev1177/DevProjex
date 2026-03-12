@@ -1,3 +1,5 @@
+using DevProjex.Avalonia.Services;
+
 namespace DevProjex.Tests.Unit.Avalonia;
 
 public sealed class MainWindowPreviewWarmupTests
@@ -11,8 +13,7 @@ public sealed class MainWindowPreviewWarmupTests
         var third = temp.CreateFile("c.txt", "c");
         var missing = Path.Combine(temp.Path, "missing.txt");
 
-        var result = InvokePrivateStatic<int>(
-            "CountSelectedFilesUpToLimit",
+        var result = PreviewWarmupPolicy.CountSelectedFilesUpToLimit(
             new HashSet<string>(PathComparer.Default) { missing, third, first, second },
             2);
 
@@ -44,7 +45,7 @@ public sealed class MainWindowPreviewWarmupTests
                 CreateFileDescriptor("readme.md")
             ]);
 
-        var result = InvokePrivateStatic<int>("CountTreeFilesUpToLimit", treeRoot, 2);
+        var result = PreviewWarmupPolicy.CountTreeFilesUpToLimit(treeRoot, 2);
 
         Assert.Equal(2, result);
     }
@@ -57,8 +58,7 @@ public sealed class MainWindowPreviewWarmupTests
         var beta = temp.CreateFile("beta.txt", "beta");
         var missing = Path.Combine(temp.Path, "missing.txt");
 
-        var files = InvokePrivateStatic<List<string>>(
-            "CollectInitialPreviewFiles",
+        var files = PreviewWarmupPolicy.CollectInitialPreviewFiles(
             new HashSet<string>(PathComparer.Default) { beta, missing, alpha, beta },
             true,
             null,
@@ -95,8 +95,7 @@ public sealed class MainWindowPreviewWarmupTests
                 new TreeNodeDescriptor("zeta.txt", zeta, false, false, "file", [])
             ]);
 
-        var files = InvokePrivateStatic<List<string>>(
-            "CollectInitialPreviewFiles",
+        var files = PreviewWarmupPolicy.CollectInitialPreviewFiles(
             new HashSet<string>(PathComparer.Default),
             false,
             treeRoot,
@@ -115,8 +114,7 @@ public sealed class MainWindowPreviewWarmupTests
             .Select(index => temp.CreateFile($"file{index:000}.txt", "x"))
             .ToHashSet(PathComparer.Default);
 
-        var result = InvokePrivateStatic<bool>(
-            "ShouldBuildPreviewWarmup",
+        var result = PreviewWarmupPolicy.ShouldBuildPreviewWarmup(
             PreviewContentMode.Tree,
             true,
             selectedPaths,
@@ -133,21 +131,13 @@ public sealed class MainWindowPreviewWarmupTests
             .Select(index => temp.CreateFile($"file{index:000}.txt", "x"))
             .ToHashSet(PathComparer.Default);
 
-        var result = InvokePrivateStatic<bool>(
-            "ShouldBuildPreviewWarmup",
+        var result = PreviewWarmupPolicy.ShouldBuildPreviewWarmup(
             PreviewContentMode.Content,
             true,
             selectedPaths,
             null);
 
         Assert.True(result);
-    }
-
-    private static T InvokePrivateStatic<T>(string name, params object?[] arguments)
-    {
-        var method = typeof(MainWindow).GetMethod(name, BindingFlags.NonPublic | BindingFlags.Static);
-        Assert.NotNull(method);
-        return (T)method!.Invoke(null, arguments)!;
     }
 
     private static TreeNodeDescriptor CreateFileDescriptor(string name)

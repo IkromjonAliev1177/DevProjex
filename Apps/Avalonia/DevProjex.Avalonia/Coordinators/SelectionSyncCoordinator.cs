@@ -15,13 +15,6 @@ public sealed class SelectionSyncCoordinator(
     Func<string?> currentPathProvider)
     : IDisposable
 {
-    private enum PreparedSelectionMode
-    {
-        None = 0,
-        Defaults = 1,
-        Profile = 2
-    }
-
     // Store collection references for proper cleanup
     private ObservableCollection<SelectionOptionViewModel>? _hookedRootFolders;
     private ObservableCollection<SelectionOptionViewModel>? _hookedExtensions;
@@ -1238,11 +1231,10 @@ public sealed class SelectionSyncCoordinator(
     }
 
     private bool ShouldClearCachesForCurrentPath(string currentPath)
-    {
-        var isPathSwitch = _lastLoadedPath is not null && !PathComparer.Default.Equals(_lastLoadedPath, currentPath);
-        var hasPreparedSelectionForCurrentPath = HasPreparedSelectionForPath(currentPath);
-        return isPathSwitch && !hasPreparedSelectionForCurrentPath;
-    }
+        => SelectionSyncCoordinatorPolicy.ShouldClearCachesForCurrentPath(
+            _lastLoadedPath,
+            _preparedSelectionPath,
+            currentPath);
 
     private bool HasPreparedSelectionForPath(string path)
     {
@@ -1251,10 +1243,7 @@ public sealed class SelectionSyncCoordinator(
     }
 
     private bool ShouldSkipRefreshForPreparedPath(string currentPath)
-    {
-        return _preparedSelectionPath is not null &&
-               !PathComparer.Default.Equals(_preparedSelectionPath, currentPath);
-    }
+        => SelectionSyncCoordinatorPolicy.ShouldSkipRefreshForPreparedPath(_preparedSelectionPath, currentPath);
 
     private bool IsStalePathRequest(string path)
     {
@@ -1274,85 +1263,32 @@ public sealed class SelectionSyncCoordinator(
     }
 
     private IReadOnlyList<SelectionOption> ApplyMissingProfileSelectionsFallbackToExtensions(
-        IReadOnlyList<SelectionOption> options)
-    {
-        if (!ShouldSuppressAllTogglesOverride())
-            return options;
-        if (_extensionsSelectionCache.Count == 0 || options.Count == 0)
-            return options;
-
-        var hasAnyMatchedSelection = false;
-        foreach (var option in options)
-        {
-            if (option.IsChecked)
-            {
-                hasAnyMatchedSelection = true;
-                break;
-            }
-        }
-
-        if (hasAnyMatchedSelection)
-            return options;
-
-        // Saved extension selections exist, but none are available in current scan.
-        // Fall back to current defaults instead of forcing all current options unchecked.
-        var fallback = new List<SelectionOption>(options.Count);
-        foreach (var option in options)
-            fallback.Add(option with { IsChecked = true });
-        return fallback;
-    }
+        IReadOnlyList<SelectionOption> options) =>
+        SelectionSyncCoordinatorPolicy.ApplyMissingProfileSelectionsFallbackToExtensions(
+            _preparedSelectionMode,
+            _extensionsSelectionCache,
+            options);
 
     private IReadOnlyList<SelectionOption> ApplyMissingProfileSelectionsFallbackToRootFolders(
         IReadOnlyList<SelectionOption> options,
         IReadOnlyList<string> scannedRootFolders,
-        IgnoreRules ignoreRules)
-    {
-        if (!ShouldSuppressAllTogglesOverride())
-            return options;
-        if (_rootSelectionCache.Count == 0 || options.Count == 0)
-            return options;
-
-        var hasAnyMatchedSelection = false;
-        foreach (var option in options)
-        {
-            if (option.IsChecked)
-            {
-                hasAnyMatchedSelection = true;
-                break;
-            }
-        }
-
-        if (hasAnyMatchedSelection)
-            return options;
-
-        // Saved root folder selections exist, but all of them are absent now.
-        // Recompute with default behavior for currently available roots.
-        return filterSelectionService.BuildRootFolderOptions(
+        IgnoreRules ignoreRules) =>
+        SelectionSyncCoordinatorPolicy.ApplyMissingProfileSelectionsFallbackToRootFolders(
+            _preparedSelectionMode,
+            _rootSelectionCache,
+            options,
             scannedRootFolders,
-            EmptyStringSet,
             ignoreRules,
-            hasPreviousSelections: false);
-    }
+            filterSelectionService,
+            EmptyStringSet);
 
     private bool ShouldUseIgnoreDefaultFallback(
         IReadOnlyList<IgnoreOptionDescriptor> options,
-        IReadOnlySet<IgnoreOptionId> previousSelections)
-    {
-        if (!ShouldSuppressAllTogglesOverride())
-            return false;
-        if (previousSelections.Count == 0 || options.Count == 0)
-            return false;
-
-        foreach (var option in options)
-        {
-            if (previousSelections.Contains(option.Id))
-                return false;
-        }
-
-        // Saved ignore selections exist, but none of those options are currently available.
-        // Use current default states for visible ignore options.
-        return true;
-    }
+        IReadOnlySet<IgnoreOptionId> previousSelections) =>
+        SelectionSyncCoordinatorPolicy.ShouldUseIgnoreDefaultFallback(
+            _preparedSelectionMode,
+            options,
+            previousSelections);
 
     private void UpdateRootSelectionCache()
     {
