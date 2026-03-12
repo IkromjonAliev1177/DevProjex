@@ -1,6 +1,3 @@
-# This workflow will build a .NET project
-# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-net
-
 name: .NET CI
 
 on:
@@ -8,11 +5,36 @@ on:
     branches: [ "master" ]
   pull_request:
     branches: [ "master" ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dotnet-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build-test:
-    runs-on: windows-latest
-    timeout-minutes: 30
+    name: CI (${{ matrix.name }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows
+            runner: windows-latest
+            os_id: windows
+            run_integration: true
+          - name: Linux
+            runner: ubuntu-latest
+            os_id: linux
+            run_integration: true
+          - name: macOS
+            runner: macos-latest
+            os_id: macos
+            run_integration: false
 
     steps:
       - uses: actions/checkout@v4
@@ -23,13 +45,38 @@ jobs:
           dotnet-version: 10.0.104
 
       - name: Restore
+        shell: pwsh
         run: dotnet restore DevProjex.sln
 
       - name: Build
+        shell: pwsh
         run: dotnet build DevProjex.sln -c Release --no-restore
 
       - name: Test Unit
-        run: dotnet test Tests/DevProjex.Tests.Unit/DevProjex.Tests.Unit.csproj -c Release --no-build --verbosity normal
+        shell: pwsh
+        run: >
+          dotnet test Tests/DevProjex.Tests.Unit/DevProjex.Tests.Unit.csproj
+          -c Release
+          --no-build
+          --verbosity normal
+          --logger "trx;LogFileName=unit.trx"
+          --results-directory "TestResults/unit"
 
       - name: Test Integration
-        run: dotnet test Tests/DevProjex.Tests.Integration/DevProjex.Tests.Integration.csproj -c Release --no-build --verbosity normal
+        if: ${{ matrix.run_integration }}
+        shell: pwsh
+        run: >
+          dotnet test Tests/DevProjex.Tests.Integration/DevProjex.Tests.Integration.csproj
+          -c Release
+          --no-build
+          --verbosity normal
+          --logger "trx;LogFileName=integration.trx"
+          --results-directory "TestResults/integration"
+
+      - name: Upload Test Results
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ matrix.os_id }}
+          path: TestResults/**/*.trx
+          if-no-files-found: ignore
