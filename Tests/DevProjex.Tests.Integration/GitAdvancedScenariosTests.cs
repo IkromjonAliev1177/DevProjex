@@ -296,8 +296,8 @@ public class GitAdvancedScenariosTests : IAsyncLifetime
         if (!await _gitService.IsGitAvailableAsync())
             return;
 
-        // Use an OS-invalid target path so the scenario remains cross-platform.
-        var invalidPath = CreateInvalidClonePath();
+        // Use a destination that already exists as a file so clone must fail on every OS.
+        var invalidPath = _tempDir.CreateFile("existing-target.txt", "occupied");
 
         // Act
         var result = await _gitService.CloneAsync(TestRepoUrl, invalidPath);
@@ -305,14 +305,6 @@ public class GitAdvancedScenariosTests : IAsyncLifetime
         // Assert
         Assert.False(result.Success);
         Assert.NotNull(result.ErrorMessage);
-    }
-
-    private string CreateInvalidClonePath()
-    {
-        if (OperatingSystem.IsWindows())
-            return Path.Combine(_tempDir.Path, "invalid<>path");
-
-        return _tempDir.Path + "\0invalid";
     }
 
     [Fact]
