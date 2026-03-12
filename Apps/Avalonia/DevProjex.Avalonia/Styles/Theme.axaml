@@ -14,6 +14,7 @@
     <Color x:Key="AppTextColor">#1A1A1A</Color>
     <Color x:Key="AppMutedTextColor">#5E5E5E</Color>
     <Color x:Key="TreeSelectionColor">#DCEEFF</Color>
+    <Color x:Key="PreviewSelectionColor">#2D8CFF</Color>
     <Color x:Key="TreeSearchHighlightColor">#F7C76B</Color>
     <Color x:Key="TreeSearchCurrentColor">#F9A825</Color>
     <Color x:Key="MenuHoverColor">#E6E6E6</Color>
@@ -41,6 +42,8 @@
     <SolidColorBrush x:Key="AppMutedTextBrush" Color="{StaticResource AppMutedTextColor}" />
     <SolidColorBrush x:Key="TreeSelectionBrush" Color="{StaticResource TreeSelectionColor}" />
     <SolidColorBrush x:Key="TreeSelectionTextBrush" Color="{StaticResource AppTextColor}" />
+    <SolidColorBrush x:Key="PreviewSelectionBrush" Color="{StaticResource PreviewSelectionColor}" />
+    <SolidColorBrush x:Key="PreviewSelectionTextBrush" Color="{StaticResource AppTextColor}" />
     <SolidColorBrush x:Key="TreeSearchHighlightBrush" Color="{StaticResource TreeSearchHighlightColor}" />
     <SolidColorBrush x:Key="TreeSearchCurrentBrush" Color="{StaticResource TreeSearchCurrentColor}" />
     <SolidColorBrush x:Key="TreeSearchHighlightTextBrush" Color="#000000" />
@@ -74,6 +77,7 @@
     <Color x:Key="AppTextColor">#E7E9EF</Color>
     <Color x:Key="AppMutedTextColor">#9AA3B2</Color>
     <Color x:Key="TreeSelectionColor">#254861</Color>
+    <Color x:Key="PreviewSelectionColor">#2D8CFF</Color>
     <Color x:Key="TreeSearchHighlightColor">#E6A23A</Color>
     <Color x:Key="TreeSearchCurrentColor">#F39C12</Color>
     <Color x:Key="MenuHoverColor">#3A3D44</Color>
@@ -101,6 +105,8 @@
     <SolidColorBrush x:Key="AppMutedTextBrush" Color="{StaticResource AppMutedTextColor}" />
     <SolidColorBrush x:Key="TreeSelectionBrush" Color="{StaticResource TreeSelectionColor}" />
     <SolidColorBrush x:Key="TreeSelectionTextBrush" Color="{StaticResource AppTextColor}" />
+    <SolidColorBrush x:Key="PreviewSelectionBrush" Color="{StaticResource PreviewSelectionColor}" />
+    <SolidColorBrush x:Key="PreviewSelectionTextBrush" Color="{StaticResource AppTextColor}" />
     <SolidColorBrush x:Key="TreeSearchHighlightBrush" Color="{StaticResource TreeSearchHighlightColor}" />
     <SolidColorBrush x:Key="TreeSearchCurrentBrush" Color="{StaticResource TreeSearchCurrentColor}" />
     <SolidColorBrush x:Key="TreeSearchHighlightTextBrush" Color="#000000" />

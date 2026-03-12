@@ -81,6 +81,8 @@ public sealed class VirtualizedPreviewTextControl : Control
     private MenuItem? _clearSelectionMenuItem;
     private static readonly global::Avalonia.Input.Cursor PreviewTextCursor =
         new(global::Avalonia.Input.StandardCursorType.Ibeam);
+    private static readonly global::Avalonia.Input.Cursor PreviewMenuCursor =
+        new(global::Avalonia.Input.StandardCursorType.Arrow);
 
     static VirtualizedPreviewTextControl()
     {
@@ -303,10 +305,7 @@ public sealed class VirtualizedPreviewTextControl : Control
             var (selectionBackground, selectionForeground) = ResolveSelectionBrushes();
             if (selectionForeground is not null)
                 formattedText.SetForegroundBrush(selectionForeground, selectionStart, selectionLength);
-
-            var selectionGeometry = formattedText.BuildHighlightGeometry(origin, selectionStart, selectionLength);
-            if (selectionGeometry is not null)
-                context.DrawGeometry(selectionBackground, null, selectionGeometry);
+            DrawSelectionBackgrounds(context, visibleWindow, selectionBackground, typeface, lineHeight);
         }
 
         context.DrawText(formattedText, origin);
@@ -560,19 +559,65 @@ public sealed class VirtualizedPreviewTextControl : Control
             : new SolidColorBrush(Color.Parse("#DCEEFF"));
         _cachedSelectionForeground = TextBrush ?? Brushes.White;
 
-        if (app?.Resources.TryGetResource("TreeSelectionBrush", theme, out var selectionBackground) == true &&
+        if (app?.Resources.TryGetResource("PreviewSelectionBrush", theme, out var selectionBackground) == true &&
             selectionBackground is IBrush selectionBackgroundBrush)
         {
-            _cachedSelectionBackground = selectionBackgroundBrush;
+            _cachedSelectionBackground = EnsureOpaqueSelectionBrush(selectionBackgroundBrush);
         }
 
-        if (app?.Resources.TryGetResource("TreeSelectionTextBrush", theme, out var selectionForeground) == true &&
+        if (app?.Resources.TryGetResource("PreviewSelectionTextBrush", theme, out var selectionForeground) == true &&
             selectionForeground is IBrush selectionForegroundBrush)
         {
             _cachedSelectionForeground = selectionForegroundBrush;
         }
 
         return (_cachedSelectionBackground, _cachedSelectionForeground);
+    }
+
+    private void DrawSelectionBackgrounds(
+        DrawingContext context,
+        VisibleTextWindow visibleWindow,
+        IBrush selectionBackground,
+        Typeface typeface,
+        double lineHeight)
+    {
+        if (!TryGetNormalizedSelection(out var selectionStart, out var selectionEnd))
+            return;
+
+        var firstSelectedLine = Math.Max(selectionStart.Line, visibleWindow.FirstLine);
+        var lastSelectedLine = Math.Min(selectionEnd.Line, visibleWindow.LastLine);
+        if (lastSelectedLine < firstSelectedLine)
+            return;
+
+        var minimumSelectionWidth = ResolveMinimumSelectionWidth(typeface);
+
+        for (var lineNumber = firstSelectedLine; lineNumber <= lastSelectedLine; lineNumber++)
+        {
+            var lineText = GetLineText(lineNumber);
+            var lineLength = lineText.Length;
+            var startColumn = lineNumber == selectionStart.Line
+                ? Math.Clamp(selectionStart.Column, 0, lineLength)
+                : 0;
+            var endColumn = lineNumber == selectionEnd.Line
+                ? Math.Clamp(selectionEnd.Column, startColumn, lineLength)
+                : lineLength;
+
+            if (startColumn == endColumn && lineNumber == selectionEnd.Line)
+                continue;
+
+            var left = LeftPadding + ResolveDistanceFromColumn(lineText, startColumn, typeface);
+            var right = LeftPadding + ResolveDistanceFromColumn(lineText, endColumn, typeface);
+            var width = Math.Max(0, right - left);
+
+            if (width < minimumSelectionWidth && lineNumber < selectionEnd.Line)
+                width = minimumSelectionWidth;
+
+            if (width <= 0)
+                continue;
+
+            var top = TopPadding + (lineNumber - 1) * lineHeight;
+            context.FillRectangle(selectionBackground, new Rect(left, top, width, lineHeight));
+        }
     }
 
     private SelectionPosition HitTestSelectionPosition(Point point)
@@ -625,6 +670,29 @@ public sealed class VirtualizedPreviewTextControl : Control
         var characterHit = layout.TextLines[0].GetCharacterHitFromDistance(distance);
         var column = characterHit.FirstCharacterIndex + Math.Max(0, characterHit.TrailingLength);
         return Math.Clamp(column, 0, lineText.Length);
+    }
+
+    private double ResolveDistanceFromColumn(string lineText, int column, Typeface typeface)
+    {
+        if (string.IsNullOrEmpty(lineText) || column <= 0)
+            return 0;
+
+        var clampedColumn = Math.Clamp(column, 0, lineText.Length);
+        var layout = new TextLayout(
+            lineText,
+            typeface,
+            TextFontSize,
+            TextBrush ?? Brushes.White);
+        if (layout.TextLines.Count == 0)
+            return 0;
+
+        return layout.TextLines[0].GetDistanceFromCharacterHit(new CharacterHit(clampedColumn, 0));
+    }
+
+    private double ResolveMinimumSelectionWidth(Typeface typeface)
+    {
+        var sample = BuildFormattedText(" ", typeface);
+        return Math.Max(4.0, Math.Ceiling(sample.Width));
     }
 
     private void UpdateSelectionActivePosition(SelectionPosition position)
@@ -825,15 +893,19 @@ public sealed class VirtualizedPreviewTextControl : Control
             return;
 
         _copyMenuItem = new MenuItem();
+        _copyMenuItem.Cursor = PreviewMenuCursor;
         _copyMenuItem.Click += OnCopyMenuItemClick;
 
         _selectAllMenuItem = new MenuItem();
+        _selectAllMenuItem.Cursor = PreviewMenuCursor;
         _selectAllMenuItem.Click += OnSelectAllMenuItemClick;
 
         _clearSelectionMenuItem = new MenuItem();
+        _clearSelectionMenuItem.Cursor = PreviewMenuCursor;
         _clearSelectionMenuItem.Click += OnClearSelectionMenuItemClick;
 
         _contextMenu = new ContextMenu();
+        _contextMenu.Cursor = PreviewMenuCursor;
         _contextMenu.Items.Add(_copyMenuItem);
         _contextMenu.Items.Add(_selectAllMenuItem);
         _contextMenu.Items.Add(new Separator());
@@ -937,6 +1009,17 @@ public sealed class VirtualizedPreviewTextControl : Control
         {
             // Ignore: popup can close while the host is being configured.
         }
+    }
+
+    private static IBrush EnsureOpaqueSelectionBrush(IBrush brush)
+    {
+        if (brush is not ISolidColorBrush solidBrush)
+            return brush;
+
+        var color = solidBrush.Color;
+        return new SolidColorBrush(
+            Color.FromArgb(byte.MaxValue, color.R, color.G, color.B),
+            1.0);
     }
 
     private void ResetVisibleWindowCache()
