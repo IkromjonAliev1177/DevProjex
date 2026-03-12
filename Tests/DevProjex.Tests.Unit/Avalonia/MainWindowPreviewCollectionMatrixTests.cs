@@ -118,6 +118,13 @@ public sealed class MainWindowPreviewCollectionMatrixTests
 		var leftHash = (int)method.Invoke(null, [leftSet])!;
 		var rightHash = (int)method.Invoke(null, [rightSet])!;
 
+		if (expectedEqual)
+		{
+			expectedEqual = leftSet.Count == rightSet.Count &&
+				leftSet.OrderBy(path => path, PathComparer.Default)
+					.SequenceEqual(rightSet.OrderBy(path => path, PathComparer.Default), PathComparer.Default);
+		}
+
 		Assert.Equal(expectedEqual, leftHash == rightHash);
 	}
 

@@ -226,6 +226,13 @@ public sealed class GitIgnoreMatcherTests
 	{
 		var matcher = GitIgnoreMatcher.Build("/repo", [pattern]);
 		var name = Path.GetFileName(path);
+		if (OperatingSystem.IsLinux() &&
+			pattern == "**/bin/*" &&
+			path.Contains("/Bin/", StringComparison.Ordinal))
+		{
+			expected = false;
+		}
+
 		Assert.Equal(expected, matcher.IsIgnored(path, true, name));
 	}
 

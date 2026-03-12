@@ -2143,7 +2143,7 @@ public partial class MainWindow : Window
 
         var hash = new HashCode();
         foreach (var path in ordered)
-            hash.Add(path, StringComparer.OrdinalIgnoreCase);
+            hash.Add(path, PathComparer.Default);
 
         return hash.ToHashCode();
     }
