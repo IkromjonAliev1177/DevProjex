@@ -68,6 +68,31 @@ public sealed class MainWindowPreviewInternalsTests
     }
 
     [Fact]
+    public void BuildOrderedSelectedFilePaths_CaseVariantPaths_FollowPlatformSemantics()
+    {
+        var method = GetPrivateStaticMethod("BuildOrderedSelectedFilePaths");
+        var selected = new HashSet<string>(StringComparer.Ordinal)
+        {
+            CreatePath("root", "B.cs"),
+            CreatePath("root", "a.cs"),
+            CreatePath("root", "A.cs")
+        };
+
+        var result = (List<string>)method.Invoke(null, [selected, false])!;
+
+        var expected = new HashSet<string>(PathComparer.Default)
+        {
+            CreatePath("root", "B.cs"),
+            CreatePath("root", "a.cs"),
+            CreatePath("root", "A.cs")
+        }
+        .OrderBy(path => path, PathComparer.Default)
+        .ToList();
+
+        Assert.Equal(expected, result);
+    }
+
+    [Fact]
     public void BuildPreviewCacheKey_SameArguments_ProduceEqualKey()
     {
         var method = GetPrivateStaticMethod("BuildPreviewCacheKey");
@@ -138,5 +163,12 @@ public sealed class MainWindowPreviewInternalsTests
                     IconKey: "csharp",
                     Children: [])
             ]);
+    }
+
+    private static string CreatePath(params string[] segments)
+    {
+        return OperatingSystem.IsWindows()
+            ? Path.Combine(["C:\\", ..segments])
+            : Path.Combine(["/", ..segments]);
     }
 }

@@ -33,12 +33,12 @@ public sealed class SelectionSyncCoordinator(
     private NotifyCollectionChangedEventHandler? _ignoreOptionsCollectionChangedHandler;
 
     private bool _disposed;
-    private static readonly HashSet<string> EmptyStringSet = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly HashSet<string> EmptyStringSet = new(PathComparer.Default);
 
     private IReadOnlyList<IgnoreOptionDescriptor> _ignoreOptions = [];
     private HashSet<IgnoreOptionId> _ignoreSelectionCache = [];
     private bool _ignoreSelectionInitialized;
-    private HashSet<string> _rootSelectionCache = new(StringComparer.OrdinalIgnoreCase);
+    private HashSet<string> _rootSelectionCache = new(PathComparer.Default);
     private bool _rootSelectionInitialized;
     private HashSet<string> _extensionsSelectionCache = new(StringComparer.OrdinalIgnoreCase);
     private bool _extensionsSelectionInitialized;
@@ -293,8 +293,8 @@ public sealed class SelectionSyncCoordinator(
 
         var hasPreviousSelections = _rootSelectionInitialized;
         var prev = hasPreviousSelections
-            ? new HashSet<string>(_rootSelectionCache, StringComparer.OrdinalIgnoreCase)
-            : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            ? new HashSet<string>(_rootSelectionCache, PathComparer.Default)
+            : new HashSet<string>(PathComparer.Default);
 
         var selectedIgnoreOptions = GetSelectedIgnoreOptionIds();
         var ignoreRules = GetOrBuildIgnoreRules(path, selectedIgnoreOptions, null);
@@ -417,7 +417,7 @@ public sealed class SelectionSyncCoordinator(
         _rootSelectionInitialized = true;
         _rootSelectionCache = new HashSet<string>(
             profile.SelectedRootFolders,
-            StringComparer.OrdinalIgnoreCase);
+            PathComparer.Default);
 
         _extensionsSelectionInitialized = true;
         _extensionsSelectionCache = new HashSet<string>(
@@ -729,7 +729,7 @@ public sealed class SelectionSyncCoordinator(
             return;
 
         _extensionsSelectionInitialized = true;
-        _extensionsSelectionCache = CollectCheckedSelectionNames(viewModel.Extensions);
+        _extensionsSelectionCache = CollectCheckedSelectionNames(viewModel.Extensions, StringComparer.OrdinalIgnoreCase);
     }
 
     internal void ApplyExtensionScan(IReadOnlyCollection<string> extensions)
@@ -968,9 +968,11 @@ public sealed class SelectionSyncCoordinator(
         }
     }
 
-    private static HashSet<string> CollectCheckedSelectionNames(IEnumerable<SelectionOptionViewModel> options)
+    private static HashSet<string> CollectCheckedSelectionNames(
+        IEnumerable<SelectionOptionViewModel> options,
+        StringComparer comparer)
     {
-        var selected = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var selected = new HashSet<string>(comparer);
         foreach (var option in options)
         {
             if (option.IsChecked)
@@ -1064,9 +1066,7 @@ public sealed class SelectionSyncCoordinator(
             normalized = path;
         }
 
-        if (!OperatingSystem.IsLinux())
-            normalized = normalized.ToUpperInvariant();
-        return normalized;
+        return PathUtility.NormalizeForCacheKey(normalized);
     }
 
     private static string BuildIgnoreOptionSelectionKey(IReadOnlyCollection<IgnoreOptionId> selectedIgnoreOptions)
@@ -1097,21 +1097,24 @@ public sealed class SelectionSyncCoordinator(
         if (selectedRootFolders.Count == 0)
             return "<empty>";
 
-        var comparer = OperatingSystem.IsLinux()
-            ? StringComparer.Ordinal
-            : StringComparer.OrdinalIgnoreCase;
-        var unique = new HashSet<string>(comparer);
+        var unique = new HashSet<string>(PathComparer.Default);
         foreach (var root in selectedRootFolders)
         {
             if (!string.IsNullOrWhiteSpace(root))
-                unique.Add(root.Trim());
+            {
+                var normalizedRoot = root.Trim();
+                if (OperatingSystem.IsWindows())
+                    normalizedRoot = normalizedRoot.ToUpperInvariant();
+
+                unique.Add(normalizedRoot);
+            }
         }
 
         if (unique.Count == 0)
             return "<empty>";
 
         var ordered = new List<string>(unique);
-        ordered.Sort(comparer);
+        ordered.Sort(PathComparer.Default);
 
         var estimatedLength = ordered.Count * 8;
         foreach (var entry in ordered)
@@ -1360,7 +1363,7 @@ public sealed class SelectionSyncCoordinator(
             return;
         }
 
-        _rootSelectionCache = CollectCheckedSelectionNames(viewModel.RootFolders);
+        _rootSelectionCache = CollectCheckedSelectionNames(viewModel.RootFolders, PathComparer.Default);
     }
 
     private sealed record IgnoreRulesBuildCacheEntry(string Key, IgnoreRules Rules);

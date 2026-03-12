@@ -252,7 +252,7 @@ public partial class MainWindow : Window
     private CancellationTokenSource? _previewSelectionMetricsCts;
     private DispatcherTimer? _previewSelectionMetricsDebounceTimer;
 
-    private readonly Dictionary<string, FileMetricsData> _fileMetricsCache = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, FileMetricsData> _fileMetricsCache = new(PathComparer.Default);
     private volatile bool _isBackgroundMetricsActive;
     private int _metricsRecalcVersion;
     private int _previewSelectionMetricsVersion;
@@ -4698,8 +4698,8 @@ public partial class MainWindow : Window
             return;
 
         var profile = new ProjectSelectionProfile(
-            SelectedRootFolders: CollectCheckedOptionNames(_viewModel.RootFolders),
-            SelectedExtensions: CollectCheckedOptionNames(_viewModel.Extensions),
+            SelectedRootFolders: CollectCheckedOptionNames(_viewModel.RootFolders, PathComparer.Default),
+            SelectedExtensions: CollectCheckedOptionNames(_viewModel.Extensions, StringComparer.OrdinalIgnoreCase),
             SelectedIgnoreOptions: _selectionCoordinator.GetSelectedIgnoreOptionIds().ToArray());
 
         _projectProfileStore.SaveProfile(_currentPath, profile);
@@ -5202,8 +5202,8 @@ public partial class MainWindow : Window
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(refreshCts.Token, cancellationToken);
         var linkedToken = linkedCts.Token;
 
-        var allowedExt = CollectCheckedOptionNames(_viewModel.Extensions);
-        var allowedRoot = CollectCheckedOptionNames(_viewModel.RootFolders);
+        var allowedExt = CollectCheckedOptionNames(_viewModel.Extensions, StringComparer.OrdinalIgnoreCase);
+        var allowedRoot = CollectCheckedOptionNames(_viewModel.RootFolders, PathComparer.Default);
 
         var selectedIgnoreOptions = _selectionCoordinator.GetSelectedIgnoreOptionIds();
         var ignoreRules = BuildIgnoreRules(_currentPath, selectedIgnoreOptions, allowedRoot);
@@ -5788,9 +5788,11 @@ public partial class MainWindow : Window
 
     private bool EnsureTreeReady() => _currentTree is not null && !string.IsNullOrWhiteSpace(_currentPath);
 
-    private static HashSet<string> CollectCheckedOptionNames(IEnumerable<SelectionOptionViewModel> options)
+    private static HashSet<string> CollectCheckedOptionNames(
+        IEnumerable<SelectionOptionViewModel> options,
+        StringComparer comparer)
     {
-        var selected = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var selected = new HashSet<string>(comparer);
         foreach (var option in options)
         {
             if (option.IsChecked)

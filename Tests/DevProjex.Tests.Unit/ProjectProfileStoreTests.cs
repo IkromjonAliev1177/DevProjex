@@ -183,6 +183,81 @@ public sealed class ProjectProfileStoreTests
 	}
 
 	[Fact]
+	public void SaveProfile_CaseDistinctRootFolders_BehaviorMatchesPlatform()
+	{
+		var tempRoot = CreateTempDirectory();
+		try
+		{
+			var store = CreateStore(tempRoot);
+			var projectPath = Path.Combine(tempRoot, "RepoCase");
+			var profile = new ProjectSelectionProfile(
+				SelectedRootFolders: ["src", "Src", "src"],
+				SelectedExtensions: [".cs"],
+				SelectedIgnoreOptions: []);
+
+			store.SaveProfile(projectPath, profile);
+
+			Assert.True(store.TryLoadProfile(projectPath, out var loaded));
+			var expectedCount = OperatingSystem.IsWindows() ? 1 : 2;
+			Assert.Equal(expectedCount, loaded.SelectedRootFolders.Count);
+			Assert.Contains("src", loaded.SelectedRootFolders);
+			if (!OperatingSystem.IsWindows())
+				Assert.Contains("Src", loaded.SelectedRootFolders);
+		}
+		finally
+		{
+			Directory.Delete(tempRoot, recursive: true);
+		}
+	}
+
+	[Fact]
+	public void SaveProfile_CaseDistinctProjectPaths_BehaviorMatchesPlatform()
+	{
+		var tempRoot = CreateTempDirectory();
+		try
+		{
+			var store = CreateStore(tempRoot);
+			var projectUpper = Path.Combine(tempRoot, "RepoCase");
+			var projectLower = Path.Combine(tempRoot, "rePOcAse");
+
+			store.SaveProfile(
+				projectUpper,
+				new ProjectSelectionProfile(
+					SelectedRootFolders: ["src"],
+					SelectedExtensions: [".cs"],
+					SelectedIgnoreOptions: []));
+
+			store.SaveProfile(
+				projectLower,
+				new ProjectSelectionProfile(
+					SelectedRootFolders: ["docs"],
+					SelectedExtensions: [".md"],
+					SelectedIgnoreOptions: []));
+
+			Assert.True(store.TryLoadProfile(projectUpper, out var upperProfile));
+			Assert.True(store.TryLoadProfile(projectLower, out var lowerProfile));
+
+			if (OperatingSystem.IsWindows())
+			{
+				Assert.Contains("docs", upperProfile.SelectedRootFolders);
+				Assert.Contains(".md", upperProfile.SelectedExtensions);
+				Assert.Contains("docs", lowerProfile.SelectedRootFolders);
+			}
+			else
+			{
+				Assert.Contains("src", upperProfile.SelectedRootFolders);
+				Assert.DoesNotContain("docs", upperProfile.SelectedRootFolders);
+				Assert.Contains("docs", lowerProfile.SelectedRootFolders);
+				Assert.DoesNotContain("src", lowerProfile.SelectedRootFolders);
+			}
+		}
+		finally
+		{
+			Directory.Delete(tempRoot, recursive: true);
+		}
+	}
+
+	[Fact]
 	public void SaveProfile_InvalidPath_IsIgnoredWithoutThrowing()
 	{
 		var tempRoot = CreateTempDirectory();

@@ -102,6 +102,36 @@ public sealed class MainWindowPreviewCollectionMatrixTests
 		Assert.Equal(expected, actual);
 	}
 
+	[Fact]
+	public void CollectOrderedPreviewFiles_WithoutSelection_CaseVariantTreeFiles_FollowPlatformSemantics()
+	{
+		var method = GetPrivateStaticMethod("CollectOrderedPreviewFiles");
+		using var temp = new TemporaryDirectory();
+		var relativeFiles = new[] { "src/A.cs", "src/a.cs", "src/B.cs" };
+
+		foreach (var relative in relativeFiles)
+		{
+			var fullPath = Path.Combine(temp.Path, relative.Replace('/', Path.DirectorySeparatorChar));
+			var parent = Path.GetDirectoryName(fullPath);
+			if (!string.IsNullOrWhiteSpace(parent))
+				Directory.CreateDirectory(parent);
+			File.WriteAllText(fullPath, relative, Encoding.UTF8);
+		}
+
+		var treeRoot = CreateTree(temp.Path, relativeFiles);
+		var actual = (List<string>)method.Invoke(
+			null,
+			[new HashSet<string>(StringComparer.Ordinal), false, treeRoot])!;
+
+		var expected = relativeFiles
+			.Select(relative => Path.Combine(temp.Path, relative.Replace('/', Path.DirectorySeparatorChar)))
+			.Distinct(PathComparer.Default)
+			.OrderBy(path => path, PathComparer.Default)
+			.ToList();
+
+		Assert.Equal(expected, actual);
+	}
+
 	[Theory]
 	[InlineData("/root/a.cs;/root/b.cs", "/root/b.cs;/root/a.cs", true)]
 	[InlineData("/root/A.cs;/root/b.cs", "/root/a.cs;/root/B.cs", true)]
@@ -213,6 +243,9 @@ public sealed class MainWindowPreviewCollectionMatrixTests
 		public string Name { get; } = name;
 		public string FullPath { get; } = fullPath;
 		public bool IsDirectory { get; set; } = isDirectory;
-		public Dictionary<string, MutableTreeNode> Children { get; } = new(StringComparer.OrdinalIgnoreCase);
+		public Dictionary<string, MutableTreeNode> Children { get; } = new(
+			OperatingSystem.IsWindows()
+				? StringComparer.OrdinalIgnoreCase
+				: StringComparer.Ordinal);
 	}
 }

@@ -29,7 +29,7 @@ public sealed class ScanOptionsUseCase(IFileSystemScanner scanner)
 		extensionsList.Sort(StringComparer.OrdinalIgnoreCase);
 
 		var rootFoldersList = new List<string>(rootFolders.Value);
-		rootFoldersList.Sort(StringComparer.OrdinalIgnoreCase);
+		rootFoldersList.Sort(PathComparer.Default);
 
 		return new ScanOptionsResult(
 			Extensions: extensionsList,
@@ -47,7 +47,7 @@ public sealed class ScanOptionsUseCase(IFileSystemScanner scanner)
 
 		var scan = scanner.GetRootFolderNames(rootPath, ignoreRules, cancellationToken);
 		var rootFolders = new List<string>(scan.Value);
-		rootFolders.Sort(StringComparer.OrdinalIgnoreCase);
+		rootFolders.Sort(PathComparer.Default);
 		return new ScanResult<List<string>>(rootFolders, scan.RootAccessDenied, scan.HadAccessDenied);
 	}
 

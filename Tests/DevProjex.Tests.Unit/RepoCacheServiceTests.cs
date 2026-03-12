@@ -160,4 +160,40 @@ public class RepoCacheServiceTests : IDisposable
         }
         catch { }
     }
+
+    [Fact]
+    public void IsInCache_PrefixTrapSibling_ReturnsFalse()
+    {
+        var sibling = _testCacheRoot + "2";
+        Directory.CreateDirectory(sibling);
+
+        try
+        {
+            Assert.False(_service.IsInCache(sibling));
+        }
+        finally
+        {
+            try
+            {
+                if (Directory.Exists(sibling))
+                    Directory.Delete(sibling, recursive: true);
+            }
+            catch
+            {
+                // Best effort cleanup
+            }
+        }
+    }
+
+    [Fact]
+    public void IsInCache_CaseVariantBehavior_MatchesPlatform()
+    {
+        var cacheDir = _service.CreateRepositoryDirectory("https://github.com/user/repo");
+        var alteredCaseRoot = _testCacheRoot.Replace("CacheTests", "cAchetEsts", StringComparison.Ordinal);
+        var alteredCasePath = cacheDir.Replace(_testCacheRoot, alteredCaseRoot, StringComparison.Ordinal);
+
+        Assert.Equal(OperatingSystem.IsWindows(), _service.IsInCache(alteredCasePath));
+
+        _service.DeleteRepositoryDirectory(cacheDir);
+    }
 }

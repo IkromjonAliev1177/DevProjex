@@ -108,10 +108,7 @@ public sealed class RepoCacheService : IRepoCacheService
 
 		try
 		{
-			var fullPath = Path.GetFullPath(path);
-			var cachePath = Path.GetFullPath(CacheRootPath);
-
-			return fullPath.StartsWith(cachePath, StringComparison.OrdinalIgnoreCase);
+			return PathUtility.IsPathInside(path, CacheRootPath);
 		}
 		catch
 		{
