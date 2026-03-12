@@ -55,6 +55,8 @@ public sealed class SelectionSyncCoordinatorExtensionlessCountSequenceTests
 	public void ApplyExtensionScan_FromRootSelectionScan_CountTracksSelectedRootFolders()
 	{
 		const string projectPath = @"C:\Workspace\ProjectA";
+		var srcPath = Path.Combine(projectPath, "src");
+		var testsPath = Path.Combine(projectPath, "tests");
 		var ignoreRules = new IgnoreRules(
 			IgnoreHiddenFolders: false,
 			IgnoreHiddenFiles: false,
@@ -70,11 +72,11 @@ public sealed class SelectionSyncCoordinatorExtensionlessCountSequenceTests
 				false),
 			GetExtensionsHandler = (path, _) => path switch
 			{
-				@"C:\Workspace\ProjectA\src" => new ScanResult<HashSet<string>>(
+				_ when path == srcPath => new ScanResult<HashSet<string>>(
 					new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Makefile", ".ts" },
 					false,
 					false),
-				@"C:\Workspace\ProjectA\tests" => new ScanResult<HashSet<string>>(
+				_ when path == testsPath => new ScanResult<HashSet<string>>(
 					new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "LICENSE", ".cs" },
 					false,
 					false),

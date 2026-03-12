@@ -152,7 +152,7 @@ public sealed class SelectedContentExportServiceTests
 		Assert.Equal(string.Empty, result);
 	}
 
-	// Verifies sorting is case-insensitive.
+	// Verifies sorting follows the current platform path semantics.
 	[Fact]
 	public void Build_SortsPathsCaseInsensitive()
 	{
@@ -163,11 +163,12 @@ public sealed class SelectedContentExportServiceTests
 		var service = new SelectedContentExportService(new FileContentAnalyzer());
 		var result = service.Build([fileB, fileA]);
 
-		var comparison = OperatingSystem.IsWindows()
-			? StringComparison.OrdinalIgnoreCase
-			: StringComparison.Ordinal;
-		var firstIndex = result.IndexOf("a.txt:", comparison);
-		var secondIndex = result.IndexOf("B.txt:", comparison);
+		var orderedPaths = new[] { fileB, fileA }
+			.OrderBy(path => path, PathComparer.Default)
+			.Select(Path.GetFileName)
+			.ToArray();
+		var firstIndex = result.IndexOf($"{orderedPaths[0]}:", StringComparison.Ordinal);
+		var secondIndex = result.IndexOf($"{orderedPaths[1]}:", StringComparison.Ordinal);
 		Assert.True(firstIndex < secondIndex);
 	}
 
