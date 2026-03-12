@@ -299,6 +299,18 @@
           </Button>
         </StackPanel>
 
+        <StackPanel Grid.Column="1"
+                    Orientation="Horizontal"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    IsVisible="{Binding CenteredPreviewSelectionMetricsVisible}">
+          <TextBlock Text="{Binding StatusPreviewSelectionStatsText}"
+                     FontSize="12"
+                     Foreground="{DynamicResource AppTextBrush}"
+                     Opacity="0.88"
+                     VerticalAlignment="Center" />
+        </StackPanel>
+
         <!-- Right: Content metrics -->
         <StackPanel Grid.Column="2"
                     Orientation="Horizontal"
@@ -649,15 +661,22 @@
                                   Margin="0,0,0,8"
                                   HorizontalScrollBarVisibility="Auto"
                                   VerticalScrollBarVisibility="Auto"
+                                  PointerPressed="OnPreviewScrollViewerPointerPressed"
                                   ScrollChanged="OnPreviewTextScrollChanged">
-                      <Border Padding="10,10,16,10">
-                        <TextBlock Text="{Binding PreviewText}"
-                                   FontFamily="{Binding SelectedFontFamily}"
-                                   FontSize="{Binding PreviewFontSize}"
-                                   TextWrapping="NoWrap"
-                                   HorizontalAlignment="Left"
-                                   VerticalAlignment="Top" />
-                      </Border>
+                      <controls:VirtualizedPreviewTextControl Name="PreviewTextControl"
+                                                              Document="{Binding PreviewDocument}"
+                                                              CopyMenuHeader="{Binding PreviewSelectionCopy}"
+                                                              SelectAllMenuHeader="{Binding PreviewSelectionSelectAll}"
+                                                              ClearSelectionMenuHeader="{Binding PreviewSelectionClear}"
+                                                              TextFontFamily="{Binding SelectedFontFamily}"
+                                                              TextFontSize="{Binding PreviewFontSize}"
+                                                              TextBrush="{DynamicResource AppTextBrush}"
+                                                              TopPadding="10"
+                                                              BottomPadding="10"
+                                                              LeftPadding="10"
+                                                              RightPadding="16"
+                                                              HorizontalAlignment="Left"
+                                                              VerticalAlignment="Top" />
                     </ScrollViewer>
                   </Grid>
                 </Grid>

@@ -1,0 +1,145 @@
+using System.Buffers;
+
+namespace DevProjex.Application.Preview;
+
+public sealed class FileBackedPreviewTextDocument(
+    string storagePath,
+    long[] lineOffsets,
+    long fileLength,
+    int maxLineLength,
+    long characterCount)
+    : IPreviewTextDocument
+{
+    private static readonly UTF8Encoding Utf8WithoutBom = new(encoderShouldEmitUTF8Identifier: false);
+
+    private readonly object _sync = new();
+    private FileStream? _stream = new(
+        storagePath,
+        FileMode.Open,
+        FileAccess.Read,
+        FileShare.Read,
+        bufferSize: 4096,
+        options: FileOptions.RandomAccess | FileOptions.SequentialScan);
+    private bool _disposed;
+
+    public int LineCount => Math.Max(1, lineOffsets.Length);
+
+    public int MaxLineLength { get; } = maxLineLength;
+
+    public long CharacterCount { get; } = characterCount;
+
+    public string GetLineText(int lineNumber)
+    {
+        ThrowIfDisposed();
+
+        if (lineOffsets.Length == 0)
+            return string.Empty;
+
+        var normalizedLine = Math.Clamp(lineNumber, 1, LineCount);
+        var startOffset = lineOffsets[normalizedLine - 1];
+        var endOffset = normalizedLine < LineCount
+            ? lineOffsets[normalizedLine]
+            : fileLength;
+
+        return ReadTextRange(startOffset, endOffset);
+    }
+
+    public string GetLineRangeText(int firstLine, int lastLine)
+    {
+        ThrowIfDisposed();
+
+        if (lineOffsets.Length == 0)
+            return string.Empty;
+
+        var normalizedFirstLine = Math.Max(1, firstLine);
+        var normalizedLastLine = Math.Min(LineCount, Math.Max(normalizedFirstLine, lastLine));
+        if (normalizedLastLine < normalizedFirstLine)
+            return string.Empty;
+
+        var startOffset = lineOffsets[normalizedFirstLine - 1];
+        var endOffset = normalizedLastLine < LineCount
+            ? lineOffsets[normalizedLastLine]
+            : fileLength;
+
+        return ReadTextRange(startOffset, endOffset);
+    }
+
+    public void Dispose()
+    {
+        if (_disposed)
+            return;
+
+        _disposed = true;
+
+        lock (_sync)
+        {
+            _stream?.Dispose();
+            _stream = null;
+        }
+
+        try
+        {
+            if (File.Exists(storagePath))
+                File.Delete(storagePath);
+        }
+        catch
+        {
+            // Best-effort cleanup only. Temporary preview storage must not crash shutdown.
+        }
+    }
+
+    private int ReadBytes(long startOffset, byte[] buffer, int byteCount)
+    {
+        lock (_sync)
+        {
+            ThrowIfDisposed();
+
+            var stream = _stream!;
+            stream.Seek(startOffset, SeekOrigin.Begin);
+
+            var totalBytesRead = 0;
+            while (totalBytesRead < byteCount)
+            {
+                var bytesRead = stream.Read(buffer, totalBytesRead, byteCount - totalBytesRead);
+                if (bytesRead == 0)
+                    break;
+
+                totalBytesRead += bytesRead;
+            }
+
+            return totalBytesRead;
+        }
+    }
+
+    private string ReadTextRange(long startOffset, long endOffset)
+    {
+        var byteCount = checked((int)Math.Max(0, endOffset - startOffset));
+        if (byteCount == 0)
+            return string.Empty;
+
+        var buffer = ArrayPool<byte>.Shared.Rent(byteCount);
+        try
+        {
+            var bytesRead = ReadBytes(startOffset, buffer, byteCount);
+            if (bytesRead > 0 && buffer[bytesRead - 1] == (byte)'\n')
+                bytesRead--;
+
+            if (bytesRead > 0 && buffer[bytesRead - 1] == (byte)'\r')
+                bytesRead--;
+
+            return bytesRead == 0
+                ? string.Empty
+                : Utf8WithoutBom.GetString(buffer, 0, bytesRead);
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
+        }
+    }
+
+    private void ThrowIfDisposed()
+    {
+        if (_disposed)
+            throw new ObjectDisposedException(nameof(FileBackedPreviewTextDocument));
+    }
+}

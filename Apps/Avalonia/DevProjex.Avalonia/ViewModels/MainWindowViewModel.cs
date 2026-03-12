@@ -61,6 +61,7 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
     private bool _isPreviewMode;
     private bool _isPreviewLoading;
     private string _previewText = string.Empty;
+    private IPreviewTextDocument? _previewDocument;
     private int _previewLineCount = 1;
 
     // Theme intensity sliders (0-100)
@@ -87,9 +88,11 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
     private double _aboutPopoverMaxHeight = 380;
     private string _statusTreeStatsText = string.Empty;
     private string _statusContentStatsText = string.Empty;
+    private string _statusPreviewSelectionStatsText = string.Empty;
     private string _statusOperationText = string.Empty;
     private bool _statusBusy;
     private bool _statusMetricsVisible;
+    private bool _statusPreviewSelectionVisible;
     private bool _statusProgressIsIndeterminate = true;
     private double _statusProgressValue;
 
@@ -170,6 +173,17 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         }
     }
 
+    public string StatusPreviewSelectionStatsText
+    {
+        get => _statusPreviewSelectionStatsText;
+        set
+        {
+            if (_statusPreviewSelectionStatsText == value) return;
+            _statusPreviewSelectionStatsText = value;
+            RaisePropertyChanged();
+        }
+    }
+
     public bool StatusBusy
     {
         get => _statusBusy;
@@ -180,6 +194,7 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
             RaisePropertyChanged();
             RaisePropertyChanged(nameof(StatusProgressVisible));
             RaisePropertyChanged(nameof(StatusProgressPercentVisible));
+            RaisePropertyChanged(nameof(CenteredPreviewSelectionMetricsVisible));
             // Also update IsIndeterminate since it depends on StatusBusy
             // This stops the indeterminate animation when progress bar is hidden
             RaisePropertyChanged(nameof(StatusProgressIsIndeterminate));
@@ -434,6 +449,31 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
             RaisePropertyChanged();
         }
     }
+
+    public IPreviewTextDocument? PreviewDocument
+    {
+        get => _previewDocument;
+        set
+        {
+            if (ReferenceEquals(_previewDocument, value)) return;
+            _previewDocument = value;
+            RaisePropertyChanged();
+        }
+    }
+
+    public bool StatusPreviewSelectionVisible
+    {
+        get => _statusPreviewSelectionVisible;
+        set
+        {
+            if (_statusPreviewSelectionVisible == value) return;
+            _statusPreviewSelectionVisible = value;
+            RaisePropertyChanged();
+            RaisePropertyChanged(nameof(CenteredPreviewSelectionMetricsVisible));
+        }
+    }
+
+    public bool CenteredPreviewSelectionMetricsVisible => _statusPreviewSelectionVisible && !_statusBusy;
 
     public int PreviewLineCount
     {
@@ -970,6 +1010,9 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
     public string PreviewModeTreeAndContent { get; private set; } = string.Empty;
     public string PreviewLoadingText { get; private set; } = string.Empty;
     public string PreviewNoDataText { get; private set; } = string.Empty;
+    public string PreviewSelectionCopy { get; private set; } = string.Empty;
+    public string PreviewSelectionSelectAll { get; private set; } = string.Empty;
+    public string PreviewSelectionClear { get; private set; } = string.Empty;
 
     // StatusBar labels
     public string StatusTreeLabel { get; private set; } = string.Empty;
@@ -1080,6 +1123,9 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         PreviewModeTreeAndContent = _localization["Preview.Mode.TreeAndContent"];
         PreviewLoadingText = _localization["Preview.Loading"];
         PreviewNoDataText = _localization["Preview.NoData"];
+        PreviewSelectionCopy = _localization["Preview.Selection.Copy"];
+        PreviewSelectionSelectAll = _localization["Preview.Selection.SelectAll"];
+        PreviewSelectionClear = _localization["Preview.Selection.Clear"];
 
         // StatusBar labels
         StatusTreeLabel = _localization["Status.Tree.Label"];
@@ -1202,6 +1248,9 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         RaisePropertyChanged(nameof(PreviewModeTreeAndContent));
         RaisePropertyChanged(nameof(PreviewLoadingText));
         RaisePropertyChanged(nameof(PreviewNoDataText));
+        RaisePropertyChanged(nameof(PreviewSelectionCopy));
+        RaisePropertyChanged(nameof(PreviewSelectionSelectAll));
+        RaisePropertyChanged(nameof(PreviewSelectionClear));
 
         // StatusBar labels
         RaisePropertyChanged(nameof(StatusTreeLabel));
@@ -1320,6 +1369,8 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         ToastItems.Clear();
 
         // Clear large strings
+        _previewDocument?.Dispose();
+        _previewDocument = null;
         _previewText = string.Empty;
         _previewLineCount = 1;
     }

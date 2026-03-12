@@ -10,6 +10,7 @@ global using Avalonia.Media;
 global using Avalonia.Styling;
 global using Avalonia.Threading;
 global using Avalonia.VisualTree;
+global using DevProjex.Application.Preview;
 global using DevProjex.Application.Services;
 global using DevProjex.Application.UseCases;
 global using DevProjex.Infrastructure.ResourceStore;

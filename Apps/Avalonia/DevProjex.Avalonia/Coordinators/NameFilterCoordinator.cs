@@ -1,18 +1,12 @@
 namespace DevProjex.Avalonia.Coordinators;
 
-public sealed class NameFilterCoordinator : IDisposable
+public sealed class NameFilterCoordinator(Action<CancellationToken> applyFilterRealtime) : IDisposable
 {
-    private readonly Action<CancellationToken> _applyFilterRealtime;
     private static readonly TimeSpan DebounceDelay = TimeSpan.FromMilliseconds(360);
     private CancellationTokenSource? _debounceCts;
     private CancellationTokenSource? _filterCts;
     private readonly object _ctsLock = new();
     private int _debounceVersion;
-
-    public NameFilterCoordinator(Action<CancellationToken> applyFilterRealtime)
-    {
-        _applyFilterRealtime = applyFilterRealtime;
-    }
 
     private async Task RunDebounceAsync(int version, CancellationToken token)
     {
@@ -41,7 +35,7 @@ public sealed class NameFilterCoordinator : IDisposable
         await Dispatcher.UIThread.InvokeAsync(() =>
         {
             if (!applyToken.IsCancellationRequested)
-                _applyFilterRealtime(applyToken);
+                applyFilterRealtime(applyToken);
         }, DispatcherPriority.Background);
     }
 
