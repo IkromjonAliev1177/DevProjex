@@ -2365,6 +2365,8 @@ public partial class MainWindow : Window
             // Clear preview only when refresh actually starts (after progress is shown).
             _clearPreviewBeforeNextRefresh = true;
             SchedulePreviewRefresh(immediate: true);
+            // Restore keyboard shortcuts to the preview surface after the mode button steals focus.
+            Dispatcher.UIThread.Post(FocusPreviewSurface, DispatcherPriority.Background);
         }
         catch (OperationCanceledException)
         {
