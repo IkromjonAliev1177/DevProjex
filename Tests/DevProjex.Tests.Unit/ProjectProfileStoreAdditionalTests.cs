@@ -103,9 +103,12 @@ public sealed class ProjectProfileStoreAdditionalTests
 					SelectedIgnoreOptions: []));
 
 			Assert.True(store.TryLoadProfile(Path.Combine(tempRoot, "RepoA"), out var loaded));
-			Assert.Equal(2, loaded.SelectedRootFolders.Count);
+			var expectedRootFolders = new HashSet<string>(PathComparer.Default) { "src", "SRC", "tests" };
+			Assert.Equal(expectedRootFolders.Count, loaded.SelectedRootFolders.Count);
 			Assert.Contains("src", loaded.SelectedRootFolders);
 			Assert.Contains("tests", loaded.SelectedRootFolders);
+			if (!OperatingSystem.IsWindows())
+				Assert.Contains("SRC", loaded.SelectedRootFolders);
 		}
 		finally
 		{

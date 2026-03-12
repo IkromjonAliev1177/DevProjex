@@ -225,9 +225,9 @@ public sealed class RepoCacheServiceExtendedTests : IDisposable
             var upperPath = cachePath.ToUpperInvariant();
             var lowerPath = cachePath.ToLowerInvariant();
 
-            // Assert - should work regardless of case (Windows behavior)
-            Assert.True(_service.IsInCache(upperPath));
-            Assert.True(_service.IsInCache(lowerPath));
+            // Assert - real filesystem paths follow platform semantics.
+            Assert.Equal(OperatingSystem.IsWindows(), _service.IsInCache(upperPath));
+            Assert.Equal(OperatingSystem.IsWindows(), _service.IsInCache(lowerPath));
         }
         finally
         {
