@@ -36,7 +36,10 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
     private bool _isProjectLoaded;
     private bool _settingsVisible;
     private bool _searchVisible;
+    private bool _isSearchInProgress;
     private string _searchQuery = string.Empty;
+    private int _searchCurrentMatchIndex;
+    private int _searchTotalMatches;
     private string _nameFilter = string.Empty;
 
     private FontFamily? _selectedFontFamily;
@@ -302,6 +305,7 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
             if (_searchVisible == value) return;
             _searchVisible = value;
             RaisePropertyChanged();
+            RaisePropertyChanged(nameof(SearchMatchSummaryVisible));
         }
     }
 
@@ -313,8 +317,23 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
             if (_searchQuery == value) return;
             _searchQuery = value;
             RaisePropertyChanged();
+            RaisePropertyChanged(nameof(SearchMatchSummaryVisible));
         }
     }
+
+    public int SearchCurrentMatchIndex => _searchCurrentMatchIndex;
+
+    public int SearchTotalMatches => _searchTotalMatches;
+
+    public bool IsSearchInProgress => _isSearchInProgress;
+
+    public bool SearchMatchSummaryVisible =>
+        SearchVisible &&
+        !_isSearchInProgress &&
+        !string.IsNullOrWhiteSpace(_searchQuery) &&
+        _searchTotalMatches > 0;
+
+    public string SearchMatchSummaryText => $"({_searchCurrentMatchIndex} / {_searchTotalMatches})";
 
     public string NameFilter
     {
@@ -898,6 +917,34 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
 
     // Settings lists use an ItemsPanel with explicit Spacing (can go negative to tighten).
     public double SettingsListSpacing => _isCompactMode ? -5 : -3;
+
+    public void UpdateSearchMatchSummary(int currentIndex, int totalMatches)
+    {
+        var normalizedTotal = Math.Max(0, totalMatches);
+        var normalizedCurrent = normalizedTotal == 0
+            ? 0
+            : Math.Clamp(currentIndex, 1, normalizedTotal);
+
+        if (_searchCurrentMatchIndex == normalizedCurrent && _searchTotalMatches == normalizedTotal)
+            return;
+
+        _searchCurrentMatchIndex = normalizedCurrent;
+        _searchTotalMatches = normalizedTotal;
+        RaisePropertyChanged(nameof(SearchCurrentMatchIndex));
+        RaisePropertyChanged(nameof(SearchTotalMatches));
+        RaisePropertyChanged(nameof(SearchMatchSummaryText));
+        RaisePropertyChanged(nameof(SearchMatchSummaryVisible));
+    }
+
+    public void SetSearchInProgress(bool isInProgress)
+    {
+        if (_isSearchInProgress == isInProgress)
+            return;
+
+        _isSearchInProgress = isInProgress;
+        RaisePropertyChanged(nameof(IsSearchInProgress));
+        RaisePropertyChanged(nameof(SearchMatchSummaryVisible));
+    }
 
     public bool AllExtensionsChecked
     {

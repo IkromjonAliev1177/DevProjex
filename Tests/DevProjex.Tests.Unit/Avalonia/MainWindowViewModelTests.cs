@@ -110,6 +110,54 @@ public sealed class MainWindowViewModelTests
     }
 
     [Fact]
+    public void SearchMatchSummaryVisible_FollowsSearchVisible()
+    {
+        var viewModel = CreateViewModel();
+
+        Assert.False(viewModel.SearchMatchSummaryVisible);
+
+        viewModel.SearchVisible = true;
+        viewModel.SearchQuery = "delta";
+        viewModel.UpdateSearchMatchSummary(1, 1);
+
+        Assert.True(viewModel.SearchMatchSummaryVisible);
+    }
+
+    [Fact]
+    public void SearchMatchSummaryVisible_IsFalse_WhenQueryIsEmpty()
+    {
+        var viewModel = CreateViewModel();
+        viewModel.SearchVisible = true;
+        viewModel.SearchQuery = string.Empty;
+        viewModel.UpdateSearchMatchSummary(1, 1);
+
+        Assert.False(viewModel.SearchMatchSummaryVisible);
+    }
+
+    [Fact]
+    public void SearchMatchSummaryVisible_IsFalse_WhenNoMatchesExist()
+    {
+        var viewModel = CreateViewModel();
+        viewModel.SearchVisible = true;
+        viewModel.SearchQuery = "delta";
+        viewModel.UpdateSearchMatchSummary(0, 0);
+
+        Assert.False(viewModel.SearchMatchSummaryVisible);
+    }
+
+    [Fact]
+    public void SearchMatchSummaryVisible_IsFalse_WhileSearchIsInProgress()
+    {
+        var viewModel = CreateViewModel();
+        viewModel.SearchVisible = true;
+        viewModel.SearchQuery = "delta";
+        viewModel.UpdateSearchMatchSummary(1, 2);
+        viewModel.SetSearchInProgress(true);
+
+        Assert.False(viewModel.SearchMatchSummaryVisible);
+    }
+
+    [Fact]
     public void SearchQuery_Changes()
     {
         var viewModel = CreateViewModel();
@@ -128,6 +176,53 @@ public sealed class MainWindowViewModelTests
         viewModel.SearchQuery = string.Empty;
 
         Assert.Equal(string.Empty, viewModel.SearchQuery);
+    }
+
+    [Fact]
+    public void UpdateSearchMatchSummary_FormatsCurrentAndTotal()
+    {
+        var viewModel = CreateViewModel();
+
+        viewModel.UpdateSearchMatchSummary(2, 5);
+
+        Assert.Equal(2, viewModel.SearchCurrentMatchIndex);
+        Assert.Equal(5, viewModel.SearchTotalMatches);
+        Assert.Equal("(2 / 5)", viewModel.SearchMatchSummaryText);
+    }
+
+    [Fact]
+    public void UpdateSearchMatchSummary_WhenTotalIsZero_ResetsCurrentToZero()
+    {
+        var viewModel = CreateViewModel();
+        viewModel.UpdateSearchMatchSummary(3, 3);
+
+        viewModel.UpdateSearchMatchSummary(5, 0);
+
+        Assert.Equal(0, viewModel.SearchCurrentMatchIndex);
+        Assert.Equal(0, viewModel.SearchTotalMatches);
+        Assert.Equal("(0 / 0)", viewModel.SearchMatchSummaryText);
+    }
+
+    [Fact]
+    public void UpdateSearchMatchSummary_ClampsCurrentIndexWithinRange()
+    {
+        var viewModel = CreateViewModel();
+
+        viewModel.UpdateSearchMatchSummary(99, 4);
+
+        Assert.Equal(4, viewModel.SearchCurrentMatchIndex);
+        Assert.Equal(4, viewModel.SearchTotalMatches);
+        Assert.Equal("(4 / 4)", viewModel.SearchMatchSummaryText);
+    }
+
+    [Fact]
+    public void SetSearchInProgress_UpdatesFlag()
+    {
+        var viewModel = CreateViewModel();
+
+        viewModel.SetSearchInProgress(true);
+
+        Assert.True(viewModel.IsSearchInProgress);
     }
 
     [Fact]

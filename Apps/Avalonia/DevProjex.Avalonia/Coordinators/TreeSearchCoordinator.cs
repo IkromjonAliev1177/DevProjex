@@ -95,6 +95,8 @@ public sealed class TreeSearchCoordinator(
 
     public void OnSearchQueryChanged()
     {
+        viewModel.SetSearchInProgress(!string.IsNullOrWhiteSpace(viewModel.SearchQuery));
+
         CancellationToken token;
         int version;
         lock (_searchCtsLock)
@@ -146,6 +148,8 @@ public sealed class TreeSearchCoordinator(
 
     public void UpdateSearchMatches(bool normalizeTreeWhenEmptyQuery = true)
     {
+        viewModel.SetSearchInProgress(false);
+
         lock (_searchCtsLock)
         {
             _searchDebounceCts?.Cancel();
@@ -161,6 +165,7 @@ public sealed class TreeSearchCoordinator(
                 _searchMatches.Clear();
                 _searchMatchIndex = -1;
                 UpdateCurrentSearchMatch(null);
+                UpdateSearchMatchSummary();
                 ClearHighlightsIfNeeded();
                 _searchExpandedNodes.Clear();
                 _nextSearchExpandedNodes.Clear();
@@ -199,6 +204,7 @@ public sealed class TreeSearchCoordinator(
         Interlocked.Increment(ref _bringIntoViewVersion);
         CancelPendingHighlightApply();
         CancelPendingExpansionApply();
+        viewModel.SetSearchInProgress(false);
 
         // Clear current match reference first
         _currentSearchMatch = null;
@@ -222,6 +228,7 @@ public sealed class TreeSearchCoordinator(
         _indexedFirstRoot = null;
         _indexedRootCount = 0;
         _searchExpansionEpoch = 0;
+        UpdateSearchMatchSummary();
 
         // Note: Don't call UpdateHighlights here - nodes may already be cleared
     }
@@ -231,6 +238,7 @@ public sealed class TreeSearchCoordinator(
         Interlocked.Increment(ref _bringIntoViewVersion);
         CancelPendingHighlightApply();
         CancelPendingExpansionApply();
+        viewModel.SetSearchInProgress(false);
         lock (_searchCtsLock)
         {
             _searchDebounceCts?.Cancel();
@@ -261,6 +269,7 @@ public sealed class TreeSearchCoordinator(
         _lastComputedQuery = null;
         _indexedFirstRoot = null;
         _indexedRootCount = 0;
+        UpdateSearchMatchSummary();
 
         // Clear cached brushes
         _cachedHighlightBackground = null;
@@ -286,12 +295,16 @@ public sealed class TreeSearchCoordinator(
     private void SelectSearchMatch()
     {
         if (_searchMatchIndex < 0 || _searchMatchIndex >= _searchMatches.Count)
+        {
+            UpdateSearchMatchSummary();
             return;
+        }
 
         var node = _searchMatches[_searchMatchIndex];
         node.EnsureParentsExpanded();
         SelectTreeNode(node);
         UpdateCurrentSearchMatch(node);
+        UpdateSearchMatchSummary();
         BringNodeIntoView(node);
         treeView.Focus();
     }
@@ -347,6 +360,15 @@ public sealed class TreeSearchCoordinator(
         {
             // Debounced/canceled search updates are expected.
         }
+        finally
+        {
+            if (!token.IsCancellationRequested && version == Volatile.Read(ref _searchVersion))
+            {
+                await Dispatcher.UIThread.InvokeAsync(
+                    () => viewModel.SetSearchInProgress(false),
+                    DispatcherPriority.Background);
+            }
+        }
     }
 
     private void ApplySearchResultCore(string query, IReadOnlyList<TreeNodeViewModel> matches)
@@ -372,6 +394,7 @@ public sealed class TreeSearchCoordinator(
             _searchExpansionStateInitialized = false;
             _lastComputedQuery = null;
             _lastComputedMatches.Clear();
+            UpdateSearchMatchSummary();
             return;
         }
 
@@ -405,6 +428,10 @@ public sealed class TreeSearchCoordinator(
         {
             _searchMatchIndex = 0;
             SelectSearchMatch();
+        }
+        else
+        {
+            UpdateSearchMatchSummary();
         }
 
         _lastComputedQuery = query;
@@ -794,6 +821,14 @@ public sealed class TreeSearchCoordinator(
                 normalForeground,
                 currentBackground);
         }
+    }
+
+    private void UpdateSearchMatchSummary()
+    {
+        var currentIndex = _searchMatchIndex >= 0 && _searchMatchIndex < _searchMatches.Count
+            ? _searchMatchIndex + 1
+            : 0;
+        viewModel.UpdateSearchMatchSummary(currentIndex, _searchMatches.Count);
     }
 
     private void CollapseAllExceptRoot(TreeNodeViewModel node)
