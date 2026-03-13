@@ -100,6 +100,7 @@
   "Settings.Ignore.DotFolders": "dot folders",
   "Settings.Ignore.DotFiles": "dot files",
   "Settings.Ignore.EmptyFolders": "Empty folders",
+  "Settings.Ignore.EmptyFiles": "Empty files",
   "Settings.Ignore.ExtensionlessFiles": "Files without extension",
   "Settings.All": "All",
   "Settings.Extensions": "File types:",

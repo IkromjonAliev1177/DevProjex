@@ -202,6 +202,7 @@ Variantlar tartibi:
 * Smart ignore (mavjud bo‘lsa)
 * .gitignore dan foydalanish (kamida bitta `.gitignore` topilsa)
 * Bo‘sh papkalar
+* Bo‘sh fayllar
 * Yashirin papkalar
 * Yashirin fayllar
 * Boshida nuqtali papkalar
@@ -238,6 +239,7 @@ Variantlar:
 * Boshida nuqtali papkalar
 * Boshida nuqtali fayllar
 * Bo‘sh papkalar
+* Bo‘sh fayllar
 * Kengaytmasiz fayllar
 
 Band yoqilganda mos elementlar daraxtdan va nusxalash/eksport natijalaridan yashiriladi.
@@ -269,10 +271,13 @@ Faqat asosiy ko‘rinish qoidalari qoladi.
 ### 11.6 Bo‘sh papkalar
 Mantiqan bo‘sh papkalarni daraxtdan va nusxalash/eksport natijalaridan yashiradi.
 
-### 11.7 Kengaytmasiz fayllar
+### 11.7 Bo‘sh fayllar
+Hajmi 0 bayt bo‘lgan bo‘sh fayllarni daraxtdan va nusxalash/eksport natijalaridan yashiradi.
+
+### 11.8 Kengaytmasiz fayllar
 Kengaytmasi yo‘q fayllarni (masalan: `Dockerfile`, `Makefile`, `README`) daraxtdan va nusxalash/eksport natijalaridan yashiradi.
 
-### 11.8 «E’tiborsiz qoldirish» blokidagi hisoblagichlar
+### 11.9 «E’tiborsiz qoldirish» blokidagi hisoblagichlar
 «Ko‘rinish → Qo‘shimcha hisoblagichlar» yoqilganda, mavjud bandlar yonida son `(N)` formatida ko‘rsatiladi.
 ## 12) Daraxt va metrikalar qanday hisoblanadi
 Natija quyidagilarga bog‘liq:

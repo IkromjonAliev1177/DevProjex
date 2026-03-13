@@ -4,7 +4,7 @@ public sealed class IgnoreRulesServiceToggleMatrixTests
 {
 	public static IEnumerable<object[]> OptionMatrix()
 	{
-		for (var bits = 0; bits < 64; bits++)
+		for (var bits = 0; bits < 512; bits++)
 			yield return [ bits ];
 	}
 
@@ -33,6 +33,9 @@ public sealed class IgnoreRulesServiceToggleMatrixTests
 		Assert.Equal(selected.Contains(IgnoreOptionId.HiddenFiles), rules.IgnoreHiddenFiles);
 		Assert.Equal(selected.Contains(IgnoreOptionId.DotFolders), rules.IgnoreDotFolders);
 		Assert.Equal(selected.Contains(IgnoreOptionId.DotFiles), rules.IgnoreDotFiles);
+		Assert.Equal(selected.Contains(IgnoreOptionId.EmptyFolders), rules.IgnoreEmptyFolders);
+		Assert.Equal(selected.Contains(IgnoreOptionId.EmptyFiles), rules.IgnoreEmptyFiles);
+		Assert.Equal(selected.Contains(IgnoreOptionId.ExtensionlessFiles), rules.IgnoreExtensionlessFiles);
 
 		if (expectedUseSmartIgnore)
 		{
@@ -50,7 +53,7 @@ public sealed class IgnoreRulesServiceToggleMatrixTests
 
 	private static IReadOnlyCollection<IgnoreOptionId> BuildSelectedOptions(int bits)
 	{
-		var selected = new List<IgnoreOptionId>(capacity: 6);
+		var selected = new List<IgnoreOptionId>(capacity: 9);
 		if ((bits & 0b00001) != 0)
 			selected.Add(IgnoreOptionId.UseGitIgnore);
 		if ((bits & 0b00010) != 0)
@@ -63,6 +66,12 @@ public sealed class IgnoreRulesServiceToggleMatrixTests
 			selected.Add(IgnoreOptionId.DotFolders);
 		if ((bits & 0b100000) != 0)
 			selected.Add(IgnoreOptionId.DotFiles);
+		if ((bits & 0b1000000) != 0)
+			selected.Add(IgnoreOptionId.EmptyFolders);
+		if ((bits & 0b10000000) != 0)
+			selected.Add(IgnoreOptionId.EmptyFiles);
+		if ((bits & 0b100000000) != 0)
+			selected.Add(IgnoreOptionId.ExtensionlessFiles);
 
 		return selected;
 	}

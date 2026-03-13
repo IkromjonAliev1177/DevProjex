@@ -646,6 +646,8 @@ public sealed class SelectionSyncCoordinator(
                     DotFilesCount = _ignoreOptionCounts.DotFiles,
                     IncludeEmptyFolders = _ignoreOptionCounts.EmptyFolders > 0,
                     EmptyFoldersCount = _ignoreOptionCounts.EmptyFolders,
+                    IncludeEmptyFiles = _ignoreOptionCounts.EmptyFiles > 0,
+                    EmptyFilesCount = _ignoreOptionCounts.EmptyFiles,
                     IncludeExtensionlessFiles = _ignoreOptionCounts.ExtensionlessFiles > 0,
                     ExtensionlessFilesCount = _ignoreOptionCounts.ExtensionlessFiles
                 };

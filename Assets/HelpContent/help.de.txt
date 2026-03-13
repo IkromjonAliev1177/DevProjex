@@ -202,6 +202,7 @@ Reihenfolge der Optionen:
 * Smart Ignore (wenn verfügbar)
 * .gitignore verwenden (wenn mindestens eine `.gitignore` gefunden wurde)
 * Leere Ordner
+* Leere Dateien
 * Versteckte Ordner
 * Versteckte Dateien
 * Ordner mit führendem Punkt
@@ -238,6 +239,7 @@ Optionen:
 * Ordner mit führendem Punkt
 * Dateien mit führendem Punkt
 * Leere Ordner
+* Leere Dateien
 * Dateien ohne Erweiterung
 
 Wenn aktiviert, blendet eine Option die passenden Elemente im Baum sowie in Kopier-/Exportergebnissen aus.
@@ -269,10 +271,13 @@ Es bleiben nur die grundlegenden Sichtbarkeitsregeln.
 ### 11.6 Leere Ordner
 Blendet logisch leere Ordner im Baum sowie in Kopier-/Exportergebnissen aus.
 
-### 11.7 Dateien ohne Erweiterung
+### 11.7 Leere Dateien
+Blendet leere Dateien mit Größe 0 Byte im Baum sowie in Kopier-/Exportergebnissen aus.
+
+### 11.8 Dateien ohne Erweiterung
 Blendet Dateien ohne Erweiterung (zum Beispiel: `Dockerfile`, `Makefile`, `README`) im Baum sowie in Kopier-/Exportergebnissen aus.
 
-### 11.8 Zähler im Block „Ignorieren“
+### 11.9 Zähler im Block „Ignorieren“
 Wenn „Ansicht → Zusätzliche Zähler“ aktiviert ist, wird bei verfügbaren Optionen die Anzahl im Format `(N)` angezeigt.
 ## 12) Wie Baum und Kennzahlen berechnet werden
 Das Ergebnis hängt ab von:

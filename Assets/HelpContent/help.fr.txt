@@ -202,6 +202,7 @@ Ordre des options :
 * Smart ignore (si disponible)
 * Utiliser .gitignore (si au moins un `.gitignore` est trouvé)
 * Dossiers vides
+* Fichiers vides
 * Dossiers cachés
 * Fichiers cachés
 * Dossiers commençant par un point
@@ -238,6 +239,7 @@ Options :
 * Dossiers commençant par un point
 * Fichiers commençant par un point
 * Dossiers vides
+* Fichiers vides
 * Fichiers sans extension
 
 Quand une option est activée, elle masque les éléments correspondants dans l’arbre et dans les résultats de copie/export.
@@ -269,10 +271,13 @@ Seules les règles de visibilité de base restent actives.
 ### 11.6 Dossiers vides
 Masque les dossiers logiquement vides dans l’arbre et dans les résultats de copie/export.
 
-### 11.7 Fichiers sans extension
+### 11.7 Fichiers vides
+Masque les fichiers vides de taille 0 octet dans l’arbre et dans les résultats de copie/export.
+
+### 11.8 Fichiers sans extension
 Masque les fichiers sans extension (par exemple : `Dockerfile`, `Makefile`, `README`) dans l’arbre et dans les résultats de copie/export.
 
-### 11.8 Compteurs dans le bloc « Ignorer »
+### 11.9 Compteurs dans le bloc « Ignorer »
 Quand « Affichage → Compteurs supplémentaires » est activé, le nombre est affiché à côté des options disponibles au format `(N)`.
 ## 12) Comment l'arbre et les métriques sont calculés
 Le résultat dépend de :
