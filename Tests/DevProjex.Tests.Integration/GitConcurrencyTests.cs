@@ -9,8 +9,10 @@ public class GitConcurrencyTests : IAsyncLifetime
     private readonly GitRepositoryService _service;
     private readonly RepoCacheService _cacheService;
     private readonly TemporaryDirectory _tempDir;
+    private GitTestRepository? _testRepository;
+    private bool _gitAvailable;
 
-    private const string TestRepoUrl = "https://github.com/octocat/Hello-World";
+    private string TestRepoUrl => _testRepository!.RepositoryUrl;
 
     public GitConcurrencyTests()
     {
@@ -20,10 +22,16 @@ public class GitConcurrencyTests : IAsyncLifetime
         _tempDir = new TemporaryDirectory();
     }
 
-    public Task InitializeAsync() => Task.CompletedTask;
+    public async Task InitializeAsync()
+    {
+        _gitAvailable = await _service.IsGitAvailableAsync();
+        if (_gitAvailable)
+            _testRepository = await GitTestRepository.CreateAsync();
+    }
 
     public Task DisposeAsync()
     {
+        _testRepository?.Dispose();
         _tempDir.Dispose();
         return Task.CompletedTask;
     }
@@ -31,7 +39,7 @@ public class GitConcurrencyTests : IAsyncLifetime
     [Fact]
     public async Task ParallelClones_ToDifferentDirectories_AllSucceed()
     {
-        if (!await _service.IsGitAvailableAsync())
+        if (!_gitAvailable)
             return;
 
         var dir1 = _tempDir.CreateDirectory("parallel-clone-1");
@@ -50,7 +58,7 @@ public class GitConcurrencyTests : IAsyncLifetime
     [Fact]
     public async Task ParallelGetBranches_SameRepository_AllSucceed()
     {
-        if (!await _service.IsGitAvailableAsync())
+        if (!_gitAvailable)
             return;
 
         var repoPath = _tempDir.CreateDirectory("parallel-branches");
@@ -73,7 +81,7 @@ public class GitConcurrencyTests : IAsyncLifetime
     [Fact]
     public async Task ParallelPull_SameRepository_DoesNotCorruptState()
     {
-        if (!await _service.IsGitAvailableAsync())
+        if (!_gitAvailable)
             return;
 
         var repoPath = _tempDir.CreateDirectory("parallel-pull");
@@ -98,7 +106,7 @@ public class GitConcurrencyTests : IAsyncLifetime
     [Fact]
     public async Task ConcurrentBranchSwitch_SameRepository_EventuallySucceeds()
     {
-        if (!await _service.IsGitAvailableAsync())
+        if (!_gitAvailable)
             return;
 
         var repoPath = _tempDir.CreateDirectory("concurrent-switch");
@@ -144,7 +152,7 @@ public class GitConcurrencyTests : IAsyncLifetime
     [Fact]
     public async Task MixedOperations_SameRepository_MaintainConsistency()
     {
-        if (!await _service.IsGitAvailableAsync())
+        if (!_gitAvailable)
             return;
 
         var repoPath = _tempDir.CreateDirectory("mixed-ops");
@@ -196,7 +204,7 @@ public class GitConcurrencyTests : IAsyncLifetime
     [Fact]
     public async Task RapidSequentialBranchSwitches_DoesNotCauseErrors()
     {
-        if (!await _service.IsGitAvailableAsync())
+        if (!_gitAvailable)
             return;
 
         var repoPath = _tempDir.CreateDirectory("rapid-switch");
@@ -244,7 +252,7 @@ public class GitConcurrencyTests : IAsyncLifetime
     [Fact]
     public async Task ParallelGetCurrentBranch_ReturnsConsistentResults()
     {
-        if (!await _service.IsGitAvailableAsync())
+        if (!_gitAvailable)
             return;
 
         var repoPath = _tempDir.CreateDirectory("parallel-current");
@@ -265,7 +273,7 @@ public class GitConcurrencyTests : IAsyncLifetime
     [Fact]
     public async Task StressTest_ManyOperations_MaintainsStability()
     {
-        if (!await _service.IsGitAvailableAsync())
+        if (!_gitAvailable)
             return;
 
         var repoPath = _tempDir.CreateDirectory("stress-test");

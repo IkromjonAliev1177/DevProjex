@@ -83,8 +83,7 @@ public sealed class RepoCacheServiceExtendedTests : IDisposable
 
         // Act
         var path1 = _service.CreateRepositoryDirectory(url);
-        Thread.Sleep(10); // Ensure different timestamp
-        var path2 = _service.CreateRepositoryDirectory(url);
+        var path2 = CreateDistinctRepositoryDirectory(url, [path1]);
 
         try
         {
@@ -315,10 +314,11 @@ public sealed class RepoCacheServiceExtendedTests : IDisposable
         try
         {
             // Act - create 10 directories rapidly
+            var seenPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             for (int i = 0; i < 10; i++)
             {
-                paths[i] = _service.CreateRepositoryDirectory(url);
-                Thread.Sleep(1); // Minimal delay to ensure unique timestamps
+                paths[i] = CreateDistinctRepositoryDirectory(url, seenPaths);
+                seenPaths.Add(paths[i]);
             }
 
             // Assert - all paths should be unique
@@ -384,5 +384,17 @@ public sealed class RepoCacheServiceExtendedTests : IDisposable
 
         // Final cleanup after unlock
         _service.DeleteRepositoryDirectory(path);
+    }
+
+    private string CreateDistinctRepositoryDirectory(string url, IReadOnlyCollection<string> existingPaths)
+    {
+        for (var attempt = 0; attempt < 8; attempt++)
+        {
+            var candidate = _service.CreateRepositoryDirectory(url);
+            if (!existingPaths.Contains(candidate))
+                return candidate;
+        }
+
+        throw new Xunit.Sdk.XunitException("Could not create a distinct cache directory after multiple attempts.");
     }
 }

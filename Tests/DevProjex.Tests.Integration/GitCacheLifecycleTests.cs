@@ -5,13 +5,15 @@ namespace DevProjex.Tests.Integration;
 /// Tests the complete flow: clone → open → cleanup.
 /// </summary>
 [Collection("GitNetworkTests")]
-public sealed class GitCacheLifecycleTests : IDisposable
+public sealed class GitCacheLifecycleTests : IAsyncLifetime, IDisposable
 {
-    private const string TestRepoUrl = "https://github.com/octocat/Hello-World";
-
     private readonly GitRepositoryService _gitService;
     private readonly RepoCacheService _cacheService;
     private readonly TemporaryDirectory _tempDir;
+    private GitTestRepository? _testRepository;
+    private bool _gitAvailable;
+
+    private string TestRepoUrl => _testRepository!.RepositoryUrl;
 
     public GitCacheLifecycleTests()
     {
@@ -21,15 +23,25 @@ public sealed class GitCacheLifecycleTests : IDisposable
         _tempDir = new TemporaryDirectory();
     }
 
+    public async Task InitializeAsync()
+    {
+        _gitAvailable = await _gitService.IsGitAvailableAsync();
+        if (_gitAvailable)
+            _testRepository = await GitTestRepository.CreateAsync();
+    }
+
+    public Task DisposeAsync() => Task.CompletedTask;
+
     public void Dispose()
     {
+        _testRepository?.Dispose();
         _tempDir.Dispose();
     }
 
     [Fact]
     public async Task CloneToCache_RepositoryFilesExist_AfterSuccessfulClone()
     {
-        if (!await _gitService.IsGitAvailableAsync())
+        if (!_gitAvailable)
             return;
 
         // Arrange
@@ -58,11 +70,10 @@ public sealed class GitCacheLifecycleTests : IDisposable
     [Fact]
     public async Task FailedClone_CacheShouldBeCleanedUp_AfterError()
     {
-        if (!await _gitService.IsGitAvailableAsync())
+        if (!_gitAvailable)
             return;
 
-        // Arrange
-        var invalidUrl = "https://github.com/nonexistent/repo-does-not-exist-12345";
+        var invalidUrl = new Uri(Path.Combine(_tempDir.Path, "missing-repository.git")).AbsoluteUri;
         var cacheDir = _cacheService.CreateRepositoryDirectory(invalidUrl);
 
         try
@@ -121,7 +132,7 @@ public sealed class GitCacheLifecycleTests : IDisposable
     [Fact]
     public async Task SequentialClones_OldCacheCanBeDeleted_BeforeNewClone()
     {
-        if (!await _gitService.IsGitAvailableAsync())
+        if (!_gitAvailable)
             return;
 
         // Arrange
@@ -188,7 +199,7 @@ public sealed class GitCacheLifecycleTests : IDisposable
     [Fact]
     public async Task ClonedRepository_CanListBranches()
     {
-        if (!await _gitService.IsGitAvailableAsync())
+        if (!_gitAvailable)
             return;
 
         // Arrange
@@ -215,7 +226,7 @@ public sealed class GitCacheLifecycleTests : IDisposable
     [Fact]
     public async Task ClonedRepository_CanSwitchBranches()
     {
-        if (!await _gitService.IsGitAvailableAsync())
+        if (!_gitAvailable)
             return;
 
         // Arrange

@@ -9,8 +9,10 @@ public class GitAdvancedScenariosTests : IAsyncLifetime
     private readonly GitRepositoryService _gitService;
     private readonly RepoCacheService _cacheService;
     private readonly TemporaryDirectory _tempDir;
+    private GitTestRepository? _testRepository;
+    private bool _gitAvailable;
 
-    private const string TestRepoUrl = "https://github.com/octocat/Hello-World";
+    private string TestRepoUrl => _testRepository!.RepositoryUrl;
 
     public GitAdvancedScenariosTests()
     {
@@ -20,10 +22,16 @@ public class GitAdvancedScenariosTests : IAsyncLifetime
         _tempDir = new TemporaryDirectory();
     }
 
-    public Task InitializeAsync() => Task.CompletedTask;
+    public async Task InitializeAsync()
+    {
+        _gitAvailable = await _gitService.IsGitAvailableAsync();
+        if (_gitAvailable)
+            _testRepository = await GitTestRepository.CreateAsync();
+    }
 
     public Task DisposeAsync()
     {
+        _testRepository?.Dispose();
         _tempDir.Dispose();
         try
         {
@@ -39,7 +47,7 @@ public class GitAdvancedScenariosTests : IAsyncLifetime
     [Fact]
     public async Task CloneRepository_ValidatesCurrentBranchAfterClone()
     {
-        if (!await _gitService.IsGitAvailableAsync())
+        if (!_gitAvailable)
             return;
 
         // Arrange
@@ -66,7 +74,7 @@ public class GitAdvancedScenariosTests : IAsyncLifetime
     [Fact]
     public async Task GetBranches_AfterClone_ContainsDefaultBranch()
     {
-        if (!await _gitService.IsGitAvailableAsync())
+        if (!_gitAvailable)
             return;
 
         // Arrange
@@ -96,7 +104,7 @@ public class GitAdvancedScenariosTests : IAsyncLifetime
     [Fact]
     public async Task SwitchBranch_UpdatesCurrentBranch()
     {
-        if (!await _gitService.IsGitAvailableAsync())
+        if (!_gitAvailable)
             return;
 
         // Arrange
@@ -129,7 +137,7 @@ public class GitAdvancedScenariosTests : IAsyncLifetime
     [Fact]
     public async Task GetBranches_AfterBranchSwitch_ReflectsNewActiveBranch()
     {
-        if (!await _gitService.IsGitAvailableAsync())
+        if (!_gitAvailable)
             return;
 
         // Arrange
@@ -163,7 +171,7 @@ public class GitAdvancedScenariosTests : IAsyncLifetime
     [Fact]
     public async Task CloneRepository_CreatesGitDirectory()
     {
-        if (!await _gitService.IsGitAvailableAsync())
+        if (!_gitAvailable)
             return;
 
         // Arrange
@@ -293,7 +301,7 @@ public class GitAdvancedScenariosTests : IAsyncLifetime
     [Fact]
     public async Task Clone_WithInvalidPath_ReturnsFailure()
     {
-        if (!await _gitService.IsGitAvailableAsync())
+        if (!_gitAvailable)
             return;
 
         // Use a destination that already exists as a file so clone must fail on every OS.
