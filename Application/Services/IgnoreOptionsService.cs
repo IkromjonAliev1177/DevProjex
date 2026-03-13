@@ -29,6 +29,14 @@ public sealed class IgnoreOptionsService(LocalizationService localization)
 				true));
 		}
 
+		if (availability.IncludeEmptyFiles)
+		{
+			options.Add(new IgnoreOptionDescriptor(
+				IgnoreOptionId.EmptyFiles,
+				FormatLabelWithCount(localization["Settings.Ignore.EmptyFiles"], availability.EmptyFilesCount, availability.ShowAdvancedCounts),
+				true));
+		}
+
 		if (availability.IncludeHiddenFolders)
 		{
 			options.Add(new IgnoreOptionDescriptor(

@@ -169,6 +169,9 @@ public sealed class FileSystemScanner : IFileSystemScanner, IFileSystemScannerAd
 		if (rules.IgnoreExtensionlessFiles && IsExtensionlessFileName(name))
 			return true;
 
+		if (rules.IgnoreEmptyFiles && IsZeroLengthFile(fullPath))
+			return true;
+
 		if (rules.IgnoreHiddenFiles)
 		{
 			try
@@ -528,6 +531,8 @@ public sealed class FileSystemScanner : IFileSystemScanner, IFileSystemScannerAd
 	{
 		if (IsExtensionlessFileName(name))
 			counts.ExtensionlessFiles++;
+		if (IsZeroLengthFile(fullPath))
+			counts.EmptyFiles++;
 		if (IsDotName(name))
 			counts.DotFiles++;
 		if (HasHiddenAttribute(fullPath))
@@ -545,6 +550,18 @@ public sealed class FileSystemScanner : IFileSystemScanner, IFileSystemScannerAd
 		try
 		{
 			return File.GetAttributes(fullPath).HasFlag(FileAttributes.Hidden);
+		}
+		catch
+		{
+			return false;
+		}
+	}
+
+	private static bool IsZeroLengthFile(string fullPath)
+	{
+		try
+		{
+			return new FileInfo(fullPath).Length == 0;
 		}
 		catch
 		{
@@ -590,6 +607,7 @@ public sealed class FileSystemScanner : IFileSystemScanner, IFileSystemScannerAd
 		public int DotFolders;
 		public int DotFiles;
 		public int EmptyFolders;
+		public int EmptyFiles;
 		public int ExtensionlessFiles;
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -600,13 +618,14 @@ public sealed class FileSystemScanner : IFileSystemScanner, IFileSystemScannerAd
 			DotFolders += other.DotFolders;
 			DotFiles += other.DotFiles;
 			EmptyFolders += other.EmptyFolders;
+			EmptyFiles += other.EmptyFiles;
 			ExtensionlessFiles += other.ExtensionlessFiles;
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public readonly IgnoreOptionCounts ToImmutable()
 		{
-			return new IgnoreOptionCounts(HiddenFolders, HiddenFiles, DotFolders, DotFiles, EmptyFolders, ExtensionlessFiles);
+			return new IgnoreOptionCounts(HiddenFolders, HiddenFiles, DotFolders, DotFiles, EmptyFolders, ExtensionlessFiles, EmptyFiles);
 		}
 	}
 }

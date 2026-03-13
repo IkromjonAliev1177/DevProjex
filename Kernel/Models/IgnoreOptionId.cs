@@ -9,5 +9,6 @@ public enum IgnoreOptionId
 	DotFolders,
 	DotFiles,
 	EmptyFolders,
+	EmptyFiles,
 	ExtensionlessFiles
 }

@@ -324,6 +324,9 @@ public sealed class TreeBuilder : ITreeBuilder
 		if (rules.IgnoreExtensionlessFiles && IsExtensionlessFileName(entry.Name))
 			return true;
 
+		if (rules.IgnoreEmptyFiles && IsZeroLengthFile(entry))
+			return true;
+
 		if (rules.IgnoreHiddenFiles)
 		{
 			try
@@ -352,6 +355,20 @@ public sealed class TreeBuilder : ITreeBuilder
 
 		var extension = Path.GetExtension(fileName);
 		return string.IsNullOrEmpty(extension) || extension == ".";
+	}
+
+	private static bool IsZeroLengthFile(FileSystemInfo entry)
+	{
+		try
+		{
+			return entry is FileInfo fileInfo
+				? fileInfo.Length == 0
+				: new FileInfo(entry.FullName).Length == 0;
+		}
+		catch
+		{
+			return false;
+		}
 	}
 
 	private sealed class BuildState

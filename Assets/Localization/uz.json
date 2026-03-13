@@ -100,6 +100,7 @@
   "Settings.Ignore.DotFolders": "nuqta bilan boshlanuvchi jildlar",
   "Settings.Ignore.DotFiles": "nuqta bilan boshlanuvchi fayllar",
   "Settings.Ignore.EmptyFolders": "Bo‘sh papkalar",
+  "Settings.Ignore.EmptyFiles": "Bo‘sh fayllar",
   "Settings.Ignore.ExtensionlessFiles": "Kengaytmasiz fayllar",
   "Settings.All": "Barchasi",
   "Settings.Ignore": "E'tiborsiz qoldirish:",

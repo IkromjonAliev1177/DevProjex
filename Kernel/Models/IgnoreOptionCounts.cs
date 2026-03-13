@@ -6,7 +6,8 @@ public readonly record struct IgnoreOptionCounts(
 	int DotFolders = 0,
 	int DotFiles = 0,
 	int EmptyFolders = 0,
-	int ExtensionlessFiles = 0)
+	int ExtensionlessFiles = 0,
+	int EmptyFiles = 0)
 {
 	public static readonly IgnoreOptionCounts Empty = new(
 		HiddenFolders: 0,
@@ -14,7 +15,8 @@ public readonly record struct IgnoreOptionCounts(
 		DotFolders: 0,
 		DotFiles: 0,
 		EmptyFolders: 0,
-		ExtensionlessFiles: 0);
+		ExtensionlessFiles: 0,
+		EmptyFiles: 0);
 
 	public IgnoreOptionCounts Add(in IgnoreOptionCounts other)
 	{
@@ -24,6 +26,7 @@ public readonly record struct IgnoreOptionCounts(
 			DotFolders + other.DotFolders,
 			DotFiles + other.DotFiles,
 			EmptyFolders + other.EmptyFolders,
-			ExtensionlessFiles + other.ExtensionlessFiles);
+			ExtensionlessFiles + other.ExtensionlessFiles,
+			EmptyFiles + other.EmptyFiles);
 	}
 }
