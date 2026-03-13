@@ -68,10 +68,11 @@ It’s designed for real projects where CLI output is noisy, IDE tools are unava
 ## Typical use cases 🎯
 
 * Share project structure in code reviews or chats
-* Prepare **clean input for AI assistants** (ChatGPT, Copilot, etc.)
+* Prepare **clean input for AI assistants** (ChatGPT, Claude, DeepSeek, Qwen etc.)
 * Extract only relevant modules from large codebases
 * Teach or explain project architecture
 * Inspect large folders without CLI scripts
+* Work in **policy-restricted environments** where AI agents, remote indexing, or IDE plugins are not allowed
 
 DevProjex is not tied to a specific language or IDE.
 
@@ -114,7 +115,7 @@ DevProjex is not tied to a specific language or IDE.
 * **Avalonia UI** (cross-platform)
 * Cleanly separated architecture (Core / Services / UI)
 * JSON-based resources (localization, icon mappings, presets)
-* 5000+ automated tests (unit + integration)
+* 6000+ automated tests (unit + integration)
 
 ---
 
