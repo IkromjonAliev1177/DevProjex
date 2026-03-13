@@ -37,9 +37,11 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
     private bool _settingsVisible;
     private bool _searchVisible;
     private bool _isSearchInProgress;
+    private bool _isFilterInProgress;
     private string _searchQuery = string.Empty;
     private int _searchCurrentMatchIndex;
     private int _searchTotalMatches;
+    private int _filterMatchCount;
     private string _nameFilter = string.Empty;
 
     private FontFamily? _selectedFontFamily;
@@ -343,8 +345,21 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
             if (_nameFilter == value) return;
             _nameFilter = value;
             RaisePropertyChanged();
+            RaisePropertyChanged(nameof(FilterMatchSummaryVisible));
         }
     }
+
+    public int FilterMatchCount => _filterMatchCount;
+
+    public bool IsFilterInProgress => _isFilterInProgress;
+
+    public bool FilterMatchSummaryVisible =>
+        FilterVisible &&
+        !_isFilterInProgress &&
+        !string.IsNullOrWhiteSpace(_nameFilter) &&
+        _filterMatchCount > 0;
+
+    public string FilterMatchSummaryText => $"({_filterMatchCount})";
 
     public bool IsDarkTheme
     {
@@ -404,6 +419,7 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
             if (_filterVisible == value) return;
             _filterVisible = value;
             RaisePropertyChanged();
+            RaisePropertyChanged(nameof(FilterMatchSummaryVisible));
         }
     }
 
@@ -944,6 +960,28 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         _isSearchInProgress = isInProgress;
         RaisePropertyChanged(nameof(IsSearchInProgress));
         RaisePropertyChanged(nameof(SearchMatchSummaryVisible));
+    }
+
+    public void UpdateFilterMatchSummary(int matchCount)
+    {
+        var normalizedCount = Math.Max(0, matchCount);
+        if (_filterMatchCount == normalizedCount)
+            return;
+
+        _filterMatchCount = normalizedCount;
+        RaisePropertyChanged(nameof(FilterMatchCount));
+        RaisePropertyChanged(nameof(FilterMatchSummaryText));
+        RaisePropertyChanged(nameof(FilterMatchSummaryVisible));
+    }
+
+    public void SetFilterInProgress(bool isInProgress)
+    {
+        if (_isFilterInProgress == isInProgress)
+            return;
+
+        _isFilterInProgress = isInProgress;
+        RaisePropertyChanged(nameof(IsFilterInProgress));
+        RaisePropertyChanged(nameof(FilterMatchSummaryVisible));
     }
 
     public bool AllExtensionsChecked

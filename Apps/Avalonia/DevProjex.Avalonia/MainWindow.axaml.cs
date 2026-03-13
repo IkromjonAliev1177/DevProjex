@@ -428,7 +428,10 @@ public partial class MainWindow : Window
             _viewModel,
             _treeView ?? throw new InvalidOperationException(),
             ScheduleSearchMemoryCleanupAfterRender);
-        _filterCoordinator = new NameFilterCoordinator(ApplyFilterRealtimeWithToken);
+        _filterCoordinator = new NameFilterCoordinator(
+            ApplyFilterRealtimeWithToken,
+            () => !string.IsNullOrWhiteSpace(_viewModel.NameFilter),
+            _viewModel.SetFilterInProgress);
         _themeBrushCoordinator = new ThemeBrushCoordinator(this, _viewModel, () => _topMenuBar?.MainMenuControl);
         _selectionCoordinator = new SelectionSyncCoordinator(
             _viewModel,
@@ -3711,13 +3714,19 @@ public partial class MainWindow : Window
 
     private async Task ApplyFilterRealtimeAsync(CancellationToken cancellationToken)
     {
+        var version = 0;
         try
         {
-            if (string.IsNullOrEmpty(_currentPath)) return;
+            if (string.IsNullOrEmpty(_currentPath))
+            {
+                _viewModel.UpdateFilterMatchSummary(0);
+                _viewModel.SetFilterInProgress(false);
+                return;
+            }
 
             var query = _viewModel.NameFilter?.Trim();
             bool hasQuery = !string.IsNullOrWhiteSpace(query);
-            var version = Interlocked.Increment(ref _filterApplyVersion);
+            version = Interlocked.Increment(ref _filterApplyVersion);
 
             if (hasQuery && _filterExpansionSnapshot is null)
                 _filterExpansionSnapshot = CaptureExpandedNodes();
@@ -3730,6 +3739,11 @@ public partial class MainWindow : Window
 
             if (version != _filterApplyVersion)
                 return;
+
+            _viewModel.UpdateFilterMatchSummary(
+                hasQuery && _currentTree is not null
+                    ? NameFilterMatchCounter.CountMatchesUnderRoot(_currentTree.Root, query!)
+                    : 0);
             _searchCoordinator.UpdateHighlights(query);
 
             if (hasQuery)
@@ -3758,6 +3772,11 @@ public partial class MainWindow : Window
         catch (Exception ex)
         {
             await ShowErrorAsync(ex.Message);
+        }
+        finally
+        {
+            if (version == 0 || version == Volatile.Read(ref _filterApplyVersion))
+                _viewModel.SetFilterInProgress(false);
         }
     }
 

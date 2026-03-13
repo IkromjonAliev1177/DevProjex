@@ -1,6 +1,9 @@
 namespace DevProjex.Avalonia.Coordinators;
 
-public sealed class NameFilterCoordinator(Action<CancellationToken> applyFilterRealtime) : IDisposable
+public sealed class NameFilterCoordinator(
+    Action<CancellationToken> applyFilterRealtime,
+    Func<bool>? hasActiveQuery = null,
+    Action<bool>? onFilterStateChanged = null) : IDisposable
 {
     private static readonly TimeSpan DebounceDelay = TimeSpan.FromMilliseconds(360);
     private CancellationTokenSource? _debounceCts;
@@ -41,6 +44,8 @@ public sealed class NameFilterCoordinator(Action<CancellationToken> applyFilterR
 
     public void OnNameFilterChanged()
     {
+        onFilterStateChanged?.Invoke(hasActiveQuery?.Invoke() == true);
+
         CancellationToken token;
         int version;
 
@@ -66,6 +71,8 @@ public sealed class NameFilterCoordinator(Action<CancellationToken> applyFilterR
             _debounceCts?.Cancel();
             _filterCts?.Cancel();
         }
+
+        onFilterStateChanged?.Invoke(false);
     }
 
     public void Dispose()
@@ -79,5 +86,7 @@ public sealed class NameFilterCoordinator(Action<CancellationToken> applyFilterR
             _filterCts?.Dispose();
             _filterCts = null;
         }
+
+        onFilterStateChanged?.Invoke(false);
     }
 }

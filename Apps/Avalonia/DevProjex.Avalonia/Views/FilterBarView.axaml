@@ -4,14 +4,23 @@
              x:Class="DevProjex.Avalonia.Views.FilterBarView"
              x:DataType="vm:MainWindowViewModel">
   <Border Classes="filter-panel" IsEnabled="{Binding IsProjectLoaded}" UseLayoutRounding="True">
-    <StackPanel Orientation="Horizontal" Spacing="8" Margin="12,6">
+    <Grid ColumnDefinitions="Auto,Auto,*" ColumnSpacing="8" Margin="12,6">
       <TextBox Name="FilterBox"
+               Grid.Column="0"
                Watermark="{Binding FilterByNamePlaceholder}"
                Text="{Binding NameFilter, Mode=TwoWay}"
                Width="260"
                FocusAdorner="{x:Null}"
                KeyDown="OnFilterKeyDown" />
-      <Button Content="✕" Width="32" Click="OnFilterClose" />
-    </StackPanel>
+      <Button Grid.Column="1" Content="✕" Width="32" Click="OnFilterClose" />
+      <TextBlock Grid.Column="2"
+                 Text="{Binding FilterMatchSummaryText}"
+                 IsVisible="{Binding FilterMatchSummaryVisible}"
+                 FontSize="18"
+                 Opacity="0.92"
+                 VerticalAlignment="Center"
+                 HorizontalAlignment="Right"
+                 Margin="12,0,4,0" />
+    </Grid>
   </Border>
 </UserControl>

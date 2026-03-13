@@ -247,6 +247,63 @@ public sealed class MainWindowViewModelTests
     }
 
     [Fact]
+    public void FilterMatchSummaryVisible_FollowsFilterStateAndResults()
+    {
+        var viewModel = CreateViewModel();
+        viewModel.FilterVisible = true;
+        viewModel.NameFilter = "app";
+        viewModel.UpdateFilterMatchSummary(3);
+
+        Assert.True(viewModel.FilterMatchSummaryVisible);
+        Assert.Equal("(3)", viewModel.FilterMatchSummaryText);
+    }
+
+    [Fact]
+    public void FilterMatchSummaryVisible_IsFalse_WhenFilterQueryIsEmpty()
+    {
+        var viewModel = CreateViewModel();
+        viewModel.FilterVisible = true;
+        viewModel.NameFilter = string.Empty;
+        viewModel.UpdateFilterMatchSummary(3);
+
+        Assert.False(viewModel.FilterMatchSummaryVisible);
+    }
+
+    [Fact]
+    public void FilterMatchSummaryVisible_IsFalse_WhenNoMatchesExist()
+    {
+        var viewModel = CreateViewModel();
+        viewModel.FilterVisible = true;
+        viewModel.NameFilter = "app";
+        viewModel.UpdateFilterMatchSummary(0);
+
+        Assert.False(viewModel.FilterMatchSummaryVisible);
+    }
+
+    [Fact]
+    public void FilterMatchSummaryVisible_IsFalse_WhileFilterIsInProgress()
+    {
+        var viewModel = CreateViewModel();
+        viewModel.FilterVisible = true;
+        viewModel.NameFilter = "app";
+        viewModel.UpdateFilterMatchSummary(3);
+        viewModel.SetFilterInProgress(true);
+
+        Assert.False(viewModel.FilterMatchSummaryVisible);
+    }
+
+    [Fact]
+    public void UpdateFilterMatchSummary_ClampsNegativeValuesToZero()
+    {
+        var viewModel = CreateViewModel();
+
+        viewModel.UpdateFilterMatchSummary(-5);
+
+        Assert.Equal(0, viewModel.FilterMatchCount);
+        Assert.Equal("(0)", viewModel.FilterMatchSummaryText);
+    }
+
+    [Fact]
     public void IsDarkTheme_FalseSetsIsLightThemeTrue()
     {
         var viewModel = CreateViewModel();

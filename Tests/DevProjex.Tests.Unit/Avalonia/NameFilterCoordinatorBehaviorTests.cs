@@ -87,6 +87,35 @@ public sealed class NameFilterCoordinatorBehaviorTests
         Assert.True(IsDebounceCtsNull(coordinator));
     }
 
+    [Fact]
+    public void OnNameFilterChanged_WhenActiveQueryExists_SetsBusyStateTrue()
+    {
+        bool? busyState = null;
+        using var coordinator = new NameFilterCoordinator(
+            _ => { },
+            () => true,
+            isBusy => busyState = isBusy);
+
+        coordinator.OnNameFilterChanged();
+
+        Assert.True(busyState);
+    }
+
+    [Fact]
+    public void CancelPending_ResetsBusyState()
+    {
+        bool? busyState = null;
+        using var coordinator = new NameFilterCoordinator(
+            _ => { },
+            () => true,
+            isBusy => busyState = isBusy);
+
+        coordinator.OnNameFilterChanged();
+        coordinator.CancelPending();
+
+        Assert.False(busyState);
+    }
+
     private static CancellationTokenSource? GetDebounceCts(NameFilterCoordinator coordinator)
     {
         var field = typeof(NameFilterCoordinator).GetField(
