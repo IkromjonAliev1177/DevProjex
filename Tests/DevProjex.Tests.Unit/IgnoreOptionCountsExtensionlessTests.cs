@@ -9,6 +9,12 @@ public sealed class IgnoreOptionCountsExtensionlessTests
 	}
 
 	[Fact]
+	public void Empty_EmptyFiles_IsZero()
+	{
+		Assert.Equal(0, IgnoreOptionCounts.Empty.EmptyFiles);
+	}
+
+	[Fact]
 	public void Add_ExtensionlessFiles_IsSummed()
 	{
 		var left = new IgnoreOptionCounts(
@@ -35,5 +41,16 @@ public sealed class IgnoreOptionCountsExtensionlessTests
 		Assert.Equal(44, result.DotFiles);
 		Assert.Equal(55, result.EmptyFolders);
 		Assert.Equal(66, result.ExtensionlessFiles);
+	}
+
+	[Fact]
+	public void Add_EmptyFiles_IsSummed()
+	{
+		var left = new IgnoreOptionCounts(EmptyFiles: 6);
+		var right = new IgnoreOptionCounts(EmptyFiles: 60);
+
+		var result = left.Add(right);
+
+		Assert.Equal(66, result.EmptyFiles);
 	}
 }

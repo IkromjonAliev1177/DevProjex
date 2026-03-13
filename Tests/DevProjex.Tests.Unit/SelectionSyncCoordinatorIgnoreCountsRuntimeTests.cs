@@ -19,7 +19,8 @@ public sealed class SelectionSyncCoordinatorIgnoreCountsRuntimeTests
 				DotFolders: 1,
 				DotFiles: 0,
 				EmptyFolders: 3,
-				ExtensionlessFiles: 5),
+				ExtensionlessFiles: 5,
+				EmptyFiles: 4),
 			hasIgnoreCounts: true);
 
 		coordinator.PopulateIgnoreOptionsForRootSelection(["src"], @"C:\Workspace\Project");
@@ -29,11 +30,13 @@ public sealed class SelectionSyncCoordinatorIgnoreCountsRuntimeTests
 		Assert.Contains(viewModel.IgnoreOptions, o => o.Id == IgnoreOptionId.DotFolders);
 		Assert.DoesNotContain(viewModel.IgnoreOptions, o => o.Id == IgnoreOptionId.DotFiles);
 		Assert.Contains(viewModel.IgnoreOptions, o => o.Id == IgnoreOptionId.EmptyFolders);
+		Assert.Contains(viewModel.IgnoreOptions, o => o.Id == IgnoreOptionId.EmptyFiles);
 		Assert.Contains(viewModel.IgnoreOptions, o => o.Id == IgnoreOptionId.ExtensionlessFiles);
 
 		AssertLabel(viewModel, IgnoreOptionId.HiddenFolders, "Hidden folders", 2, showAdvancedCounts);
 		AssertLabel(viewModel, IgnoreOptionId.DotFolders, "dot folders", 1, showAdvancedCounts);
 		AssertLabel(viewModel, IgnoreOptionId.EmptyFolders, "Empty folders", 3, showAdvancedCounts);
+		AssertLabel(viewModel, IgnoreOptionId.EmptyFiles, "Empty files", 4, showAdvancedCounts);
 		AssertLabel(viewModel, IgnoreOptionId.ExtensionlessFiles, "Files without extension", 5, showAdvancedCounts);
 	}
 
@@ -98,6 +101,45 @@ public sealed class SelectionSyncCoordinatorIgnoreCountsRuntimeTests
 		var restored = viewModel.IgnoreOptions.Single(o => o.Id == IgnoreOptionId.HiddenFolders);
 		Assert.True(restored.IsChecked);
 		Assert.Equal("Hidden folders (1)", restored.Label);
+	}
+
+	[Fact]
+	public void PopulateIgnoreOptionsForRootSelection_EmptyFilesCountLifecycle_RestoresSelectionAndUpdatedCount()
+	{
+		var viewModel = CreateViewModel();
+		using var coordinator = CreateCoordinator(viewModel, showAdvancedCounts: true, currentPath: @"C:\Workspace\Project");
+
+		ApplyScanState(
+			coordinator,
+			extensions: [".cs"],
+			ignoreCounts: new IgnoreOptionCounts(EmptyFiles: 2),
+			hasIgnoreCounts: true);
+		coordinator.PopulateIgnoreOptionsForRootSelection(["src"], @"C:\Workspace\Project");
+
+		var option = viewModel.IgnoreOptions.Single(o => o.Id == IgnoreOptionId.EmptyFiles);
+		Assert.Equal("Empty files (2)", option.Label);
+		option.IsChecked = true;
+		coordinator.UpdateIgnoreSelectionCache();
+
+		ApplyScanState(
+			coordinator,
+			extensions: [".cs"],
+			ignoreCounts: IgnoreOptionCounts.Empty,
+			hasIgnoreCounts: true);
+		coordinator.PopulateIgnoreOptionsForRootSelection(["src"], @"C:\Workspace\Project");
+
+		Assert.DoesNotContain(viewModel.IgnoreOptions, o => o.Id == IgnoreOptionId.EmptyFiles);
+
+		ApplyScanState(
+			coordinator,
+			extensions: [".cs"],
+			ignoreCounts: new IgnoreOptionCounts(EmptyFiles: 1),
+			hasIgnoreCounts: true);
+		coordinator.PopulateIgnoreOptionsForRootSelection(["src"], @"C:\Workspace\Project");
+
+		var restored = viewModel.IgnoreOptions.Single(o => o.Id == IgnoreOptionId.EmptyFiles);
+		Assert.True(restored.IsChecked);
+		Assert.Equal("Empty files (1)", restored.Label);
 	}
 
 	[Fact]
@@ -192,6 +234,7 @@ public sealed class SelectionSyncCoordinatorIgnoreCountsRuntimeTests
 				SmartIgnoredFiles: new HashSet<string>())
 			{
 				IgnoreEmptyFolders = selectedOptions.Contains(IgnoreOptionId.EmptyFolders),
+				IgnoreEmptyFiles = selectedOptions.Contains(IgnoreOptionId.EmptyFiles),
 				IgnoreExtensionlessFiles = selectedOptions.Contains(IgnoreOptionId.ExtensionlessFiles)
 			},
 			(_, _) => new IgnoreOptionsAvailability(
@@ -202,6 +245,7 @@ public sealed class SelectionSyncCoordinatorIgnoreCountsRuntimeTests
 				IncludeDotFolders: true,
 				IncludeDotFiles: true,
 				IncludeEmptyFolders: true,
+				IncludeEmptyFiles: true,
 				IncludeExtensionlessFiles: true,
 				ShowAdvancedCounts: showAdvancedCounts),
 			_ => false,
@@ -221,6 +265,7 @@ public sealed class SelectionSyncCoordinatorIgnoreCountsRuntimeTests
 				["Settings.Ignore.DotFolders"] = "dot folders",
 				["Settings.Ignore.DotFiles"] = "dot files",
 				["Settings.Ignore.EmptyFolders"] = "Empty folders",
+				["Settings.Ignore.EmptyFiles"] = "Empty files",
 				["Settings.Ignore.ExtensionlessFiles"] = "Files without extension"
 			}
 		};
