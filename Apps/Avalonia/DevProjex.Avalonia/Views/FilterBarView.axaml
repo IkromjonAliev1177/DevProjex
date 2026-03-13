@@ -16,7 +16,7 @@
       <TextBlock Grid.Column="2"
                  Text="{Binding FilterMatchSummaryText}"
                  IsVisible="{Binding FilterMatchSummaryVisible}"
-                 FontSize="18"
+                 FontSize="16"
                  Opacity="0.92"
                  VerticalAlignment="Center"
                  HorizontalAlignment="Right"
