@@ -202,6 +202,7 @@ Option order:
 * Smart ignore (when available)
 * Use .gitignore (when at least one `.gitignore` is found)
 * Empty folders
+* Empty files
 * Hidden folders
 * Hidden files
 * Dot-prefixed folders
@@ -238,6 +239,7 @@ Options:
 * Dot-prefixed folders
 * Dot-prefixed files
 * Empty folders
+* Empty files
 * Files without extension
 
 When enabled, an option hides matching elements from the tree and from copy/export results.
@@ -269,10 +271,13 @@ Only basic visibility rules remain.
 ### 11.6 Empty folders
 Hides logically empty folders from the tree and from copy/export results.
 
-### 11.7 Files without extension
+### 11.7 Empty files
+Hides empty files with size 0 bytes from the tree and from copy/export results.
+
+### 11.8 Files without extension
 Hides files without extension (for example: `Dockerfile`, `Makefile`, `README`) from the tree and from copy/export results.
 
-### 11.8 Counters in the "Ignore" block
+### 11.9 Counters in the "Ignore" block
 When "View → Additional counters" is enabled, counts are shown near available options in the `(N)` format.
 ## 12) How the tree and metrics are calculated
 Result depends on:
