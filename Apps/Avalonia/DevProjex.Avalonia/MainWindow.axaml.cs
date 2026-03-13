@@ -93,6 +93,10 @@ public partial class MainWindow : Window
     }
 
     private readonly CommandLineOptions _startupOptions;
+    private const string TreeItemPaddingResourceKey = "TreeItemPaddingResource";
+    private const string TreeItemSpacingResourceKey = "TreeItemSpacingResource";
+    private const string TreeIconSizeResourceKey = "TreeIconSizeResource";
+    private const string TreeTextMarginResourceKey = "TreeTextMarginResource";
     private readonly LocalizationService _localization;
     private readonly ScanOptionsUseCase _scanOptions;
     private readonly BuildTreeUseCase _buildTree;
@@ -493,9 +497,17 @@ public partial class MainWindow : Window
                 if (!_previewModeSwitchInProgress)
                     UpdatePreviewSegmentThumbPosition(animate: false);
             }
+            else if (args.PropertyName is nameof(MainWindowViewModel.TreeItemSpacing)
+                     or nameof(MainWindowViewModel.TreeItemPadding)
+                     or nameof(MainWindowViewModel.TreeIconSize)
+                     or nameof(MainWindowViewModel.TreeTextMargin))
+            {
+                UpdateTreeVisualResources();
+            }
         };
         _viewModel.PropertyChanged += _viewModelPropertyChangedHandler;
         UpdatePreviewSegmentThumbPosition(animate: false);
+        UpdateTreeVisualResources();
 
         AddHandler(KeyDownEvent, OnKeyDown, RoutingStrategies.Tunnel);
 
@@ -1975,6 +1987,17 @@ public partial class MainWindow : Window
             TreeFormat: treeFormat,
             SelectedCount: selectedPaths.Count,
             SelectedHash: PreviewFileCollectionPolicy.BuildPathSetHash(selectedPaths));
+    }
+
+    private void UpdateTreeVisualResources()
+    {
+        if (_treeView is null)
+            return;
+
+        _treeView.Resources[TreeItemPaddingResourceKey] = _viewModel.TreeItemPadding;
+        _treeView.Resources[TreeItemSpacingResourceKey] = _viewModel.TreeItemSpacing;
+        _treeView.Resources[TreeIconSizeResourceKey] = _viewModel.TreeIconSize;
+        _treeView.Resources[TreeTextMarginResourceKey] = _viewModel.TreeTextMargin;
     }
 
     private static int BuildPathSetHash(IReadOnlySet<string> selectedPaths) =>
@@ -3711,12 +3734,15 @@ public partial class MainWindow : Window
 
             if (hasQuery)
             {
-                TreeSearchEngine.ApplySmartExpandForFilter(
-                    _viewModel.TreeNodes,
-                    query!,
-                    node => node.DisplayName,
-                    node => node.Children,
-                    (node, expanded) => node.IsExpanded = expanded);
+                using (TreeNodeViewModel.BeginPreserveDescendantExpansionStateScope())
+                {
+                    TreeSearchEngine.ApplySmartExpandForFilter(
+                        _viewModel.TreeNodes,
+                        query!,
+                        node => node.DisplayName,
+                        node => node.Children,
+                        (node, expanded) => node.IsExpanded = expanded);
+                }
             }
             else if (_filterExpansionSnapshot is not null)
             {
@@ -5689,8 +5715,11 @@ public partial class MainWindow : Window
 
     private void RestoreExpandedNodes(HashSet<string> expandedPaths)
     {
-        TreeNodeViewModel.ForEachDescendant(_viewModel.TreeNodes, node =>
-            node.IsExpanded = expandedPaths.Contains(node.FullPath));
+        using (TreeNodeViewModel.BeginPreserveDescendantExpansionStateScope())
+        {
+            TreeNodeViewModel.ForEachDescendant(_viewModel.TreeNodes, node =>
+                node.IsExpanded = expandedPaths.Contains(node.FullPath));
+        }
 
         if (_viewModel.TreeNodes.FirstOrDefault() is { } root && !root.IsExpanded)
             root.IsExpanded = true;

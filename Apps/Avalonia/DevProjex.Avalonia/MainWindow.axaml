@@ -16,8 +16,7 @@
     <Style Selector="TreeViewItem">
       <Setter Property="IsExpanded" Value="{ReflectionBinding IsExpanded, Mode=TwoWay}" />
       <Setter Property="IsSelected" Value="{ReflectionBinding IsSelected, Mode=TwoWay}" />
-      <Setter Property="Padding"
-              Value="{ReflectionBinding DataContext.TreeItemPadding, RelativeSource={RelativeSource AncestorType=TreeView}}" />
+      <Setter Property="Padding" Value="{DynamicResource TreeItemPaddingResource}" />
     </Style>
     <!-- Fix for virtualization cache bug: the :empty pseudo-class may not update correctly
          when VirtualizingStackPanel recycles TreeViewItem containers. We use Opacity binding
@@ -598,34 +597,30 @@
                                     ItemsSource="{CompiledBinding ChildItemsSource}">
                     <Grid ColumnDefinitions="Auto,*" Background="Transparent">
                       <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="{Binding Level, RelativeSource={RelativeSource AncestorType=TreeViewItem}, Converter={StaticResource TreeIndentConverter}}" />
+                        <ColumnDefinition Width="{CompiledBinding IndentWidth}" />
                         <ColumnDefinition Width="*" />
                       </Grid.ColumnDefinitions>
                       <StackPanel Grid.Column="1"
                                   Orientation="Horizontal"
                                   Background="Transparent"
-                                  Spacing="{ReflectionBinding DataContext.TreeItemSpacing, RelativeSource={RelativeSource AncestorType=TreeView}}">
+                                  Spacing="{DynamicResource TreeItemSpacingResource}">
                         <CheckBox IsThreeState="True"
                                   IsChecked="{CompiledBinding IsChecked, Mode=TwoWay}"
                                   VerticalAlignment="Center" />
                         <Image Source="{CompiledBinding Icon}"
-                               Width="{ReflectionBinding DataContext.TreeIconSize, RelativeSource={RelativeSource AncestorType=TreeView}}"
-                               Height="{ReflectionBinding DataContext.TreeIconSize, RelativeSource={RelativeSource AncestorType=TreeView}}"
+                               Width="{DynamicResource TreeIconSizeResource}"
+                               Height="{DynamicResource TreeIconSizeResource}"
                                Stretch="Uniform"
                                VerticalAlignment="Center" />
                         <TextBlock Text="{CompiledBinding DisplayName}"
                                    IsVisible="{Binding !HasHighlightedDisplay}"
                                    VerticalAlignment="Center"
-                                   Margin="{ReflectionBinding DataContext.TreeTextMargin, RelativeSource={RelativeSource AncestorType=TreeView}}"
-                                   FontFamily="{ReflectionBinding DataContext.SelectedFontFamily, RelativeSource={RelativeSource AncestorType=TreeView}}"
-                                   FontSize="{ReflectionBinding DataContext.TreeFontSize, RelativeSource={RelativeSource AncestorType=TreeView}}"
+                                   Margin="{DynamicResource TreeTextMarginResource}"
                                    Foreground="{DynamicResource AppTextBrush}" />
                         <TextBlock Inlines="{CompiledBinding DisplayInlines}"
                                    IsVisible="{Binding HasHighlightedDisplay}"
                                    VerticalAlignment="Center"
-                                   Margin="{ReflectionBinding DataContext.TreeTextMargin, RelativeSource={RelativeSource AncestorType=TreeView}}"
-                                   FontFamily="{ReflectionBinding DataContext.SelectedFontFamily, RelativeSource={RelativeSource AncestorType=TreeView}}"
-                                   FontSize="{ReflectionBinding DataContext.TreeFontSize, RelativeSource={RelativeSource AncestorType=TreeView}}"
+                                   Margin="{DynamicResource TreeTextMarginResource}"
                                    Foreground="{DynamicResource AppTextBrush}" />
                       </StackPanel>
                     </Grid>

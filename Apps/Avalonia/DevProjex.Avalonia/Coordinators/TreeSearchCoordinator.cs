@@ -42,7 +42,9 @@ public sealed class TreeSearchCoordinator(
     private readonly Dictionary<string, LinkedListNode<string>> _queryMatchesCacheNodes =
         new(StringComparer.OrdinalIgnoreCase);
     private readonly object _highlightCtsLock = new();
+    private readonly object _expansionCtsLock = new();
     private CancellationTokenSource? _highlightApplyCts;
+    private CancellationTokenSource? _expansionApplyCts;
     private int _searchMatchIndex = -1;
     private TreeNodeViewModel? _currentSearchMatch;
     private string? _activeHighlightQuery;
@@ -56,6 +58,8 @@ public sealed class TreeSearchCoordinator(
     private const int SearchQueryCacheLimit = 8;
     private const int MaxCachedMatchCount = 4096;
     private const int HighlightBatchSize = 256;
+    private const int ExpansionBatchSize = 192;
+    private const int ExpansionBatchThreshold = 256;
     private const int SearchAutoExpandMatchCap = 2500;
     private const int SearchGlobalHighlightMatchCap = 3500;
 
@@ -117,6 +121,7 @@ public sealed class TreeSearchCoordinator(
         }
 
         CancelPendingHighlightApply();
+        CancelPendingExpansionApply();
     }
 
     private void CancelPendingHighlightApply()
@@ -126,6 +131,16 @@ public sealed class TreeSearchCoordinator(
             _highlightApplyCts?.Cancel();
             _highlightApplyCts?.Dispose();
             _highlightApplyCts = null;
+        }
+    }
+
+    private void CancelPendingExpansionApply()
+    {
+        lock (_expansionCtsLock)
+        {
+            _expansionApplyCts?.Cancel();
+            _expansionApplyCts?.Dispose();
+            _expansionApplyCts = null;
         }
     }
 
@@ -140,6 +155,7 @@ public sealed class TreeSearchCoordinator(
         var query = viewModel.SearchQuery ?? string.Empty;
         if (string.IsNullOrWhiteSpace(query))
         {
+            CancelPendingExpansionApply();
             if (!normalizeTreeWhenEmptyQuery)
             {
                 _searchMatches.Clear();
@@ -182,6 +198,7 @@ public sealed class TreeSearchCoordinator(
     {
         Interlocked.Increment(ref _bringIntoViewVersion);
         CancelPendingHighlightApply();
+        CancelPendingExpansionApply();
 
         // Clear current match reference first
         _currentSearchMatch = null;
@@ -213,6 +230,7 @@ public sealed class TreeSearchCoordinator(
     {
         Interlocked.Increment(ref _bringIntoViewVersion);
         CancelPendingHighlightApply();
+        CancelPendingExpansionApply();
         lock (_searchCtsLock)
         {
             _searchDebounceCts?.Cancel();
@@ -470,26 +488,143 @@ public sealed class TreeSearchCoordinator(
             }
         }
 
+        List<TreeNodeViewModel>? removedNodes = null;
         foreach (var node in _searchExpandedNodes)
         {
             if (_nextSearchExpandedNodes.Contains(node))
                 continue;
 
             if (!_searchSelfMatchedNodes.Contains(node))
-                node.IsExpanded = false;
+                (removedNodes ??= []).Add(node);
         }
 
+        List<TreeNodeViewModel>? addedNodes = null;
         foreach (var node in _nextSearchExpandedNodes)
         {
             if (_searchExpandedNodes.Contains(node))
                 continue;
 
-            node.IsExpanded = true;
+            (addedNodes ??= []).Add(node);
         }
+
+        ApplyExpansionDiff(
+            removedNodes,
+            addedNodes,
+            matches.Count > 0 ? matches[0] : null);
 
         _searchExpandedNodes.Clear();
         foreach (var node in _nextSearchExpandedNodes)
             _searchExpandedNodes.Add(node);
+    }
+
+    private void ApplyExpansionDiff(
+        List<TreeNodeViewModel>? removedNodes,
+        List<TreeNodeViewModel>? addedNodes,
+        TreeNodeViewModel? firstMatch)
+    {
+        var removedCount = removedNodes?.Count ?? 0;
+        var addedCount = addedNodes?.Count ?? 0;
+        if (removedCount == 0 && addedCount == 0)
+        {
+            CancelPendingExpansionApply();
+            return;
+        }
+
+        if (removedCount + addedCount < ExpansionBatchThreshold)
+        {
+            CancelPendingExpansionApply();
+            using var _ = TreeNodeViewModel.BeginPreserveDescendantExpansionStateScope();
+            if (removedNodes is not null)
+            {
+                foreach (var node in removedNodes)
+                    node.IsExpanded = false;
+            }
+
+            if (addedNodes is not null)
+            {
+                foreach (var node in addedNodes)
+                    node.IsExpanded = true;
+            }
+
+            return;
+        }
+
+        if (firstMatch is not null)
+        {
+            // Keep the first selected match path expanded synchronously so selection and bring-into-view
+            // stay responsive while the rest of a large expansion diff is applied in background batches.
+            using var _ = TreeNodeViewModel.BeginPreserveDescendantExpansionStateScope();
+            firstMatch.EnsureParentsExpanded();
+            if (addedNodes is not null)
+                RemoveAncestorPathNodes(addedNodes, firstMatch);
+        }
+
+        ScheduleExpansionDiffApplication(
+            removedNodes?.ToArray() ?? Array.Empty<TreeNodeViewModel>(),
+            addedNodes?.ToArray() ?? Array.Empty<TreeNodeViewModel>());
+    }
+
+    private static void RemoveAncestorPathNodes(List<TreeNodeViewModel> addedNodes, TreeNodeViewModel firstMatch)
+    {
+        var ancestor = firstMatch.Parent;
+        while (ancestor is not null)
+        {
+            addedNodes.Remove(ancestor);
+            ancestor = ancestor.Parent;
+        }
+    }
+
+    private void ScheduleExpansionDiffApplication(
+        TreeNodeViewModel[] removedNodes,
+        TreeNodeViewModel[] addedNodes)
+    {
+        CancellationToken token;
+        lock (_expansionCtsLock)
+        {
+            _expansionApplyCts?.Cancel();
+            _expansionApplyCts?.Dispose();
+            _expansionApplyCts = new CancellationTokenSource();
+            token = _expansionApplyCts.Token;
+        }
+
+        void ApplyRemovedBatch(int startIndex)
+        {
+            if (token.IsCancellationRequested)
+                return;
+
+            var endIndex = Math.Min(startIndex + ExpansionBatchSize, removedNodes.Length);
+            using (TreeNodeViewModel.BeginPreserveDescendantExpansionStateScope())
+            {
+                for (var i = startIndex; i < endIndex; i++)
+                    removedNodes[i].IsExpanded = false;
+            }
+
+            if (endIndex < removedNodes.Length)
+            {
+                Dispatcher.UIThread.Post(() => ApplyRemovedBatch(endIndex), DispatcherPriority.Background);
+                return;
+            }
+
+            ApplyAddedBatch(0);
+        }
+
+        void ApplyAddedBatch(int startIndex)
+        {
+            if (token.IsCancellationRequested)
+                return;
+
+            var endIndex = Math.Min(startIndex + ExpansionBatchSize, addedNodes.Length);
+            using (TreeNodeViewModel.BeginPreserveDescendantExpansionStateScope())
+            {
+                for (var i = startIndex; i < endIndex; i++)
+                    addedNodes[i].IsExpanded = true;
+            }
+
+            if (endIndex < addedNodes.Length)
+                Dispatcher.UIThread.Post(() => ApplyAddedBatch(endIndex), DispatcherPriority.Background);
+        }
+
+        ApplyRemovedBatch(0);
     }
 
     private void SeedExpandedNodesSnapshot()

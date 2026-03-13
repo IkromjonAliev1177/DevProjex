@@ -9,7 +9,9 @@ public sealed class TreeNodeViewModel(
     IImage? icon)
     : ViewModelBase
 {
+    private const double DefaultTreeIndentSize = 16;
     private static readonly IReadOnlyList<TreeNodeViewModel> EmptyChildItems = [];
+    private static int _preserveDescendantExpansionStateDepth;
 
     private bool? _isChecked = false;
     private bool _isExpanded;
@@ -32,6 +34,9 @@ public sealed class TreeNodeViewModel(
     public TreeNodeDescriptor Descriptor { get; private set; } = descriptor;
 
     public TreeNodeViewModel? Parent { get; private set; } = parent;
+    public int Depth { get; } = parent is null ? 0 : parent.Depth + 1;
+    public GridLength IndentWidth { get; } =
+        new(Math.Max(0, parent is null ? 0 : parent.Depth + 1) * DefaultTreeIndentSize);
 
     public IList<TreeNodeViewModel> Children { get; } = new List<TreeNodeViewModel>(descriptor.Children.Count);
     public IEnumerable<TreeNodeViewModel> ChildItemsSource => Children.Count > 0 ? Children : EmptyChildItems;
@@ -103,6 +108,16 @@ public sealed class TreeNodeViewModel(
         {
             if (_isExpanded == value) return;
             _isExpanded = value;
+
+            if (!value && Children.Count > 0 && Volatile.Read(ref _preserveDescendantExpansionStateDepth) == 0)
+            {
+                // Manual collapse should reset descendant expansion state so reopening the branch
+                // behaves predictably and does not immediately realize the entire previously-open subtree.
+                using var _ = BeginPreserveDescendantExpansionStateScope();
+                foreach (var child in Children)
+                    child.SetExpandedRecursive(false);
+            }
+
             RaisePropertyChanged();
         }
     }
@@ -120,9 +135,14 @@ public sealed class TreeNodeViewModel(
 
     public void SetExpandedRecursive(bool expanded)
     {
-        IsExpanded = expanded;
-        foreach (var child in Children)
-            child.SetExpandedRecursive(expanded);
+        if (!expanded)
+        {
+            using var _ = BeginPreserveDescendantExpansionStateScope();
+            SetExpandedRecursiveCore(this, expanded);
+            return;
+        }
+
+        SetExpandedRecursiveCore(this, expanded);
     }
 
     /// <summary>
@@ -176,6 +196,12 @@ public sealed class TreeNodeViewModel(
     {
         Icon = icon;
         RaisePropertyChanged(nameof(Icon));
+    }
+
+    public static IDisposable BeginPreserveDescendantExpansionStateScope()
+    {
+        Interlocked.Increment(ref _preserveDescendantExpansionStateDepth);
+        return new DescendantExpansionStateScope();
     }
 
     /// <summary>
@@ -323,5 +349,20 @@ public sealed class TreeNodeViewModel(
         }
 
         Parent?.UpdateCheckedFromChildren();
+    }
+
+    private static void SetExpandedRecursiveCore(TreeNodeViewModel node, bool expanded)
+    {
+        node.IsExpanded = expanded;
+        foreach (var child in node.Children)
+            SetExpandedRecursiveCore(child, expanded);
+    }
+
+    private readonly struct DescendantExpansionStateScope : IDisposable
+    {
+        public void Dispose()
+        {
+            Interlocked.Decrement(ref _preserveDescendantExpansionStateDepth);
+        }
     }
 }

@@ -77,6 +77,35 @@ public sealed class TreeNodeViewModelTests
     }
 
     [Fact]
+    public void IsExpanded_CollapsingNode_ResetsExpandedDescendants()
+    {
+        var root = CreateTree();
+        root.SetExpandedRecursive(true);
+
+        root.IsExpanded = false;
+
+        Assert.False(root.IsExpanded);
+        Assert.False(root.Children[0].IsExpanded);
+        Assert.False(root.Children[0].Children[0].IsExpanded);
+        Assert.False(root.Children[1].IsExpanded);
+    }
+
+    [Fact]
+    public void IsExpanded_CollapseWithinPreservationScope_KeepsDescendantExpansionState()
+    {
+        var root = CreateTree();
+        root.SetExpandedRecursive(true);
+
+        using (TreeNodeViewModel.BeginPreserveDescendantExpansionStateScope())
+            root.IsExpanded = false;
+
+        Assert.False(root.IsExpanded);
+        Assert.True(root.Children[0].IsExpanded);
+        Assert.True(root.Children[0].Children[0].IsExpanded);
+        Assert.True(root.Children[1].IsExpanded);
+    }
+
+    [Fact]
     public void IsSelected_Changes()
     {
         var node = CreateNode("Node");
@@ -141,6 +170,21 @@ public sealed class TreeNodeViewModelTests
 
         Assert.True(root.IsExpanded);
         Assert.True(root.Children[0].IsExpanded);
+    }
+
+    [Fact]
+    public void IndentWidth_TracksNodeDepth()
+    {
+        var root = CreateTree();
+        var child = root.Children[0];
+        var leaf = child.Children[0];
+
+        Assert.Equal(0, root.Depth);
+        Assert.Equal(0, root.IndentWidth.Value);
+        Assert.Equal(1, child.Depth);
+        Assert.Equal(16, child.IndentWidth.Value);
+        Assert.Equal(2, leaf.Depth);
+        Assert.Equal(32, leaf.IndentWidth.Value);
     }
 
     [Fact]
