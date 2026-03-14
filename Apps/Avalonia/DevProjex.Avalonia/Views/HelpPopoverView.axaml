@@ -19,7 +19,10 @@
                 Click="OnClose" />
       </Grid>
 
-      <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+      <ScrollViewer Grid.Row="1"
+                    IsScrollInertiaEnabled="True"
+                    HorizontalScrollBarVisibility="Disabled"
+                    VerticalScrollBarVisibility="Auto">
         <StackPanel Name="BodyPanel" Spacing="6" />
       </ScrollViewer>
     </Grid>

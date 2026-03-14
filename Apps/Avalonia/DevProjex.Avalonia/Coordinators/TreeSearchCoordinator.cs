@@ -287,6 +287,35 @@ public sealed class TreeSearchCoordinator(
         SelectSearchMatch();
     }
 
+    public bool TryNavigateForCurrentQuery(int step)
+    {
+        var query = viewModel.SearchQuery ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(query))
+            return false;
+
+        var shouldRefreshMatches =
+            viewModel.IsSearchInProgress ||
+            _searchMatches.Count == 0 ||
+            !string.Equals(_lastComputedQuery, query, StringComparison.OrdinalIgnoreCase);
+
+        if (!shouldRefreshMatches)
+        {
+            Navigate(step);
+            return true;
+        }
+
+        UpdateSearchMatches(normalizeTreeWhenEmptyQuery: false);
+        if (_searchMatches.Count == 0)
+            return false;
+
+        // Forward activation should land on the first result after a query refresh
+        // instead of skipping straight to the second match.
+        if (step < 0)
+            Navigate(step);
+
+        return true;
+    }
+
     public void RefreshThemeHighlights()
     {
         UpdateHighlights(viewModel.SearchQuery);

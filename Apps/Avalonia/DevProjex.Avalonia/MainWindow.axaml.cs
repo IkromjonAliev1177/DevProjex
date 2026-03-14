@@ -3511,30 +3511,12 @@ public partial class MainWindow : Window
 
     private void OnSearchNext(object? sender, RoutedEventArgs e)
     {
-        if (string.IsNullOrWhiteSpace(_viewModel.SearchQuery))
-            return;
-
-        if (!_searchCoordinator.HasMatches)
-        {
-            _toastService.Show(_localization["Toast.NoMatches"]);
-            return;
-        }
-
-        _searchCoordinator.Navigate(1);
+        TryNavigateSearchMatches(1);
     }
 
     private void OnSearchPrev(object? sender, RoutedEventArgs e)
     {
-        if (string.IsNullOrWhiteSpace(_viewModel.SearchQuery))
-            return;
-
-        if (!_searchCoordinator.HasMatches)
-        {
-            _toastService.Show(_localization["Toast.NoMatches"]);
-            return;
-        }
-
-        _searchCoordinator.Navigate(-1);
+        TryNavigateSearchMatches(-1);
     }
 
     private async void OnToggleSearch(object? sender, RoutedEventArgs e)
@@ -3796,14 +3778,21 @@ public partial class MainWindow : Window
 
         if (e.Key == Key.Enter)
         {
-            _searchCoordinator.UpdateSearchMatches(normalizeTreeWhenEmptyQuery: false);
-            if (e.KeyModifiers.HasFlag(KeyModifiers.Shift))
-                _searchCoordinator.Navigate(-1);
-            else
-                _searchCoordinator.Navigate(1);
-
+            TryNavigateSearchMatches(e.KeyModifiers.HasFlag(KeyModifiers.Shift) ? -1 : 1);
             e.Handled = true;
         }
+    }
+
+    private bool TryNavigateSearchMatches(int step)
+    {
+        if (string.IsNullOrWhiteSpace(_viewModel.SearchQuery))
+            return false;
+
+        if (_searchCoordinator.TryNavigateForCurrentQuery(step))
+            return true;
+
+        _toastService.Show(_localization["Toast.NoMatches"]);
+        return false;
     }
 
     private void OnKeyDown(object? sender, KeyEventArgs e)
@@ -3878,6 +3867,13 @@ public partial class MainWindow : Window
         if (e.Key == Key.Escape && _viewModel.FilterVisible)
         {
             _ = CloseFilterAsync();
+            e.Handled = true;
+            return;
+        }
+
+        if (e.Key == Key.F3 && _viewModel.SearchVisible)
+        {
+            TryNavigateSearchMatches(mods.HasFlag(KeyModifiers.Shift) ? -1 : 1);
             e.Handled = true;
             return;
         }

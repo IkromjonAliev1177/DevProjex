@@ -45,7 +45,9 @@
                     Checked="OnIgnoreAllChanged" Unchecked="OnIgnoreAllChanged" />
         </Grid>
         <Border Grid.Row="1" Classes="checklist-border">
-          <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+          <ScrollViewer IsScrollInertiaEnabled="True"
+                        VerticalScrollBarVisibility="Auto"
+                        HorizontalScrollBarVisibility="Disabled">
             <!-- Compact spacing is handled by a custom ItemsPanel in the settings lists. -->
             <ItemsControl ItemsSource="{Binding IgnoreOptions}">
               <ItemsControl.ItemsPanel>
@@ -82,7 +84,9 @@
                     Checked="OnExtensionsAllChanged" Unchecked="OnExtensionsAllChanged" />
         </Grid>
         <Border Grid.Row="1" Classes="checklist-border">
-          <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+          <ScrollViewer IsScrollInertiaEnabled="True"
+                        VerticalScrollBarVisibility="Auto"
+                        HorizontalScrollBarVisibility="Disabled">
             <!-- Keep list spacing centralized so compact mode does not rely on control templates. -->
             <ItemsControl ItemsSource="{Binding Extensions}">
               <ItemsControl.ItemsPanel>
@@ -111,7 +115,9 @@
                     Checked="OnRootAllChanged" Unchecked="OnRootAllChanged" />
         </Grid>
         <Border Grid.Row="1" Classes="checklist-border">
-          <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+          <ScrollViewer IsScrollInertiaEnabled="True"
+                        VerticalScrollBarVisibility="Auto"
+                        HorizontalScrollBarVisibility="Disabled">
             <!-- Root folders share the same spacing logic as other settings lists. -->
             <ItemsControl ItemsSource="{Binding RootFolders}">
               <ItemsControl.ItemsPanel>
