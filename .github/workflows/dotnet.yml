@@ -15,8 +15,21 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  validate-release-config:
+    name: Validate Release Config
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate release metadata
+        shell: pwsh
+        run: ./Scripts/validate-release-config.ps1
+
   build-test:
     name: CI (${{ matrix.name }})
+    needs: validate-release-config
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 35
     strategy:

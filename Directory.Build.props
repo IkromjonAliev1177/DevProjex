@@ -1,6 +1,15 @@
 <Project>
   <PropertyGroup>
     <ImplicitUsings>enable</ImplicitUsings>
+    <DevProjexVersion Condition="'$(DevProjexVersion)'==''">4.7.0</DevProjexVersion>
+    <DevProjexAssemblyVersion Condition="'$(DevProjexAssemblyVersion)'==''">4.7.0.0</DevProjexAssemblyVersion>
+    <DevProjexFileVersion Condition="'$(DevProjexFileVersion)'==''">$(DevProjexAssemblyVersion)</DevProjexFileVersion>
+    <DevProjexInformationalVersion Condition="'$(DevProjexInformationalVersion)'==''">$(DevProjexVersion)</DevProjexInformationalVersion>
+    <DevProjexStorePackageVersion Condition="'$(DevProjexStorePackageVersion)'==''">4.7.0.0</DevProjexStorePackageVersion>
+    <Version>$(DevProjexVersion)</Version>
+    <AssemblyVersion>$(DevProjexAssemblyVersion)</AssemblyVersion>
+    <FileVersion>$(DevProjexFileVersion)</FileVersion>
+    <InformationalVersion>$(DevProjexInformationalVersion)</InformationalVersion>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)'=='ReleaseStore'">

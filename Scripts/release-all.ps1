@@ -26,6 +26,7 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
+. (Join-Path $PSScriptRoot "Release.Common.ps1")
 
 $script:IsolatedWorkspaceRoot = $null
 $script:IsolatedRepoRoot = $null
@@ -103,7 +104,16 @@ function Get-VersionInteractive([string]$currentValue) {
     $value = $currentValue
     while ($true) {
         if ([string]::IsNullOrWhiteSpace($value)) {
-            $value = Read-Host "Enter release version (5 / 4.6 / 4.7.1 / 4.7.1.0)"
+            $prompt = "Enter release version"
+            if (-not [string]::IsNullOrWhiteSpace($currentValue)) {
+                $prompt += " [$currentValue]"
+            }
+
+            $prompt += " (1-4 numeric segments)"
+            $value = Read-Host $prompt
+            if ([string]::IsNullOrWhiteSpace($value)) {
+                $value = $currentValue
+            }
         }
 
         $parsedVersion = Try-ParseVersionInput -rawVersion $value
@@ -113,6 +123,29 @@ function Get-VersionInteractive([string]$currentValue) {
 
         Write-Host "Invalid version format. Use 1-4 numeric segments, for example: 5, 4.6, 4.7.1, 4.7.1.0" -ForegroundColor Yellow
         $value = ""
+    }
+}
+
+function Assert-WindowsArtifactVersion(
+    [string]$artifactPath,
+    [string]$displayVersion,
+    [string]$storePackageVersion
+) {
+    $versionInfo = [System.Diagnostics.FileVersionInfo]::GetVersionInfo($artifactPath)
+    if ([string]::IsNullOrWhiteSpace($versionInfo.FileVersion)) {
+        throw "FileVersion is missing for '$artifactPath'."
+    }
+
+    if (-not $versionInfo.FileVersion.StartsWith($storePackageVersion, [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw "FileVersion '$($versionInfo.FileVersion)' does not match expected store package version '$storePackageVersion' for '$artifactPath'."
+    }
+
+    if ([string]::IsNullOrWhiteSpace($versionInfo.ProductVersion)) {
+        throw "ProductVersion is missing for '$artifactPath'."
+    }
+
+    if (-not $versionInfo.ProductVersion.StartsWith($displayVersion, [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw "ProductVersion '$($versionInfo.ProductVersion)' does not match expected display version '$displayVersion' for '$artifactPath'."
     }
 }
 
@@ -211,6 +244,9 @@ function Build-GitHubArtifactsInWorkspace([string]$version, [string]$configurati
         throw "Avalonia project not found in isolated workspace: $projectPath"
     }
 
+    $defaultReleaseVersionInfo = Get-DefaultReleaseVersionInfo -repoRoot $script:IsolatedRepoRoot
+    $versionProperties = Get-BuildVersionProperties -displayVersion $version -storePackageVersion ([string]$defaultReleaseVersionInfo.StorePackageVersion)
+
     $releaseDir = Join-Path $script:IsolatedRepoRoot "publish\github\v$version"
     $workDir = Join-Path $releaseDir "_work"
 
@@ -254,7 +290,7 @@ function Build-GitHubArtifactsInWorkspace([string]$version, [string]$configurati
             "/p:DebugType=None",
             "/p:DebugSymbols=false",
             "-o", $ridOutDir
-        )
+        ) + $versionProperties
 
         Invoke-ExternalCommand -filePath "dotnet" -arguments $publishArgs -failureMessage "dotnet publish failed for RID: $rid" -workingDirectory $script:IsolatedRepoRoot
 
@@ -265,6 +301,10 @@ function Build-GitHubArtifactsInWorkspace([string]$version, [string]$configurati
 
         $destinationPath = Join-Path $releaseDir ([string]$target.Name)
         Copy-Item -Path $sourcePath -Destination $destinationPath -Force
+
+        if ($rid.StartsWith("win-", [System.StringComparison]::OrdinalIgnoreCase)) {
+            Assert-WindowsArtifactVersion -artifactPath $destinationPath -displayVersion $version -storePackageVersion ([string]$defaultReleaseVersionInfo.StorePackageVersion)
+        }
     }
 
     $shaFile = Join-Path $releaseDir "SHA256SUMS.txt"
@@ -325,6 +365,7 @@ function Get-LatestVisualStudioInstancePath() {
 }
 
 function Build-StoreArtifactsInWorkspace(
+    [string]$displayVersion,
     [string]$configuration,
     [string]$platform,
     [string]$bundlePlatforms,
@@ -342,6 +383,8 @@ function Build-StoreArtifactsInWorkspace(
     if (-not [string]::IsNullOrWhiteSpace($packageVersion)) {
         Write-Host "  Package version override: $packageVersion"
     }
+
+    $versionProperties = Get-BuildVersionProperties -displayVersion $displayVersion -storePackageVersion $packageVersion
 
     Write-Host "Cleaning stale packaging artifacts..."
     $cleanupPaths = @(
@@ -412,7 +455,7 @@ function Build-StoreArtifactsInWorkspace(
 
     $avaloniaProjectPath = Join-Path $script:IsolatedRepoRoot "Apps\Avalonia\DevProjex.Avalonia\DevProjex.Avalonia.csproj"
     Write-Host "Restoring packages..."
-    Invoke-ExternalCommand -filePath "dotnet" -arguments @("restore", $avaloniaProjectPath, "/p:Configuration=$configuration") -failureMessage "dotnet restore failed for store build" -workingDirectory $script:IsolatedRepoRoot
+    Invoke-ExternalCommand -filePath "dotnet" -arguments (@("restore", $avaloniaProjectPath, "/p:Configuration=$configuration") + $versionProperties) -failureMessage "dotnet restore failed for store build" -workingDirectory $script:IsolatedRepoRoot
 
     $publishStoreDir = Join-Path $script:IsolatedRepoRoot "publish\store"
     New-Item -ItemType Directory -Force -Path $publishStoreDir | Out-Null
@@ -428,7 +471,7 @@ function Build-StoreArtifactsInWorkspace(
         "/p:UapAppxPackageBuildMode=StoreUpload",
         "/p:AppxPackageDir=publish\store\",
         "/flp:logfile=$buildLogRelative;verbosity=normal"
-    )
+    ) + $versionProperties
     Invoke-ExternalCommand -filePath $msbuildExe -arguments $msbuildArgs -failureMessage "MSIX build failed" -workingDirectory $script:IsolatedRepoRoot
 
     $objRoot = Join-Path $script:IsolatedRepoRoot "Packaging\Windows\DevProjex.Store\obj"
@@ -891,7 +934,9 @@ function Cleanup-IsolatedWorkspace() {
 }
 
 Ensure-DotnetAvailable
-$versionInfo = Get-VersionInteractive -currentValue $Version
+$defaultReleaseVersionInfo = Get-DefaultReleaseVersionInfo -repoRoot (Get-DevProjexRepoRoot -startPath $PSScriptRoot)
+$initialVersion = if ([string]::IsNullOrWhiteSpace($Version)) { [string]$defaultReleaseVersionInfo.DisplayVersion } else { $Version }
+$versionInfo = Get-VersionInteractive -currentValue $initialVersion
 $resolvedVersion = [string]$versionInfo.DisplayVersion
 $storePackageVersion = [string]$versionInfo.StorePackageVersion
 $sourceRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
@@ -914,7 +959,7 @@ try {
     Build-GitHubArtifactsInWorkspace -version $resolvedVersion -configuration "Release"
 
     Write-Step "Building Microsoft Store package in isolated workspace"
-    Build-StoreArtifactsInWorkspace -configuration "ReleaseStore" -platform "x64" -bundlePlatforms "x64|arm64" -packageVersion $storePackageVersion
+    Build-StoreArtifactsInWorkspace -displayVersion $resolvedVersion -configuration "ReleaseStore" -platform "x64" -bundlePlatforms "x64|arm64" -packageVersion $storePackageVersion
 
     Invoke-WackValidationInWorkspace
 
