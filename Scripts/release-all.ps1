@@ -97,6 +97,100 @@ function Get-MsBuildPath() {
     throw "MSBuild.exe not found. Install Visual Studio Build Tools with Desktop Bridge support."
 }
 
+function Get-InstalledWindowsUapSdkVersions() {
+    $uapRoot = Join-Path ${env:ProgramFiles(x86)} "Windows Kits\10\DesignTime\CommonConfiguration\Neutral\UAP"
+    if (-not (Test-Path $uapRoot)) {
+        return @()
+    }
+
+    return Get-ChildItem -Path $uapRoot -Directory -ErrorAction SilentlyContinue |
+        Where-Object { Test-Path (Join-Path $_.FullName "UAP.props") } |
+        ForEach-Object {
+            try {
+                [pscustomobject]@{
+                    Name = $_.Name
+                    Version = [version]$_.Name
+                }
+            }
+            catch {
+                $null
+            }
+        } |
+        Where-Object { $null -ne $_ } |
+        Sort-Object Version -Descending
+}
+
+function Resolve-StoreTargetPlatformVersion([string]$projectPath) {
+    [xml]$projectXml = Get-Content -Path $projectPath
+    $xmlNamespace = New-Object System.Xml.XmlNamespaceManager($projectXml.NameTable)
+    $xmlNamespace.AddNamespace("msb", "http://schemas.microsoft.com/developer/msbuild/2003")
+
+    $requestedNode = $projectXml.SelectSingleNode("/msb:Project/msb:PropertyGroup/msb:TargetPlatformVersion", $xmlNamespace)
+    $minNode = $projectXml.SelectSingleNode("/msb:Project/msb:PropertyGroup/msb:TargetPlatformMinVersion", $xmlNamespace)
+
+    if ($null -eq $requestedNode -or [string]::IsNullOrWhiteSpace($requestedNode.InnerText)) {
+        throw "TargetPlatformVersion was not found in $projectPath"
+    }
+
+    $requestedVersion = [version]$requestedNode.InnerText.Trim()
+    $requestedVersionText = $requestedVersion.ToString()
+    $minVersion = if ($null -ne $minNode -and -not [string]::IsNullOrWhiteSpace($minNode.InnerText)) {
+        [version]$minNode.InnerText.Trim()
+    }
+    else {
+        [version]"0.0.0.0"
+    }
+
+    $installedVersions = @(Get-InstalledWindowsUapSdkVersions)
+    if ($installedVersions.Count -eq 0) {
+        throw "No Windows UAP SDKs with UAP.props were found under Windows Kits."
+    }
+
+    $requestedInstalled = $installedVersions | Where-Object { $_.Version -eq $requestedVersion } | Select-Object -First 1
+    if ($null -ne $requestedInstalled) {
+        return [pscustomobject]@{
+            ResolvedVersion = $requestedVersionText
+            RequestedVersion = $requestedVersionText
+            UsedFallback = $false
+        }
+    }
+
+    $fallbackVersion = $installedVersions | Where-Object { $_.Version -ge $minVersion } | Select-Object -First 1
+    if ($null -eq $fallbackVersion) {
+        $availableVersionList = ($installedVersions | ForEach-Object { $_.Name }) -join ", "
+        throw "Requested UAP SDK '$requestedVersionText' is not installed, and no installed UAP SDK satisfies TargetPlatformMinVersion '$($minVersion.ToString())'. Available SDKs: $availableVersionList"
+    }
+
+    return [pscustomobject]@{
+        ResolvedVersion = [string]$fallbackVersion.Name
+        RequestedVersion = $requestedVersionText
+        UsedFallback = $true
+    }
+}
+
+function Set-StoreProjectTargetPlatformVersion(
+    [string]$projectPath,
+    [string]$targetPlatformVersion
+) {
+    [xml]$projectXml = Get-Content -Path $projectPath
+    $xmlNamespace = New-Object System.Xml.XmlNamespaceManager($projectXml.NameTable)
+    $xmlNamespace.AddNamespace("msb", "http://schemas.microsoft.com/developer/msbuild/2003")
+
+    $targetVersionNode = $projectXml.SelectSingleNode("/msb:Project/msb:PropertyGroup/msb:TargetPlatformVersion", $xmlNamespace)
+    if ($null -eq $targetVersionNode) {
+        throw "TargetPlatformVersion was not found in $projectPath"
+    }
+
+    $currentVersion = $targetVersionNode.InnerText.Trim()
+    if ($currentVersion -eq $targetPlatformVersion) {
+        return $false
+    }
+
+    $targetVersionNode.InnerText = $targetPlatformVersion
+    $projectXml.Save($projectPath)
+    return $true
+}
+
 function Try-ParseVersionInput([string]$rawVersion) {
     if ([string]::IsNullOrWhiteSpace($rawVersion)) {
         return $null
@@ -245,11 +339,24 @@ function Invoke-StoreSmokeBuild([string]$repoRoot, [string]$versionOverride) {
     $projectPath = Join-Path $repoRoot "Packaging\Windows\DevProjex.Store\DevProjex.Store.wapproj"
     $appProjectPath = Join-Path $repoRoot "Apps\Avalonia\DevProjex.Avalonia\DevProjex.Avalonia.csproj"
     $msbuildPath = Get-MsBuildPath
+    $targetPlatformResolution = Resolve-StoreTargetPlatformVersion -projectPath $projectPath
     $outputRoot = Join-Path $env:TEMP ("devprojex-store-smoke-" + [Guid]::NewGuid().ToString("N"))
+    $originalProjectContent = $null
+    $projectPatched = $false
 
     New-Item -ItemType Directory -Path $outputRoot -Force | Out-Null
 
     try {
+        if ($targetPlatformResolution.UsedFallback) {
+            Write-Warning "Requested UAP SDK $($targetPlatformResolution.RequestedVersion) is not installed. Using $($targetPlatformResolution.ResolvedVersion) for Store smoke build."
+        }
+        else {
+            Write-Host "Using requested UAP SDK $($targetPlatformResolution.ResolvedVersion) for Store smoke build."
+        }
+
+        $originalProjectContent = Get-Content -Path $projectPath -Raw
+        $projectPatched = Set-StoreProjectTargetPlatformVersion -projectPath $projectPath -targetPlatformVersion $targetPlatformResolution.ResolvedVersion
+
         Invoke-ExternalCommand -filePath "dotnet" -arguments (@("restore", $appProjectPath, "/p:Configuration=ReleaseStore") + $versionProperties) -failureMessage "dotnet restore failed for store smoke build" -workingDirectory $repoRoot
 
         $msbuildArgs = @(
@@ -274,6 +381,10 @@ function Invoke-StoreSmokeBuild([string]$repoRoot, [string]$versionOverride) {
         $artifacts | Sort-Object Name | ForEach-Object { Write-Host "  $($_.FullName)" }
     }
     finally {
+        if ($projectPatched -and $null -ne $originalProjectContent) {
+            Set-Content -Path $projectPath -Value $originalProjectContent -Encoding UTF8
+        }
+
         if (Test-Path $outputRoot) {
             Remove-Item -Path $outputRoot -Recurse -Force -ErrorAction SilentlyContinue
         }
@@ -539,6 +650,14 @@ function Build-StoreArtifactsInWorkspace(
     }
 
     $versionProperties = Get-BuildVersionProperties -displayVersion $displayVersion -storePackageVersion $packageVersion
+    $targetPlatformResolution = Resolve-StoreTargetPlatformVersion -projectPath $project
+
+    if ($targetPlatformResolution.UsedFallback) {
+        Write-Warning "Requested UAP SDK $($targetPlatformResolution.RequestedVersion) is not installed. Using $($targetPlatformResolution.ResolvedVersion) for Store build."
+    }
+    else {
+        Write-Host "  UAP SDK: $($targetPlatformResolution.ResolvedVersion)"
+    }
 
     Write-Host "Cleaning stale packaging artifacts..."
     $cleanupPaths = @(
@@ -609,6 +728,7 @@ function Build-StoreArtifactsInWorkspace(
 
     $avaloniaProjectPath = Join-Path $script:IsolatedRepoRoot "Apps\Avalonia\DevProjex.Avalonia\DevProjex.Avalonia.csproj"
     Write-Host "Restoring packages..."
+    Set-StoreProjectTargetPlatformVersion -projectPath $project -targetPlatformVersion $targetPlatformResolution.ResolvedVersion | Out-Null
     Invoke-ExternalCommand -filePath "dotnet" -arguments (@("restore", $avaloniaProjectPath, "/p:Configuration=$configuration") + $versionProperties) -failureMessage "dotnet restore failed for store build" -workingDirectory $script:IsolatedRepoRoot
 
     $publishStoreDir = Join-Path $script:IsolatedRepoRoot "publish\store"
