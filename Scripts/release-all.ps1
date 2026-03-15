@@ -21,11 +21,14 @@
 #>
 [CmdletBinding()]
 param(
-    [string]$Version = ""
+    [string]$Version = "",
+    [switch]$ValidateConfigOnly,
+    [switch]$SmokeStoreBuildOnly
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
+. (Join-Path $PSScriptRoot "release-helpers.ps1")
 
 $script:IsolatedWorkspaceRoot = $null
 $script:IsolatedRepoRoot = $null
@@ -69,6 +72,31 @@ function Ensure-DotnetAvailable() {
     }
 }
 
+function Get-MsBuildPath() {
+    $vswherePath = "C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe"
+    if (Test-Path $vswherePath) {
+        try {
+            $installationPath = & $vswherePath -latest -products * -requires Microsoft.Component.MSBuild -property installationPath 2>$null
+            if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($installationPath)) {
+                $candidate = Join-Path $installationPath.Trim() "MSBuild\Current\Bin\MSBuild.exe"
+                if (Test-Path $candidate) {
+                    return $candidate
+                }
+            }
+        }
+        catch {
+            # Fall back to PATH lookup below.
+        }
+    }
+
+    $command = Get-Command msbuild.exe -ErrorAction SilentlyContinue
+    if ($null -ne $command) {
+        return $command.Source
+    }
+
+    throw "MSBuild.exe not found. Install Visual Studio Build Tools with Desktop Bridge support."
+}
+
 function Try-ParseVersionInput([string]$rawVersion) {
     if ([string]::IsNullOrWhiteSpace($rawVersion)) {
         return $null
@@ -103,7 +131,16 @@ function Get-VersionInteractive([string]$currentValue) {
     $value = $currentValue
     while ($true) {
         if ([string]::IsNullOrWhiteSpace($value)) {
-            $value = Read-Host "Enter release version (5 / 4.6 / 4.7.1 / 4.7.1.0)"
+            $prompt = "Enter release version"
+            if (-not [string]::IsNullOrWhiteSpace($currentValue)) {
+                $prompt += " [$currentValue]"
+            }
+
+            $prompt += " (1-4 numeric segments)"
+            $value = Read-Host $prompt
+            if ([string]::IsNullOrWhiteSpace($value)) {
+                $value = $currentValue
+            }
         }
 
         $parsedVersion = Try-ParseVersionInput -rawVersion $value
@@ -113,6 +150,156 @@ function Get-VersionInteractive([string]$currentValue) {
 
         Write-Host "Invalid version format. Use 1-4 numeric segments, for example: 5, 4.6, 4.7.1, 4.7.1.0" -ForegroundColor Yellow
         $value = ""
+    }
+}
+
+function Assert-Condition([bool]$condition, [string]$message) {
+    if (-not $condition) {
+        throw $message
+    }
+}
+
+function Assert-VersionFormat([string]$value, [string]$name, [string]$pattern) {
+    if ($value -notmatch $pattern) {
+        throw "$name has invalid format '$value'."
+    }
+}
+
+function Invoke-ReleaseConfigValidation([string]$repoRoot) {
+    $versionInfo = Get-DefaultReleaseVersionInfo -repoRoot $repoRoot
+
+    Assert-VersionFormat -value ([string]$versionInfo.DisplayVersion) -name "DevProjexVersion" -pattern '^\d+(\.\d+){0,3}$'
+    Assert-VersionFormat -value ([string]$versionInfo.AssemblyVersion) -name "DevProjexAssemblyVersion" -pattern '^\d+\.\d+\.\d+\.\d+$'
+    Assert-VersionFormat -value ([string]$versionInfo.FileVersion) -name "DevProjexFileVersion" -pattern '^\d+\.\d+\.\d+\.\d+$'
+    Assert-VersionFormat -value ([string]$versionInfo.StorePackageVersion) -name "DevProjexStorePackageVersion" -pattern '^\d+\.\d+\.\d+\.\d+$'
+    Assert-Condition ($versionInfo.AssemblyVersion -eq $versionInfo.FileVersion) "AssemblyVersion and FileVersion must stay identical."
+    Assert-Condition ($versionInfo.AssemblyVersion -eq $versionInfo.StorePackageVersion) "AssemblyVersion and StorePackageVersion must stay identical."
+
+    $appProjectPath = Join-Path $repoRoot "Apps\Avalonia\DevProjex.Avalonia\DevProjex.Avalonia.csproj"
+    $appProjectContent = Get-Content -Path $appProjectPath -Raw
+    foreach ($versionPropertyName in @("Version", "AssemblyVersion", "FileVersion", "InformationalVersion")) {
+        Assert-Condition (-not ($appProjectContent -match "<$versionPropertyName>")) "App project must inherit $versionPropertyName from Directory.Build.props: $appProjectPath"
+    }
+
+    $manifestPath = Join-Path $repoRoot "Packaging\Windows\DevProjex.Store\Package.appxmanifest"
+    [xml]$manifest = Get-Content -Path $manifestPath
+    $manifestVersion = [string]$manifest.Package.Identity.Version
+    Assert-Condition ($manifestVersion -eq $versionInfo.StorePackageVersion) "Store manifest version '$manifestVersion' does not match DevProjexStorePackageVersion '$($versionInfo.StorePackageVersion)'."
+
+    $wapprojPath = Join-Path $repoRoot "Packaging\Windows\DevProjex.Store\DevProjex.Store.wapproj"
+    [xml]$wapproj = Get-Content -Path $wapprojPath
+    $xmlNamespace = New-Object System.Xml.XmlNamespaceManager($wapproj.NameTable)
+    $xmlNamespace.AddNamespace("msb", "http://schemas.microsoft.com/developer/msbuild/2003")
+    $bundlePlatformsNode = $wapproj.SelectSingleNode("/msb:Project/msb:PropertyGroup/msb:AppxBundlePlatforms", $xmlNamespace)
+    Assert-Condition ($null -ne $bundlePlatformsNode) "AppxBundlePlatforms was not found in $wapprojPath"
+    Assert-Condition ([string]$bundlePlatformsNode.InnerText -eq "x64|arm64") "AppxBundlePlatforms must stay x64|arm64."
+
+    $listingCsvPath = Join-Path $repoRoot "Packaging\Windows\StoreListing\listing.csv"
+    $listingHeaders = (Get-Content -Path $listingCsvPath -First 1) -split ','
+    Assert-Condition (($listingHeaders -contains 'en-us') -and ($listingHeaders -contains 'ru-ru')) "Store listing CSV must include en-us and ru-ru columns."
+
+    $releaseAllPath = Join-Path $repoRoot "Scripts\release-all.ps1"
+    $releaseAllContent = Get-Content -Path $releaseAllPath -Raw
+    Assert-Condition ($releaseAllContent.Contains('release-helpers.ps1')) "release-all.ps1 must use release-helpers.ps1 for shared release metadata."
+
+    $wingetScriptPath = Join-Path $repoRoot "Scripts\winget-update.ps1"
+    $wingetScriptContent = Get-Content -Path $wingetScriptPath -Raw
+    Assert-Condition ($wingetScriptContent.Contains('release-helpers.ps1')) "winget-update.ps1 must use release-helpers.ps1 for shared release metadata."
+    Assert-Condition ($wingetScriptContent.Contains('Get-DefaultReleaseVersionInfo')) "winget-update.ps1 must load default release version info from release-helpers.ps1."
+    Assert-Condition ($wingetScriptContent.Contains('defaultValue ([string]$defaultReleaseVersionInfo.DisplayVersion)')) "winget-update.ps1 must use shared default display version instead of a hardcoded prompt value."
+
+    $macReadmePath = Join-Path $repoRoot "Packaging\MacOS\README.md"
+    $macReadmeContent = Get-Content -Path $macReadmePath -Raw
+    Assert-Condition ($macReadmeContent.Contains('YOUR_RELEASE_VERSION')) "Packaging/MacOS/README.md must use a release-version placeholder instead of a stale hardcoded example."
+
+    Write-Host "Release configuration is consistent."
+    Write-Host "  DisplayVersion      : $($versionInfo.DisplayVersion)"
+    Write-Host "  StorePackageVersion : $($versionInfo.StorePackageVersion)"
+    Write-Host "  AppxBundlePlatforms : x64|arm64"
+}
+
+function Invoke-StoreSmokeBuild([string]$repoRoot, [string]$versionOverride) {
+    $defaultVersionInfo = Get-DefaultReleaseVersionInfo -repoRoot $repoRoot
+    $resolvedDisplayVersion = if ([string]::IsNullOrWhiteSpace($versionOverride)) { [string]$defaultVersionInfo.DisplayVersion } else { $versionOverride.Trim() }
+    if ($resolvedDisplayVersion -notmatch '^\d+(\.\d+){0,3}$') {
+        throw "Invalid version '$resolvedDisplayVersion'."
+    }
+
+    $storePackageVersion = if ($resolvedDisplayVersion -match '^\d+\.\d+\.\d+\.\d+$') {
+        $resolvedDisplayVersion
+    }
+    else {
+        $versionParts = [System.Collections.Generic.List[string]]::new()
+        foreach ($part in $resolvedDisplayVersion.Split('.')) {
+            $versionParts.Add($part)
+        }
+
+        while ($versionParts.Count -lt 4) {
+            $versionParts.Add("0")
+        }
+
+        $versionParts -join '.'
+    }
+
+    $versionProperties = Get-BuildVersionProperties -displayVersion $resolvedDisplayVersion -storePackageVersion $storePackageVersion
+    $projectPath = Join-Path $repoRoot "Packaging\Windows\DevProjex.Store\DevProjex.Store.wapproj"
+    $appProjectPath = Join-Path $repoRoot "Apps\Avalonia\DevProjex.Avalonia\DevProjex.Avalonia.csproj"
+    $msbuildPath = Get-MsBuildPath
+    $outputRoot = Join-Path $env:TEMP ("devprojex-store-smoke-" + [Guid]::NewGuid().ToString("N"))
+
+    New-Item -ItemType Directory -Path $outputRoot -Force | Out-Null
+
+    try {
+        Invoke-ExternalCommand -filePath "dotnet" -arguments (@("restore", $appProjectPath, "/p:Configuration=ReleaseStore") + $versionProperties) -failureMessage "dotnet restore failed for store smoke build" -workingDirectory $repoRoot
+
+        $msbuildArgs = @(
+            $projectPath,
+            "/p:Configuration=ReleaseStore",
+            "/p:Platform=x64",
+            "/p:AppxBundle=Always",
+            "/p:AppxBundlePlatforms=x64|arm64",
+            "/p:UapAppxPackageBuildMode=StoreUpload",
+            "/p:GenerateAppInstallerFile=false",
+            "/p:AppxPackageDir=$outputRoot\"
+        ) + $versionProperties
+
+        Invoke-ExternalCommand -filePath $msbuildPath -arguments $msbuildArgs -failureMessage "MS Store smoke build failed" -workingDirectory $repoRoot
+
+        $artifacts = Get-ChildItem -Path $outputRoot -Recurse -File -Include *.msixupload,*.msixbundle,*.msix -ErrorAction SilentlyContinue
+        if ($null -eq $artifacts -or $artifacts.Count -eq 0) {
+            throw "Store smoke build did not produce any MSIX artifacts."
+        }
+
+        Write-Host "Store smoke build succeeded."
+        $artifacts | Sort-Object Name | ForEach-Object { Write-Host "  $($_.FullName)" }
+    }
+    finally {
+        if (Test-Path $outputRoot) {
+            Remove-Item -Path $outputRoot -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
+
+function Assert-WindowsArtifactVersion(
+    [string]$artifactPath,
+    [string]$displayVersion,
+    [string]$storePackageVersion
+) {
+    $versionInfo = [System.Diagnostics.FileVersionInfo]::GetVersionInfo($artifactPath)
+    if ([string]::IsNullOrWhiteSpace($versionInfo.FileVersion)) {
+        throw "FileVersion is missing for '$artifactPath'."
+    }
+
+    if (-not $versionInfo.FileVersion.StartsWith($storePackageVersion, [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw "FileVersion '$($versionInfo.FileVersion)' does not match expected store package version '$storePackageVersion' for '$artifactPath'."
+    }
+
+    if ([string]::IsNullOrWhiteSpace($versionInfo.ProductVersion)) {
+        throw "ProductVersion is missing for '$artifactPath'."
+    }
+
+    if (-not $versionInfo.ProductVersion.StartsWith($displayVersion, [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw "ProductVersion '$($versionInfo.ProductVersion)' does not match expected display version '$displayVersion' for '$artifactPath'."
     }
 }
 
@@ -211,6 +398,9 @@ function Build-GitHubArtifactsInWorkspace([string]$version, [string]$configurati
         throw "Avalonia project not found in isolated workspace: $projectPath"
     }
 
+    $defaultReleaseVersionInfo = Get-DefaultReleaseVersionInfo -repoRoot $script:IsolatedRepoRoot
+    $versionProperties = Get-BuildVersionProperties -displayVersion $version -storePackageVersion ([string]$defaultReleaseVersionInfo.StorePackageVersion)
+
     $releaseDir = Join-Path $script:IsolatedRepoRoot "publish\github\v$version"
     $workDir = Join-Path $releaseDir "_work"
 
@@ -254,7 +444,7 @@ function Build-GitHubArtifactsInWorkspace([string]$version, [string]$configurati
             "/p:DebugType=None",
             "/p:DebugSymbols=false",
             "-o", $ridOutDir
-        )
+        ) + $versionProperties
 
         Invoke-ExternalCommand -filePath "dotnet" -arguments $publishArgs -failureMessage "dotnet publish failed for RID: $rid" -workingDirectory $script:IsolatedRepoRoot
 
@@ -265,6 +455,10 @@ function Build-GitHubArtifactsInWorkspace([string]$version, [string]$configurati
 
         $destinationPath = Join-Path $releaseDir ([string]$target.Name)
         Copy-Item -Path $sourcePath -Destination $destinationPath -Force
+
+        if ($rid.StartsWith("win-", [System.StringComparison]::OrdinalIgnoreCase)) {
+            Assert-WindowsArtifactVersion -artifactPath $destinationPath -displayVersion $version -storePackageVersion ([string]$defaultReleaseVersionInfo.StorePackageVersion)
+        }
     }
 
     $shaFile = Join-Path $releaseDir "SHA256SUMS.txt"
@@ -325,6 +519,7 @@ function Get-LatestVisualStudioInstancePath() {
 }
 
 function Build-StoreArtifactsInWorkspace(
+    [string]$displayVersion,
     [string]$configuration,
     [string]$platform,
     [string]$bundlePlatforms,
@@ -342,6 +537,8 @@ function Build-StoreArtifactsInWorkspace(
     if (-not [string]::IsNullOrWhiteSpace($packageVersion)) {
         Write-Host "  Package version override: $packageVersion"
     }
+
+    $versionProperties = Get-BuildVersionProperties -displayVersion $displayVersion -storePackageVersion $packageVersion
 
     Write-Host "Cleaning stale packaging artifacts..."
     $cleanupPaths = @(
@@ -412,7 +609,7 @@ function Build-StoreArtifactsInWorkspace(
 
     $avaloniaProjectPath = Join-Path $script:IsolatedRepoRoot "Apps\Avalonia\DevProjex.Avalonia\DevProjex.Avalonia.csproj"
     Write-Host "Restoring packages..."
-    Invoke-ExternalCommand -filePath "dotnet" -arguments @("restore", $avaloniaProjectPath, "/p:Configuration=$configuration") -failureMessage "dotnet restore failed for store build" -workingDirectory $script:IsolatedRepoRoot
+    Invoke-ExternalCommand -filePath "dotnet" -arguments (@("restore", $avaloniaProjectPath, "/p:Configuration=$configuration") + $versionProperties) -failureMessage "dotnet restore failed for store build" -workingDirectory $script:IsolatedRepoRoot
 
     $publishStoreDir = Join-Path $script:IsolatedRepoRoot "publish\store"
     New-Item -ItemType Directory -Force -Path $publishStoreDir | Out-Null
@@ -428,7 +625,7 @@ function Build-StoreArtifactsInWorkspace(
         "/p:UapAppxPackageBuildMode=StoreUpload",
         "/p:AppxPackageDir=publish\store\",
         "/flp:logfile=$buildLogRelative;verbosity=normal"
-    )
+    ) + $versionProperties
     Invoke-ExternalCommand -filePath $msbuildExe -arguments $msbuildArgs -failureMessage "MSIX build failed" -workingDirectory $script:IsolatedRepoRoot
 
     $objRoot = Join-Path $script:IsolatedRepoRoot "Packaging\Windows\DevProjex.Store\obj"
@@ -590,10 +787,15 @@ function Invoke-WackForPackage(
     $safeLabel = ($label -replace '[^a-zA-Z0-9\-_]', '_').ToLowerInvariant()
     $reportPath = Join-Path $reportDirectory ("wack-" + $safeLabel + ".xml")
 
-    & $appCertPath test -appxpackagepath "$packagePath" -reportoutputpath "$reportPath"
+    $appCertOutput = & $appCertPath test -appxpackagepath "$packagePath" -reportoutputpath "$reportPath"
     $exitCode = $LASTEXITCODE
+    foreach ($line in @($appCertOutput)) {
+        if (-not [string]::IsNullOrWhiteSpace([string]$line)) {
+            Write-Host "  $line"
+        }
+    }
 
-    return @{
+    return [pscustomobject]@{
         Label = $label
         PackagePath = $packagePath
         ExitCode = $exitCode
@@ -891,7 +1093,25 @@ function Cleanup-IsolatedWorkspace() {
 }
 
 Ensure-DotnetAvailable
-$versionInfo = Get-VersionInteractive -currentValue $Version
+$repoRoot = Get-DevProjexRepoRoot -startPath $PSScriptRoot
+
+if ($ValidateConfigOnly -and $SmokeStoreBuildOnly) {
+    throw "Use either -ValidateConfigOnly or -SmokeStoreBuildOnly, not both."
+}
+
+if ($ValidateConfigOnly) {
+    Invoke-ReleaseConfigValidation -repoRoot $repoRoot
+    return
+}
+
+if ($SmokeStoreBuildOnly) {
+    Invoke-StoreSmokeBuild -repoRoot $repoRoot -versionOverride $Version
+    return
+}
+
+$defaultReleaseVersionInfo = Get-DefaultReleaseVersionInfo -repoRoot $repoRoot
+$initialVersion = if ([string]::IsNullOrWhiteSpace($Version)) { [string]$defaultReleaseVersionInfo.DisplayVersion } else { $Version }
+$versionInfo = Get-VersionInteractive -currentValue $initialVersion
 $resolvedVersion = [string]$versionInfo.DisplayVersion
 $storePackageVersion = [string]$versionInfo.StorePackageVersion
 $sourceRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
@@ -914,7 +1134,7 @@ try {
     Build-GitHubArtifactsInWorkspace -version $resolvedVersion -configuration "Release"
 
     Write-Step "Building Microsoft Store package in isolated workspace"
-    Build-StoreArtifactsInWorkspace -configuration "ReleaseStore" -platform "x64" -bundlePlatforms "x64|arm64" -packageVersion $storePackageVersion
+    Build-StoreArtifactsInWorkspace -displayVersion $resolvedVersion -configuration "ReleaseStore" -platform "x64" -bundlePlatforms "x64|arm64" -packageVersion $storePackageVersion
 
     Invoke-WackValidationInWorkspace
 
