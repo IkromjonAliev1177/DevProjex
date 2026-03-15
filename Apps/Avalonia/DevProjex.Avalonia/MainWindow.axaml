@@ -653,7 +653,9 @@
 
                     <ScrollViewer Grid.Column="1"
                                   Name="PreviewTextScrollViewer"
+                                  Classes="preview-scroll"
                                   Margin="0,0,0,8"
+                                  Cursor="Arrow"
                                   IsScrollInertiaEnabled="True"
                                   HorizontalScrollBarVisibility="Auto"
                                   VerticalScrollBarVisibility="Auto"

@@ -724,6 +724,23 @@
         <Setter Property="Background" Value="Transparent" />
     </Style>
 
+    <Style Selector="ScrollViewer.preview-scroll">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Cursor" Value="Arrow" />
+    </Style>
+
+    <Style Selector="ScrollViewer.preview-scroll ScrollBar">
+        <Setter Property="Cursor" Value="Arrow" />
+    </Style>
+
+    <Style Selector="ScrollViewer.preview-scroll RepeatButton">
+        <Setter Property="Cursor" Value="Arrow" />
+    </Style>
+
+    <Style Selector="ScrollViewer.preview-scroll Thumb">
+        <Setter Property="Cursor" Value="Arrow" />
+    </Style>
+
     <!-- Fix font inheritance for TextBlock in TreeView -->
     <Style Selector="TreeView TextBlock">
         <Setter Property="FontFamily" Value="{Binding $parent[TreeView].FontFamily}" />
