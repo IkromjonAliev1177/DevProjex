@@ -25,7 +25,7 @@ jobs:
 
       - name: Validate release metadata
         shell: pwsh
-        run: ./Scripts/validate-release-config.ps1
+        run: ./Scripts/release-all.ps1 -ValidateConfigOnly
 
   build-test:
     name: CI (${{ matrix.name }})

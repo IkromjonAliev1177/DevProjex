@@ -25,7 +25,7 @@ jobs:
 
       - name: Validate release metadata
         shell: pwsh
-        run: ./Scripts/validate-release-config.ps1
+        run: ./Scripts/release-all.ps1 -ValidateConfigOnly
 
   publish-smoke:
     name: Publish Smoke (${{ matrix.rid }})
@@ -91,4 +91,4 @@ jobs:
 
       - name: Build Store package smoke
         shell: pwsh
-        run: ./Scripts/smoke-store-build.ps1
+        run: ./Scripts/release-all.ps1 -SmokeStoreBuildOnly
