@@ -75,6 +75,31 @@ jobs:
           /p:DebugSymbols=false
           -o artifacts/publish/${{ matrix.rid }}
 
+      - name: Startup Smoke (Windows x64)
+        if: ${{ matrix.rid == 'win-x64' }}
+        shell: pwsh
+        run: |
+          $exePath = Resolve-Path "artifacts/publish/${{ matrix.rid }}/DevProjex.exe"
+          $workingDirectory = Split-Path -Path $exePath -Parent
+
+          $process = Start-Process -FilePath $exePath -WorkingDirectory $workingDirectory -PassThru
+          try {
+            Start-Sleep -Seconds 5
+            $process.Refresh()
+
+            if ($process.HasExited) {
+              throw "Published app exited too early during startup smoke. ExitCode=$($process.ExitCode)"
+            }
+
+            Write-Host "Startup smoke passed. Process stayed alive for 5 seconds."
+          }
+          finally {
+            if (-not $process.HasExited) {
+              Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+              $process.WaitForExit(5000) | Out-Null
+            }
+          }
+
   store-package-smoke:
     name: Store Package Smoke
     needs: validate-release-config
