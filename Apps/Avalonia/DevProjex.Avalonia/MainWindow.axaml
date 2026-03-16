@@ -158,18 +158,19 @@
       <Setter Property="Padding" Value="0" />
     </Style>
 
-    <Style Selector="GridSplitter.island-splitter">
-      <Setter Property="Background" Value="{DynamicResource AppBorderBrush}" />
-      <Setter Property="Opacity" Value="0.22" />
-      <Setter Property="Width" Value="8" />
-      <Setter Property="HorizontalAlignment" Value="Center" />
+    <Style Selector="Border.island-splitter">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Width" Value="4" />
+      <Setter Property="MinWidth" Value="4" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
       <Setter Property="VerticalAlignment" Value="Stretch" />
       <Setter Property="Cursor" Value="SizeWestEast" />
+      <Setter Property="UseLayoutRounding" Value="True" />
     </Style>
 
-    <Style Selector="GridSplitter.island-splitter:pointerover">
-      <Setter Property="Opacity" Value="0.56" />
+    <Style Selector="Border.island-splitter:pointerover, Border.island-splitter.splitter-dragging">
       <Setter Property="Background" Value="{DynamicResource AppAccentBrush}" />
+      <Setter Property="Opacity" Value="0.44" />
     </Style>
 
     <Style Selector="Border.status-strip">
@@ -494,7 +495,7 @@
 
       <!-- Project workspace shown when a project is loaded -->
       <Grid Name="WorkspaceGrid"
-            ColumnDefinitions="*,0,0,Auto"
+            ColumnDefinitions="*,0,0,0,Auto"
             IsVisible="{Binding IsProjectLoaded}"
             Margin="4,3,4,3">
         <Grid Grid.Column="0"
@@ -590,14 +591,15 @@
           </Border>
         </Grid>
 
-        <GridSplitter
-                      Grid.Column="1"
-                      Name="TreePreviewSplitter"
-                      Classes="island-splitter"
-                      IsVisible="{Binding IsSplitMode}"
-                      ResizeDirection="Columns"
-                      ResizeBehavior="PreviousAndNext"
-                      ShowsPreview="False" />
+        <Border Grid.Column="1"
+                Name="TreePreviewSplitter"
+                Classes="island-splitter"
+                IsVisible="False"
+                PointerPressed="OnTreePreviewSplitterPointerPressed"
+                PointerMoved="OnWorkspaceSplitterPointerMoved"
+                PointerReleased="OnWorkspaceSplitterPointerReleased"
+                PointerCaptureLost="OnWorkspaceSplitterPointerCaptureLost"
+                PointerExited="OnWorkspaceSplitterPointerExited" />
 
         <Grid Grid.Column="2"
               RowDefinitions="Auto,*">
@@ -718,11 +720,20 @@
           </Border>
         </Grid>
 
-        <!-- Animated settings panel container -->
         <Border Grid.Column="3"
+                Name="PreviewSettingsSplitter"
+                Classes="island-splitter"
+                IsVisible="False"
+                PointerPressed="OnPreviewSettingsSplitterPointerPressed"
+                PointerMoved="OnWorkspaceSplitterPointerMoved"
+                PointerReleased="OnWorkspaceSplitterPointerReleased"
+                PointerCaptureLost="OnWorkspaceSplitterPointerCaptureLost"
+                PointerExited="OnWorkspaceSplitterPointerExited" />
+
+        <!-- Animated settings panel container -->
+        <Border Grid.Column="4"
                 Name="SettingsContainer"
                 ClipToBounds="True"
-                Margin="4,0,0,0"
                 IsVisible="{Binding IsProjectLoaded}">
           <Border Classes="island-panel settings-island"
                   Name="SettingsIsland"

@@ -38,6 +38,13 @@ public partial class MainWindow : Window
         Preview = 2
     }
 
+    private enum WorkspaceResizeTarget
+    {
+        None = 0,
+        TreePreview = 1,
+        PreviewSettings = 2
+    }
+
     private enum StatusOperationType
     {
         None = 0,
@@ -168,7 +175,9 @@ public partial class MainWindow : Window
     private ColumnDefinition? _treePaneColumn;
     private ColumnDefinition? _treePreviewSplitterColumn;
     private ColumnDefinition? _previewPaneColumn;
-    private GridSplitter? _treePreviewSplitter;
+    private ColumnDefinition? _previewSettingsSplitterColumn;
+    private Border? _treePreviewSplitter;
+    private Border? _previewSettingsSplitter;
     private Border? _treeIsland;
     private Border? _previewIsland;
     private Border? _previewLineNumbersBackground;
@@ -192,13 +201,21 @@ public partial class MainWindow : Window
     private Border? _settingsIsland;
     private TranslateTransform? _settingsTransform;
     private bool _settingsAnimating;
-    private const double SettingsPanelWidth = 328.0; // 320 content + 8 margin
+    private const double SettingsPanelWidth = 328.0;
+    private const double SettingsPanelMinWidth = 248.0;
     private static readonly TimeSpan SettingsPanelAnimationDuration = TimeSpan.FromMilliseconds(300);
     private const double SplitTreePaneMinWidth = 220.0;
     private const double SplitPreviewPaneMinWidth = 280.0;
-    private const double TreePreviewSplitterWidth = 8.0;
+    private const double TreePreviewSplitterWidth = 4.0;
+    private const double PreviewSettingsSplitterWidth = 4.0;
+    private const string SplitterDraggingClass = "splitter-dragging";
     private GridLength _savedSplitTreeColumnWidth = new(5, GridUnitType.Star);
     private GridLength _savedSplitPreviewColumnWidth = new(6, GridUnitType.Star);
+    private double _currentSettingsPanelWidth = SettingsPanelWidth;
+    private WorkspaceResizeTarget _activeWorkspaceResizeTarget;
+    private IPointer? _activeWorkspaceResizePointer;
+    private double _lastWorkspaceResizePointerX;
+    private bool _workspaceChromeRefreshPending;
 
     // Search bar animation
     private Border? _searchBarContainer;
@@ -371,14 +388,16 @@ public partial class MainWindow : Window
         _treeView = this.FindControl<TreeView>("ProjectTree");
         _topMenuBar = this.FindControl<TopMenuBarView>("TopMenuBar");
         _workspaceGrid = this.FindControl<Grid>("WorkspaceGrid");
-        _treePreviewSplitter = this.FindControl<GridSplitter>("TreePreviewSplitter");
+        _treePreviewSplitter = this.FindControl<Border>("TreePreviewSplitter");
+        _previewSettingsSplitter = this.FindControl<Border>("PreviewSettingsSplitter");
         _treeIsland = this.FindControl<Border>("TreeIsland");
         _previewIsland = this.FindControl<Border>("PreviewIsland");
-        if (_workspaceGrid is not null && _workspaceGrid.ColumnDefinitions.Count >= 3)
+        if (_workspaceGrid is not null && _workspaceGrid.ColumnDefinitions.Count >= 5)
         {
             _treePaneColumn = _workspaceGrid.ColumnDefinitions[0];
             _treePreviewSplitterColumn = _workspaceGrid.ColumnDefinitions[1];
             _previewPaneColumn = _workspaceGrid.ColumnDefinitions[2];
+            _previewSettingsSplitterColumn = _workspaceGrid.ColumnDefinitions[3];
         }
         _searchBar = this.FindControl<SearchBarView>("SearchBar");
         _filterBar = this.FindControl<FilterBarView>("FilterBar");
@@ -735,6 +754,8 @@ public partial class MainWindow : Window
             _viewModel.UpdateHelpPopoverMaxSize(rect.Size);
             if (_viewModel.IsSplitMode)
                 NormalizeSplitPaneWidthsToStar();
+            ClampSettingsPanelWidthToAvailableSpace(applyToVisual: _viewModel.SettingsVisible && !_settingsAnimating);
+            UpdatePreviewSettingsSplitterState();
             if (_hasStatusMetricsSnapshot && _viewModel.StatusMetricsVisible)
                 RenderStatusBarMetrics();
             if (_hasPreviewSelectionMetricsSnapshot)
@@ -986,6 +1007,9 @@ public partial class MainWindow : Window
                 break;
         }
 
+        ClampSettingsPanelWidthToAvailableSpace(applyToVisual: _viewModel.SettingsVisible && !_settingsAnimating);
+        UpdatePreviewSettingsSplitterState();
+
         if (_treePreviewSplitter is not null)
             _treePreviewSplitter.IsVisible = _viewModel.IsSplitMode;
     }
@@ -1035,6 +1059,300 @@ public partial class MainWindow : Window
     {
         column.MinWidth = visible ? minWidth : 0;
         column.Width = visible ? width : new GridLength(0);
+    }
+
+    private void UpdatePreviewSettingsSplitterState()
+    {
+        if (_previewSettingsSplitterColumn is null)
+            return;
+
+        var isVisible = ShouldShowPreviewSettingsSplitter();
+        _previewSettingsSplitterColumn.Width = new GridLength(isVisible ? PreviewSettingsSplitterWidth : 0);
+
+        if (_previewSettingsSplitter is not null)
+            _previewSettingsSplitter.IsVisible = isVisible;
+    }
+
+    private bool ShouldShowPreviewSettingsSplitter()
+    {
+        if (!_viewModel.IsProjectLoaded)
+            return false;
+
+        if (_settingsAnimating || _viewModel.SettingsVisible)
+            return true;
+
+        var containerWidth = _settingsContainer?.Width ?? 0;
+        var actualWidth = _settingsContainer?.Bounds.Width ?? 0;
+        return containerWidth > 0.5 || actualWidth > 0.5;
+    }
+
+    private void ClampSettingsPanelWidthToAvailableSpace(bool applyToVisual)
+    {
+        _currentSettingsPanelWidth = GetClampedSettingsPanelWidth(_currentSettingsPanelWidth);
+        if (!applyToVisual || _settingsAnimating || _settingsContainer is null)
+            return;
+
+        if (!_viewModel.SettingsVisible && _settingsContainer.Width <= 0.5 && _settingsContainer.Bounds.Width <= 0.5)
+            return;
+
+        ApplySettingsPanelWidth(_currentSettingsPanelWidth, animate: false);
+    }
+
+    private double GetClampedSettingsPanelWidth(double desiredWidth)
+    {
+        var maxWidth = GetMaximumSettingsPanelWidth();
+        if (maxWidth <= 0)
+            return 0;
+
+        var minWidth = Math.Min(SettingsPanelMinWidth, maxWidth);
+        return Math.Clamp(desiredWidth, minWidth, maxWidth);
+    }
+
+    private double GetMaximumSettingsPanelWidth()
+    {
+        if (_workspaceGrid is null)
+            return SettingsPanelWidth;
+
+        var workspaceWidth = _workspaceGrid.Bounds.Width;
+        if (workspaceWidth <= 0)
+            return SettingsPanelWidth;
+
+        var reservedWidth = GetMinimumLeadingWorkspaceWidth() + PreviewSettingsSplitterWidth;
+        var maxWidth = workspaceWidth - reservedWidth;
+        return Math.Min(SettingsPanelWidth, Math.Max(0, maxWidth));
+    }
+
+    private double GetMinimumLeadingWorkspaceWidth()
+    {
+        return GetCurrentDisplayMode() switch
+        {
+            WorkspaceDisplayMode.Split => SplitTreePaneMinWidth + SplitPreviewPaneMinWidth + TreePreviewSplitterWidth,
+            WorkspaceDisplayMode.Preview => SplitPreviewPaneMinWidth,
+            _ => SplitTreePaneMinWidth
+        };
+    }
+
+    private void ApplySettingsPanelWidth(double width, bool animate)
+    {
+        if (_settingsContainer is null)
+            return;
+
+        if (animate)
+        {
+            EnsureSettingsPanelTransitions();
+            _settingsContainer.Width = width;
+            return;
+        }
+
+        var cachedTransitions = _settingsContainer.Transitions;
+        _settingsContainer.Transitions = null;
+        _settingsContainer.Width = width;
+        _settingsContainer.Transitions = cachedTransitions;
+    }
+
+    private double GetVisibleSettingsPanelWidth()
+    {
+        if (_settingsContainer is null)
+            return _currentSettingsPanelWidth;
+
+        if (_settingsContainer.Width > 0.5)
+            return _settingsContainer.Width;
+
+        if (_settingsContainer.Bounds.Width > 0.5)
+            return _settingsContainer.Bounds.Width;
+
+        return _currentSettingsPanelWidth;
+    }
+
+    // Custom resize handles avoid stale hover artifacts on transparent window surfaces
+    // and let us clamp the settings pane independently from the split preview/tree layout.
+    private void OnTreePreviewSplitterPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        BeginWorkspaceResize(sender as Border, e, WorkspaceResizeTarget.TreePreview);
+    }
+
+    private void OnPreviewSettingsSplitterPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        BeginWorkspaceResize(sender as Border, e, WorkspaceResizeTarget.PreviewSettings);
+    }
+
+    private void BeginWorkspaceResize(Border? splitter, PointerPressedEventArgs e, WorkspaceResizeTarget target)
+    {
+        if (splitter is null || _workspaceGrid is null)
+            return;
+
+        if (!e.GetCurrentPoint(splitter).Properties.IsLeftButtonPressed)
+            return;
+
+        if (target == WorkspaceResizeTarget.TreePreview && !_viewModel.IsSplitMode)
+            return;
+
+        if (target == WorkspaceResizeTarget.PreviewSettings && !ShouldShowPreviewSettingsSplitter())
+            return;
+
+        CompleteActiveWorkspaceResize(releasePointer: false);
+
+        _activeWorkspaceResizeTarget = target;
+        _activeWorkspaceResizePointer = e.Pointer;
+        _lastWorkspaceResizePointerX = e.GetPosition(_workspaceGrid).X;
+        SetWorkspaceSplitterDraggingState(splitter, isDragging: true);
+        e.Pointer.Capture(splitter);
+        e.Handled = true;
+    }
+
+    private void OnWorkspaceSplitterPointerMoved(object? sender, PointerEventArgs e)
+    {
+        if (_workspaceGrid is null || _activeWorkspaceResizeTarget == WorkspaceResizeTarget.None)
+            return;
+
+        if (!ReferenceEquals(e.Pointer, _activeWorkspaceResizePointer))
+            return;
+
+        var currentX = e.GetPosition(_workspaceGrid).X;
+        var deltaX = currentX - _lastWorkspaceResizePointerX;
+        if (Math.Abs(deltaX) < 0.01)
+            return;
+
+        _lastWorkspaceResizePointerX = currentX;
+
+        switch (_activeWorkspaceResizeTarget)
+        {
+            case WorkspaceResizeTarget.TreePreview:
+                ResizeTreePreviewPanes(deltaX);
+                break;
+
+            case WorkspaceResizeTarget.PreviewSettings:
+                ResizeSettingsPane(deltaX);
+                break;
+        }
+
+        e.Handled = true;
+    }
+
+    private void OnWorkspaceSplitterPointerReleased(object? sender, PointerReleasedEventArgs e)
+    {
+        if (!ReferenceEquals(e.Pointer, _activeWorkspaceResizePointer))
+            return;
+
+        CompleteActiveWorkspaceResize(releasePointer: true);
+        e.Handled = true;
+    }
+
+    private void OnWorkspaceSplitterPointerCaptureLost(object? sender, PointerCaptureLostEventArgs e)
+    {
+        CompleteActiveWorkspaceResize(releasePointer: false);
+    }
+
+    private void OnWorkspaceSplitterPointerExited(object? sender, PointerEventArgs e)
+    {
+        if (_activeWorkspaceResizeTarget != WorkspaceResizeTarget.None)
+            return;
+
+        ScheduleWorkspaceChromeRefresh();
+    }
+
+    private void ResizeTreePreviewPanes(double deltaX)
+    {
+        if (_treePaneColumn is null || _previewPaneColumn is null)
+            return;
+
+        var totalWidth = _treePaneColumn.ActualWidth + _previewPaneColumn.ActualWidth;
+        if (totalWidth <= 0)
+            return;
+
+        var minTreeWidth = SplitTreePaneMinWidth;
+        var maxTreeWidth = totalWidth - SplitPreviewPaneMinWidth;
+        if (maxTreeWidth <= minTreeWidth)
+            return;
+
+        var newTreeWidth = Math.Clamp(_treePaneColumn.ActualWidth + deltaX, minTreeWidth, maxTreeWidth);
+        var newPreviewWidth = totalWidth - newTreeWidth;
+        _treePaneColumn.Width = new GridLength(newTreeWidth);
+        _previewPaneColumn.Width = new GridLength(newPreviewWidth);
+    }
+
+    private void ResizeSettingsPane(double deltaX)
+    {
+        if (_settingsAnimating || _settingsContainer is null)
+            return;
+
+        var currentWidth = GetVisibleSettingsPanelWidth();
+        var desiredWidth = currentWidth - deltaX;
+        var clampedWidth = GetClampedSettingsPanelWidth(desiredWidth);
+        if (Math.Abs(clampedWidth - currentWidth) < 0.01)
+            return;
+
+        _currentSettingsPanelWidth = clampedWidth;
+        ApplySettingsPanelWidth(clampedWidth, animate: false);
+    }
+
+    private void CompleteActiveWorkspaceResize(bool releasePointer)
+    {
+        if (_activeWorkspaceResizeTarget == WorkspaceResizeTarget.None)
+            return;
+
+        var activeTarget = _activeWorkspaceResizeTarget;
+        var activePointer = _activeWorkspaceResizePointer;
+
+        _activeWorkspaceResizeTarget = WorkspaceResizeTarget.None;
+        _activeWorkspaceResizePointer = null;
+        _lastWorkspaceResizePointerX = 0;
+
+        SetWorkspaceSplitterDraggingState(_treePreviewSplitter, isDragging: false);
+        SetWorkspaceSplitterDraggingState(_previewSettingsSplitter, isDragging: false);
+
+        if (activeTarget == WorkspaceResizeTarget.TreePreview)
+        {
+            CaptureSplitPaneLayout();
+            if (_treePaneColumn is not null && _previewPaneColumn is not null)
+            {
+                _treePaneColumn.Width = _savedSplitTreeColumnWidth;
+                _previewPaneColumn.Width = _savedSplitPreviewColumnWidth;
+            }
+        }
+        else if (activeTarget == WorkspaceResizeTarget.PreviewSettings)
+        {
+            ClampSettingsPanelWidthToAvailableSpace(applyToVisual: _viewModel.SettingsVisible && !_settingsAnimating);
+        }
+
+        if (releasePointer)
+            activePointer?.Capture(null);
+
+        UpdatePreviewSettingsSplitterState();
+        ScheduleWorkspaceChromeRefresh();
+    }
+
+    private static void SetWorkspaceSplitterDraggingState(Border? splitter, bool isDragging)
+    {
+        if (splitter is null)
+            return;
+
+        if (isDragging)
+            splitter.Classes.Add(SplitterDraggingClass);
+        else
+            splitter.Classes.Remove(SplitterDraggingClass);
+    }
+
+    private void ScheduleWorkspaceChromeRefresh()
+    {
+        if (_workspaceChromeRefreshPending)
+            return;
+
+        _workspaceChromeRefreshPending = true;
+        Dispatcher.UIThread.Post(
+            () =>
+            {
+                _workspaceChromeRefreshPending = false;
+                _workspaceGrid?.InvalidateArrange();
+                _workspaceGrid?.InvalidateVisual();
+                _treeIsland?.InvalidateVisual();
+                _previewIsland?.InvalidateVisual();
+                _settingsContainer?.InvalidateVisual();
+                _treePreviewSplitter?.InvalidateVisual();
+                _previewSettingsSplitter?.InvalidateVisual();
+                InvalidateVisual();
+            },
+            DispatcherPriority.Render);
     }
 
     private static bool IsUsableSplitPaneWidth(GridLength width)
@@ -2837,14 +3155,21 @@ public partial class MainWindow : Window
         try
         {
             EnsureSettingsPanelTransitions();
-            _settingsContainer.Width = show ? SettingsPanelWidth : 0.0;
-            _settingsTransform.X = show ? 0.0 : SettingsPanelWidth;
+            _currentSettingsPanelWidth = GetClampedSettingsPanelWidth(_currentSettingsPanelWidth);
+            var targetVisibleWidth = _currentSettingsPanelWidth;
+
+            if (show)
+                UpdatePreviewSettingsSplitterState();
+
+            ApplySettingsPanelWidth(show ? targetVisibleWidth : 0.0, animate: true);
+            _settingsTransform.X = show ? 0.0 : targetVisibleWidth;
             _settingsIsland.Opacity = show ? 1.0 : 0.0;
             await WaitForPanelAnimationAsync(SettingsPanelAnimationDuration);
         }
         finally
         {
             _settingsAnimating = false;
+            UpdatePreviewSettingsSplitterState();
         }
     }
 

@@ -7,7 +7,9 @@
   <UserControl.Resources>
     <converters:FontFamilyDisplayNameConverter x:Key="FontFamilyDisplayNameConverter" />
   </UserControl.Resources>
-  <Border Width="320"
+  <Border MinWidth="240"
+          MaxWidth="320"
+          HorizontalAlignment="Stretch"
           Classes="panel"
           Background="Transparent"
           BorderThickness="0"
