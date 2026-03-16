@@ -62,6 +62,7 @@
   "Filter.ByName": "Filter by name",
   "Filter.Tooltip": "Filter by name (Ctrl+Shift+N)",
   "CopyFormat.Tooltip": "Tree format",
+  "Split.Tooltip": "Split mode",
   "Preview.Tooltip": "Preview mode (Ctrl+B)",
   "Preview.Modes.Label": "Three modes:",
   "Preview.Mode.Tree": "Tree",

@@ -65,6 +65,7 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
     private bool _isAcrylicEnabled;
     private bool _isTransparentEnabled = true;
     private bool _isPreviewMode;
+    private bool _isSplitMode;
     private bool _isPreviewLoading;
     private string _previewText = string.Empty;
     private IPreviewTextDocument? _previewDocument;
@@ -280,10 +281,28 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
             if (_isPreviewMode == value) return;
             _isPreviewMode = value;
             RaisePropertyChanged();
-            RaisePropertyChanged(nameof(IsSearchFilterAvailable));
-            RaisePropertyChanged(nameof(AreFilterSettingsEnabled));
+            RaisePreviewStatePropertiesChanged();
         }
     }
+
+    public bool IsSplitMode
+    {
+        get => _isSplitMode;
+        set
+        {
+            if (_isSplitMode == value) return;
+            _isSplitMode = value;
+            RaisePropertyChanged();
+            RaisePreviewStatePropertiesChanged();
+            RaiseCompactModePropertiesChanged();
+        }
+    }
+
+    public bool IsAnyPreviewVisible => _isPreviewMode || _isSplitMode;
+
+    public bool IsPreviewPaneVisible => _isPreviewMode || _isSplitMode;
+
+    public bool IsTreePaneVisible => !_isPreviewMode;
 
     public bool IsSearchFilterAvailable => _isProjectLoaded && !_isPreviewMode;
 
@@ -384,11 +403,13 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
             if (_isCompactMode == value) return;
             _isCompactMode = value;
             RaisePropertyChanged();
-            RaisePropertyChanged(nameof(TreeItemSpacing));
-            RaisePropertyChanged(nameof(TreeItemPadding));
-            RaisePropertyChanged(nameof(SettingsListSpacing));
+            RaiseCompactModePropertiesChanged();
         }
     }
+
+    public bool IsCompactModeEffective => _isSplitMode || _isCompactMode;
+
+    public bool CanToggleCompactMode => !_isSplitMode;
 
     public bool IsTreeAnimationEnabled
     {
@@ -599,6 +620,24 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         RaisePropertyChanged(nameof(HasAnyEffect));
         RaisePropertyChanged(nameof(ShowTransparencySliders));
         RaisePropertyChanged(nameof(ShowBlurSlider));
+    }
+
+    private void RaisePreviewStatePropertiesChanged()
+    {
+        RaisePropertyChanged(nameof(IsAnyPreviewVisible));
+        RaisePropertyChanged(nameof(IsPreviewPaneVisible));
+        RaisePropertyChanged(nameof(IsTreePaneVisible));
+        RaisePropertyChanged(nameof(IsSearchFilterAvailable));
+        RaisePropertyChanged(nameof(AreFilterSettingsEnabled));
+    }
+
+    private void RaiseCompactModePropertiesChanged()
+    {
+        RaisePropertyChanged(nameof(IsCompactModeEffective));
+        RaisePropertyChanged(nameof(CanToggleCompactMode));
+        RaisePropertyChanged(nameof(TreeItemSpacing));
+        RaisePropertyChanged(nameof(TreeItemPadding));
+        RaisePropertyChanged(nameof(SettingsListSpacing));
     }
 
     // Methods for toggle behavior (click on active = disable)
@@ -926,14 +965,14 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
             : new Thickness(0);
 
     // Tree row spacing is controlled in VM so compact mode is a single switch.
-    public double TreeItemSpacing => _isCompactMode ? 2 : 6;
+    public double TreeItemSpacing => IsCompactModeEffective ? 2 : 6;
 
     // TreeViewItem padding follows the same compact flag to keep row height tight.
     // Negative vertical padding in compact mode for tighter rows.
-    public Thickness TreeItemPadding => _isCompactMode ? new Thickness(0, -20) : new Thickness(4, 1);
+    public Thickness TreeItemPadding => IsCompactModeEffective ? new Thickness(0, -20) : new Thickness(4, 1);
 
     // Settings lists use an ItemsPanel with explicit Spacing (can go negative to tighten).
-    public double SettingsListSpacing => _isCompactMode ? -5 : -3;
+    public double SettingsListSpacing => IsCompactModeEffective ? -5 : -3;
 
     public void UpdateSearchMatchSummary(int currentIndex, int totalMatches)
     {
@@ -1089,6 +1128,7 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
     public string FilterByNamePlaceholder { get; private set; } = string.Empty;
     public string FilterTooltip { get; private set; } = string.Empty;
     public string CopyFormatTooltip { get; private set; } = string.Empty;
+    public string SplitTooltip { get; private set; } = string.Empty;
     public string PreviewTooltip { get; private set; } = string.Empty;
     public string PreviewModesLabel { get; private set; } = string.Empty;
     public string PreviewModeTree { get; private set; } = string.Empty;
@@ -1202,6 +1242,7 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         FilterByNamePlaceholder = _localization["Filter.ByName"];
         FilterTooltip = _localization["Filter.Tooltip"];
         CopyFormatTooltip = _localization["CopyFormat.Tooltip"];
+        SplitTooltip = _localization["Split.Tooltip"];
         PreviewTooltip = _localization["Preview.Tooltip"];
         PreviewModesLabel = _localization["Preview.Modes.Label"];
         PreviewModeTree = _localization["Preview.Mode.Tree"];
@@ -1327,6 +1368,7 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         RaisePropertyChanged(nameof(FilterByNamePlaceholder));
         RaisePropertyChanged(nameof(FilterTooltip));
         RaisePropertyChanged(nameof(CopyFormatTooltip));
+        RaisePropertyChanged(nameof(SplitTooltip));
         RaisePropertyChanged(nameof(PreviewTooltip));
         RaisePropertyChanged(nameof(PreviewModesLabel));
         RaisePropertyChanged(nameof(PreviewModeTree));

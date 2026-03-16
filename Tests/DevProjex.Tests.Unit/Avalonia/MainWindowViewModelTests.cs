@@ -336,6 +336,45 @@ public sealed class MainWindowViewModelTests
     }
 
     [Fact]
+    public void IsSplitMode_EnablesPreviewPaneAndLocksCompactMode()
+    {
+        var viewModel = CreateViewModel();
+
+        viewModel.IsSplitMode = true;
+
+        Assert.True(viewModel.IsSplitMode);
+        Assert.True(viewModel.IsAnyPreviewVisible);
+        Assert.True(viewModel.IsPreviewPaneVisible);
+        Assert.True(viewModel.IsTreePaneVisible);
+        Assert.True(viewModel.IsCompactModeEffective);
+        Assert.False(viewModel.CanToggleCompactMode);
+    }
+
+    [Fact]
+    public void IsSplitMode_KeepsSearchAndFilterAvailable_WhenProjectLoaded()
+    {
+        var viewModel = CreateViewModel();
+        viewModel.IsProjectLoaded = true;
+
+        viewModel.IsSplitMode = true;
+
+        Assert.True(viewModel.IsSearchFilterAvailable);
+        Assert.True(viewModel.AreFilterSettingsEnabled);
+    }
+
+    [Fact]
+    public void IsCompactModeEffective_UsesSplitOverride_WithoutChangingUserSetting()
+    {
+        var viewModel = CreateViewModel();
+        viewModel.IsCompactMode = false;
+
+        viewModel.IsSplitMode = true;
+
+        Assert.False(viewModel.IsCompactMode);
+        Assert.True(viewModel.IsCompactModeEffective);
+    }
+
+    [Fact]
     public void FilterVisible_Changes()
     {
         var viewModel = CreateViewModel();
@@ -354,6 +393,17 @@ public sealed class MainWindowViewModelTests
         viewModel.FilterVisible = false;
 
         Assert.False(viewModel.FilterVisible);
+    }
+
+    [Fact]
+    public void SplitTooltip_UsesLocalizedValue()
+    {
+        var viewModel = CreateViewModel(new Dictionary<string, string>
+        {
+            ["Split.Tooltip"] = "Split mode"
+        });
+
+        Assert.Equal("Split mode", viewModel.SplitTooltip);
     }
 
     [Fact]

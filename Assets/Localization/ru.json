@@ -62,6 +62,7 @@
   "Filter.ByName": "Фильтр по названию",
   "Filter.Tooltip": "Фильтр по названию (Ctrl+Shift+N)",
   "CopyFormat.Tooltip": "Формат дерева",
+  "Split.Tooltip": "Сплит-режим",
   "Preview.Tooltip": "Режим превью (Ctrl+B)",
   "Preview.Modes.Label": "Три способа:",
   "Preview.Mode.Tree": "Дерево",

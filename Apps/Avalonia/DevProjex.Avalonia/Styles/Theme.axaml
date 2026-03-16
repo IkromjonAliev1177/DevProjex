@@ -556,6 +556,14 @@
         <Setter Property="Background" Value="{DynamicResource AppBorderBrush}" />
     </Style>
 
+    <Style Selector="Button.menu-icon-button.mode-active">
+        <Setter Property="Background" Value="{DynamicResource AppBorderBrush}" />
+    </Style>
+
+    <Style Selector="Button.menu-icon-button.mode-active:pointerover">
+        <Setter Property="Background" Value="{DynamicResource MenuPressedBrush}" />
+    </Style>
+
     <Style Selector="Button.menu-icon-button:pressed">
         <Setter Property="Background" Value="{DynamicResource MenuPressedBrush}" />
     </Style>
@@ -1064,7 +1072,7 @@
         <Setter Property="Background" Value="{DynamicResource AppBorderBrush}" />
     </Style>
 
-    <Style Selector="Path.preview-icon">
+    <Style Selector="Path.preview-icon, Path.split-icon">
         <Setter Property="Opacity" Value="{DynamicResource PreviewIconOpacity}" />
     </Style>
 
