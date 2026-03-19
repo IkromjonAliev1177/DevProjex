@@ -19,7 +19,7 @@
     <Color x:Key="TreeSearchCurrentColor">#F9A825</Color>
     <Color x:Key="MenuHoverColor">#E6E6E6</Color>
     <Color x:Key="MenuPressedColor">#D9D9D9</Color>
-    <Color x:Key="ToastSurfaceColor">#CCF3F3F3</Color>
+    <Color x:Key="ToastSurfaceColor">#F3F3F3</Color>
 
     <!-- Drop Zone Colors - Light Theme -->
     <Color x:Key="DropZoneBorderColor">#0066CC</Color>
@@ -82,7 +82,7 @@
     <Color x:Key="TreeSearchCurrentColor">#F39C12</Color>
     <Color x:Key="MenuHoverColor">#3A3D44</Color>
     <Color x:Key="MenuPressedColor">#4A4D54</Color>
-    <Color x:Key="ToastSurfaceColor">#B31B1D22</Color>
+    <Color x:Key="ToastSurfaceColor">#1B1D22</Color>
 
     <!-- Drop Zone Colors - Dark Theme -->
     <Color x:Key="DropZoneBorderColor">#4DA6FF</Color>

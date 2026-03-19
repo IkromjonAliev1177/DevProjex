@@ -766,7 +766,7 @@
         </ItemsControl.ItemsPanel>
         <ItemsControl.ItemTemplate>
           <DataTemplate>
-            <Border Background="{DynamicResource AppPanelBrush}"
+            <Border Background="{DynamicResource ToastSurfaceBrush}"
                     CornerRadius="8"
                     Padding="14,10"
                     Opacity="{Binding Opacity}"

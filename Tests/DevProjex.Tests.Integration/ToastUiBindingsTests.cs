@@ -11,7 +11,7 @@ public sealed class ToastUiBindingsTests
 		Assert.Contains("ItemsSource=\"{Binding ToastItems}\"", content);
 		Assert.Contains("Text=\"{Binding Message}\"", content);
 		Assert.Contains("TranslateTransform Y=\"{Binding OffsetY}\"", content);
-		Assert.Contains("Background=\"{DynamicResource AppPanelBrush}\"", content);
+		Assert.Contains("Background=\"{DynamicResource ToastSurfaceBrush}\"", content);
 		Assert.Contains("BorderBrush=\"{DynamicResource AppBorderBrush}\"", content);
 		Assert.Contains("Foreground=\"{DynamicResource AppTextBrush}\"", content);
 		Assert.Contains("HorizontalAlignment=\"Center\"", content);
