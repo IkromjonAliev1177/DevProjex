@@ -224,6 +224,7 @@ public partial class MainWindow : Window
     private GridLength _savedSplitPreviewColumnWidth = new(6, GridUnitType.Star);
     private double _currentSettingsPanelWidth = SettingsPanelWidth;
     private double _effectiveSettingsPanelMinWidth = SettingsPanelMinWidth;
+    private double _lastWindowBoundsWidth;
     private WorkspaceResizeTarget _activeWorkspaceResizeTarget;
     private IPointer? _activeWorkspaceResizePointer;
     private double _lastWorkspaceResizePointerX;
@@ -785,9 +786,14 @@ public partial class MainWindow : Window
 
         if (e.NewValue is Rect rect)
         {
+            var widthDelta = _lastWindowBoundsWidth > 0
+                ? rect.Width - _lastWindowBoundsWidth
+                : 0;
+            _lastWindowBoundsWidth = rect.Width;
+
             _viewModel.UpdateHelpPopoverMaxSize(rect.Size);
             if (_viewModel.IsSplitMode)
-                NormalizeSplitPaneWidthsToStar();
+                AdjustSplitPaneWidthsForWindowResize(widthDelta);
             ClampSettingsPanelWidthToAvailableSpace(applyToVisual: ShouldApplySettingsPanelWidthToVisual());
             UpdatePreviewSettingsSplitterState();
             UpdateAdaptiveWorkspaceChrome();
@@ -1259,6 +1265,58 @@ public partial class MainWindow : Window
         if (_treePaneColumn is null || _previewPaneColumn is null)
             return;
 
+        _treePaneColumn.Width = _savedSplitTreeColumnWidth;
+        _previewPaneColumn.Width = _savedSplitPreviewColumnWidth;
+    }
+
+    private void AdjustSplitPaneWidthsForWindowResize(double widthDelta)
+    {
+        if (!_viewModel.IsSplitMode)
+            return;
+
+        if (Math.Abs(widthDelta) < 0.5)
+        {
+            NormalizeSplitPaneWidthsToStar();
+            return;
+        }
+
+        if (_treePaneColumn is null || _previewPaneColumn is null)
+            return;
+
+        var treeWidth = _treePaneColumn.ActualWidth;
+        var previewWidth = _previewPaneColumn.ActualWidth;
+        var totalWidth = treeWidth + previewWidth;
+        if (treeWidth <= 0 || previewWidth <= 0 || totalWidth <= 0)
+        {
+            NormalizeSplitPaneWidthsToStar();
+            return;
+        }
+
+        var minimumTotalWidth = SplitTreePaneMinWidth + SplitPreviewPaneMinWidth;
+        var desiredTotalWidth = Math.Max(minimumTotalWidth, totalWidth + widthDelta);
+
+        // Keep the tree pane stable during window resizes and let preview absorb
+        // most of the delta. Manual splitter drags still redefine the baseline.
+        var desiredTreeWidth = treeWidth;
+        var desiredPreviewWidth = desiredTotalWidth - desiredTreeWidth;
+
+        if (desiredPreviewWidth < SplitPreviewPaneMinWidth)
+        {
+            desiredPreviewWidth = SplitPreviewPaneMinWidth;
+            desiredTreeWidth = desiredTotalWidth - desiredPreviewWidth;
+        }
+
+        if (desiredTreeWidth < SplitTreePaneMinWidth)
+        {
+            desiredTreeWidth = SplitTreePaneMinWidth;
+            desiredPreviewWidth = desiredTotalWidth - desiredTreeWidth;
+        }
+
+        desiredTreeWidth = Math.Max(SplitTreePaneMinWidth, desiredTreeWidth);
+        desiredPreviewWidth = Math.Max(SplitPreviewPaneMinWidth, desiredPreviewWidth);
+
+        _savedSplitTreeColumnWidth = new GridLength(desiredTreeWidth, GridUnitType.Star);
+        _savedSplitPreviewColumnWidth = new GridLength(desiredPreviewWidth, GridUnitType.Star);
         _treePaneColumn.Width = _savedSplitTreeColumnWidth;
         _previewPaneColumn.Width = _savedSplitPreviewColumnWidth;
     }
