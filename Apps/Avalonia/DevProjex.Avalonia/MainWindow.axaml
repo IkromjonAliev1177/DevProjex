@@ -771,7 +771,7 @@
                     Padding="14,10"
                     Opacity="{Binding Opacity}"
                     MaxWidth="420"
-                    HorizontalAlignment="Stretch"
+                    HorizontalAlignment="Center"
                     BorderBrush="{DynamicResource AppBorderBrush}"
                     BorderThickness="1">
               <Border.Transitions>
@@ -790,6 +790,8 @@
               </Border.RenderTransform>
               <TextBlock Text="{Binding Message}"
                          TextWrapping="Wrap"
+                         TextAlignment="Center"
+                         HorizontalAlignment="Center"
                          FontSize="14"
                          Foreground="{DynamicResource AppTextBrush}" />
             </Border>

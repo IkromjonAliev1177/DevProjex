@@ -62,6 +62,7 @@ public partial class TopMenuBarView : UserControl
     public TopMenuBarView()
     {
         InitializeComponent();
+        DetachedFromVisualTree += OnDetachedFromVisualTree;
 
         var popover = ThemePopover;
         if (popover is not null)
@@ -550,5 +551,11 @@ public partial class TopMenuBarView : UserControl
         {
             // Ignore: tooltip could have closed.
         }
+    }
+
+    private void OnDetachedFromVisualTree(object? sender, VisualTreeAttachmentEventArgs e)
+    {
+        DetachHelpPopupHandlers();
+        DetachHelpDocsPopupHandlers();
     }
 }

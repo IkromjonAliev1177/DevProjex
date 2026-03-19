@@ -14,6 +14,8 @@ public sealed class ToastUiBindingsTests
 		Assert.Contains("Background=\"{DynamicResource AppPanelBrush}\"", content);
 		Assert.Contains("BorderBrush=\"{DynamicResource AppBorderBrush}\"", content);
 		Assert.Contains("Foreground=\"{DynamicResource AppTextBrush}\"", content);
+		Assert.Contains("HorizontalAlignment=\"Center\"", content);
+		Assert.Contains("TextAlignment=\"Center\"", content);
 	}
 
 	private static string FindRepositoryRoot()
