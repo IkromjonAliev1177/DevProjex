@@ -229,11 +229,11 @@
     <!-- Reduce internal padding in TreeViewItem template for compact mode -->
     <Style Selector="Window.compact-mode TreeViewItem /template/ Border#PART_LayoutRoot">
         <Setter Property="Padding" Value="0" />
-        <Setter Property="Margin" Value="0,-1" />
+        <Setter Property="Margin" Value="0" />
     </Style>
 
     <Style Selector="Window.compact-mode TreeViewItem /template/ ContentPresenter#PART_HeaderPresenter">
-        <Setter Property="Margin" Value="0,-1" />
+        <Setter Property="Margin" Value="0" />
     </Style>
 
     <!-- Add horizontal gap between icon and text in compact mode -->
@@ -1116,11 +1116,17 @@
 
     <Style Selector="TextBlock.split-icon-text">
         <Setter Property="Opacity" Value="{DynamicResource PreviewIconOpacity}" />
-        <Setter Property="FontFamily" Value="Consolas, monospace" />
-        <Setter Property="FontSize" Value="13" />
+        <Setter Property="FontFamily" Value="Cascadia Mono, Consolas, monospace" />
+        <Setter Property="FontSize" Value="15" />
         <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="HorizontalAlignment" Value="Center" />
         <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="Width" Value="24" />
+        <Setter Property="Height" Value="20" />
+        <Setter Property="LineHeight" Value="20" />
+        <Setter Property="Margin" Value="0,-1,0,0" />
         <Setter Property="TextAlignment" Value="Center" />
+        <Setter Property="UseLayoutRounding" Value="True" />
     </Style>
 
 </Styles>
