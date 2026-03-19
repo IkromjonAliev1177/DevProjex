@@ -552,6 +552,14 @@
         <Setter Property="Transitions" Value="{x:Null}" />
     </Style>
 
+    <Style Selector="Button.menu-icon-button.toolbar-mode-icon-button">
+        <Setter Property="Width" Value="38" />
+        <Setter Property="Height" Value="30" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="HorizontalContentAlignment" Value="Center" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+
     <Style Selector="Button.menu-icon-button:pointerover">
         <Setter Property="Background" Value="{DynamicResource AppBorderBrush}" />
     </Style>
@@ -1124,7 +1132,7 @@
         <Setter Property="Width" Value="24" />
         <Setter Property="Height" Value="20" />
         <Setter Property="LineHeight" Value="20" />
-        <Setter Property="Margin" Value="0,-1,0,0" />
+        <Setter Property="Margin" Value="-1,-1,1,0" />
         <Setter Property="TextAlignment" Value="Center" />
         <Setter Property="UseLayoutRounding" Value="True" />
     </Style>

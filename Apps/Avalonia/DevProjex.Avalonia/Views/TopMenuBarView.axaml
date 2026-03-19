@@ -122,7 +122,7 @@
     </Border>
 
     <Button Grid.Column="2"
-            Classes="menu-icon-button"
+            Classes="menu-icon-button toolbar-mode-icon-button"
             Click="OnToggleSplit"
             IsEnabled="{Binding IsProjectLoaded}"
             IsVisible="{Binding IsProjectLoaded}"
@@ -140,7 +140,7 @@
     </Button>
 
     <Button Grid.Column="3"
-            Classes="menu-icon-button"
+            Classes="menu-icon-button toolbar-mode-icon-button"
             Classes.mode-active="{Binding IsPreviewMode}"
             Click="OnTogglePreview"
             IsEnabled="{Binding IsProjectLoaded}"
