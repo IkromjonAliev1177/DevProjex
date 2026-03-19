@@ -214,6 +214,7 @@ public partial class MainWindow : Window
     private const double FilterToolbarMinWidth = 338.0;
     private const double SettingsPanelWidth = 328.0;
     private const double SettingsPanelMinWidth = 248.0;
+    private const double SettingsPanelMaxWidth = 320.0;
     private static readonly TimeSpan SettingsPanelAnimationDuration = TimeSpan.FromMilliseconds(300);
     private const double SplitTreePaneMinWidth = SearchToolbarMinWidth;
     private const double SplitPreviewPaneMinWidth = 320.0;
@@ -1411,15 +1412,16 @@ public partial class MainWindow : Window
     private double GetMaximumSettingsPanelWidth()
     {
         if (_workspaceGrid is null)
-            return SettingsPanelWidth;
+            return SettingsPanelMaxWidth;
 
         var workspaceWidth = _workspaceGrid.Bounds.Width;
         if (workspaceWidth <= 0)
-            return SettingsPanelWidth;
+            return SettingsPanelMaxWidth;
 
         var reservedWidth = GetMinimumLeadingWorkspaceWidth() + PreviewSettingsSplitterWidth;
-        var maxWidth = workspaceWidth - reservedWidth;
-        return Math.Max(0, maxWidth);
+        var availableWidth = Math.Max(0, workspaceWidth - reservedWidth);
+        var panelWidthCap = Math.Max(_effectiveSettingsPanelMinWidth, SettingsPanelMaxWidth);
+        return Math.Min(panelWidthCap, availableWidth);
     }
 
     private double GetMinimumLeadingWorkspaceWidth()
