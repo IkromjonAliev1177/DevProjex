@@ -615,17 +615,12 @@
                 <TranslateTransform Y="0" />
               </Border.RenderTransform>
               <Grid Name="PreviewBarLayoutGrid"
-                    ColumnDefinitions="Auto,*,Auto"
+                    ColumnDefinitions="*,Auto"
                     Margin="12,4"
                     VerticalAlignment="Center">
-                <!-- Left spacer keeps segmented control visually centered against the close button. -->
                 <Border Grid.Column="0"
-                        Name="PreviewBarLeftSpacer"
-                        Width="37"
-                        Background="Transparent" />
-
-                <Border Grid.Column="1"
                         Name="PreviewSegmentedControl"
+                        Margin="0,0,8,0"
                         Classes="segmented-control preview-segmented-control">
                   <Grid Name="PreviewSegmentGrid"
                         ColumnDefinitions="1.15*,1.15*,1.6*">
@@ -655,7 +650,7 @@
                             Click="OnPreviewTreeAndContentModeClick" />
                   </Grid>
                 </Border>
-                <Button Grid.Column="2"
+                <Button Grid.Column="1"
                         Name="PreviewCloseButton"
                         Classes="menu-icon-button preview-close-button"
                         Width="32"

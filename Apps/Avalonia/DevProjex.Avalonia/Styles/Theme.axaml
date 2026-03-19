@@ -1082,8 +1082,8 @@
         <Setter Property="Margin" Value="10,4" />
     </Style>
 
-    <Style Selector="Border.preview-panel.preview-toolbar-compact Border#PreviewBarLeftSpacer">
-        <Setter Property="Width" Value="14" />
+    <Style Selector="Border.preview-panel.preview-toolbar-compact Border.preview-segmented-control">
+        <Setter Property="Margin" Value="0,0,6,0" />
     </Style>
 
     <Style Selector="Border.preview-panel.preview-toolbar-compact Button.preview-segment-button">
@@ -1095,8 +1095,8 @@
         <Setter Property="Margin" Value="6,3" />
     </Style>
 
-    <Style Selector="Border.preview-panel.preview-toolbar-narrow Border#PreviewBarLeftSpacer">
-        <Setter Property="Width" Value="0" />
+    <Style Selector="Border.preview-panel.preview-toolbar-narrow Border.preview-segmented-control">
+        <Setter Property="Margin" Value="0,0,4,0" />
     </Style>
 
     <Style Selector="Border.preview-panel.preview-toolbar-narrow Button.preview-segment-button">
