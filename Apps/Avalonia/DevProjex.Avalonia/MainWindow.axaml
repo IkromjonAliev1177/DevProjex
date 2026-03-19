@@ -548,6 +548,7 @@
             <TreeView Name="ProjectTree"
                       ItemsSource="{Binding TreeNodes}"
                       IsEnabled="{Binding IsProjectLoaded}"
+                      Padding="0,0,0,4"
                       FontFamily="{Binding SelectedFontFamily}"
                       FontSize="{Binding TreeFontSize}">
               <TreeView.ItemsPanel>

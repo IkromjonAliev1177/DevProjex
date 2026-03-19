@@ -375,6 +375,21 @@ public sealed class MainWindowViewModelTests
     }
 
     [Fact]
+    public void CompactTreeLayout_KeepsNonNegativePadding_AndShrinksConsolasTopMargin()
+    {
+        var viewModel = CreateViewModel();
+        viewModel.SelectedFontFamily = new global::Avalonia.Media.FontFamily("Consolas");
+
+        var regularMargin = viewModel.TreeTextMargin;
+
+        viewModel.IsCompactMode = true;
+
+        Assert.True(viewModel.TreeItemPadding.Top >= 0);
+        Assert.True(viewModel.TreeItemPadding.Bottom >= 0);
+        Assert.True(viewModel.TreeTextMargin.Top < regularMargin.Top);
+    }
+
+    [Fact]
     public void FilterVisible_Changes()
     {
         var viewModel = CreateViewModel();

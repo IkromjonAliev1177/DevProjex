@@ -637,6 +637,7 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         RaisePropertyChanged(nameof(CanToggleCompactMode));
         RaisePropertyChanged(nameof(TreeItemSpacing));
         RaisePropertyChanged(nameof(TreeItemPadding));
+        RaisePropertyChanged(nameof(TreeTextMargin));
         RaisePropertyChanged(nameof(SettingsListSpacing));
     }
 
@@ -961,15 +962,17 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
 
     public Thickness TreeTextMargin =>
         string.Equals(_selectedFontFamily?.Name, "Consolas", StringComparison.OrdinalIgnoreCase)
-            ? new Thickness(0, 9, 0, 0)
+            ? (IsCompactModeEffective
+                ? new Thickness(0, 3, 0, 0)
+                : new Thickness(0, 9, 0, 0))
             : new Thickness(0);
 
     // Tree row spacing is controlled in VM so compact mode is a single switch.
     public double TreeItemSpacing => IsCompactModeEffective ? 2 : 6;
 
-    // TreeViewItem padding follows the same compact flag to keep row height tight.
-    // Negative vertical padding in compact mode for tighter rows.
-    public Thickness TreeItemPadding => IsCompactModeEffective ? new Thickness(0, -20) : new Thickness(4, 1);
+    // Compact rows should stay dense without using negative padding, because
+    // virtualized trees rely on stable item measurement for correct scroll extents.
+    public Thickness TreeItemPadding => IsCompactModeEffective ? new Thickness(0) : new Thickness(4, 1);
 
     // Settings lists use an ItemsPanel with explicit Spacing (can go negative to tighten).
     public double SettingsListSpacing => IsCompactModeEffective ? -5 : -3;
