@@ -614,11 +614,13 @@
               <Border.RenderTransform>
                 <TranslateTransform Y="0" />
               </Border.RenderTransform>
-              <Grid ColumnDefinitions="Auto,*,Auto"
+              <Grid Name="PreviewBarLayoutGrid"
+                    ColumnDefinitions="Auto,*,Auto"
                     Margin="12,4"
                     VerticalAlignment="Center">
                 <!-- Left spacer keeps segmented control visually centered against the close button. -->
                 <Border Grid.Column="0"
+                        Name="PreviewBarLeftSpacer"
                         Width="37"
                         Background="Transparent" />
 
@@ -637,23 +639,24 @@
                             Name="PreviewTreeModeButton"
                             Classes="segment-text-button preview-segment-button"
                             Classes.segment-selected="{Binding IsPreviewTreeSelected}"
-                            Content="{Binding PreviewModeTree}"
+                            ToolTip.Tip="{Binding PreviewModeTree}"
                             Click="OnPreviewTreeModeClick" />
                     <Button Grid.Column="1"
                             Name="PreviewContentModeButton"
                             Classes="segment-text-button preview-segment-button"
                             Classes.segment-selected="{Binding IsPreviewContentSelected}"
-                            Content="{Binding PreviewModeContent}"
+                            ToolTip.Tip="{Binding PreviewModeContent}"
                             Click="OnPreviewContentModeClick" />
                     <Button Grid.Column="2"
                             Name="PreviewTreeAndContentModeButton"
                             Classes="segment-text-button preview-segment-button"
                             Classes.segment-selected="{Binding IsPreviewTreeAndContentSelected}"
-                            Content="{Binding PreviewModeTreeAndContent}"
+                            ToolTip.Tip="{Binding PreviewModeTreeAndContent}"
                             Click="OnPreviewTreeAndContentModeClick" />
                   </Grid>
                 </Border>
                 <Button Grid.Column="2"
+                        Name="PreviewCloseButton"
                         Classes="menu-icon-button preview-close-button"
                         Width="32"
                         Height="32"
@@ -751,9 +754,11 @@
         </Border>
       </Grid>
 
-      <ItemsControl ItemsSource="{Binding ToastItems}"
+      <ItemsControl Name="ToastHost"
+                    ItemsSource="{Binding ToastItems}"
+                    IsVisible="{Binding HasToastItems}"
                     IsHitTestVisible="False"
-                    HorizontalAlignment="Center"
+                    HorizontalAlignment="Left"
                     VerticalAlignment="Bottom"
                     Margin="0,0,0,38">
         <ItemsControl.ItemsPanel>
@@ -768,7 +773,7 @@
                     Padding="14,10"
                     Opacity="{Binding Opacity}"
                     MaxWidth="420"
-                    HorizontalAlignment="Center"
+                    HorizontalAlignment="Stretch"
                     BorderBrush="{DynamicResource AppBorderBrush}"
                     BorderThickness="1">
               <Border.Transitions>

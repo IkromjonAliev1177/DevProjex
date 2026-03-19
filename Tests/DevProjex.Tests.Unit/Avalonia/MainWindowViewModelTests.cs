@@ -407,6 +407,21 @@ public sealed class MainWindowViewModelTests
     }
 
     [Fact]
+    public void PreviewModeShortLabels_UseLocalizedValues()
+    {
+        var viewModel = CreateViewModel(new Dictionary<string, string>
+        {
+            ["Preview.Mode.Tree.Short"] = "Tree",
+            ["Preview.Mode.Content.Short"] = "Content",
+            ["Preview.Mode.TreeAndContent.Short"] = "Both"
+        });
+
+        Assert.Equal("Tree", viewModel.PreviewModeTreeShort);
+        Assert.Equal("Content", viewModel.PreviewModeContentShort);
+        Assert.Equal("Both", viewModel.PreviewModeTreeAndContentShort);
+    }
+
+    [Fact]
     public void CenteredPreviewSelectionMetricsVisible_IsTrue_WhenSelectionVisibleAndNotBusy()
     {
         var viewModel = CreateViewModel();

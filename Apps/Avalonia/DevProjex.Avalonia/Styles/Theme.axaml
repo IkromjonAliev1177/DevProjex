@@ -1046,6 +1046,12 @@
         <Setter Property="ClipToBounds" Value="True" />
     </Style>
 
+    <Style Selector="Button.preview-segment-button TextBlock">
+        <Setter Property="TextWrapping" Value="NoWrap" />
+        <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+        <Setter Property="TextAlignment" Value="Center" />
+    </Style>
+
     <Style Selector="Border.preview-segment-thumb">
         <Setter Property="HorizontalAlignment" Value="Left" />
     </Style>
@@ -1070,6 +1076,38 @@
 
     <Style Selector="Button.preview-close-button:pointerover">
         <Setter Property="Background" Value="{DynamicResource AppBorderBrush}" />
+    </Style>
+
+    <Style Selector="Border.preview-panel.preview-toolbar-compact Grid#PreviewBarLayoutGrid">
+        <Setter Property="Margin" Value="10,4" />
+    </Style>
+
+    <Style Selector="Border.preview-panel.preview-toolbar-compact Border#PreviewBarLeftSpacer">
+        <Setter Property="Width" Value="14" />
+    </Style>
+
+    <Style Selector="Border.preview-panel.preview-toolbar-compact Button.preview-segment-button">
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="Padding" Value="0,4" />
+    </Style>
+
+    <Style Selector="Border.preview-panel.preview-toolbar-narrow Grid#PreviewBarLayoutGrid">
+        <Setter Property="Margin" Value="6,3" />
+    </Style>
+
+    <Style Selector="Border.preview-panel.preview-toolbar-narrow Border#PreviewBarLeftSpacer">
+        <Setter Property="Width" Value="0" />
+    </Style>
+
+    <Style Selector="Border.preview-panel.preview-toolbar-narrow Button.preview-segment-button">
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="Padding" Value="0,3" />
+    </Style>
+
+    <Style Selector="Border.preview-panel.preview-toolbar-narrow Button.preview-close-button">
+        <Setter Property="Width" Value="28" />
+        <Setter Property="Height" Value="28" />
+        <Setter Property="Margin" Value="2,0,0,0" />
     </Style>
 
     <Style Selector="Path.preview-icon, Path.split-icon">

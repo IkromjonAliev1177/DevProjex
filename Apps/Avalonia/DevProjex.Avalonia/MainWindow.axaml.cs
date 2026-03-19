@@ -45,6 +45,13 @@ public partial class MainWindow : Window
         PreviewSettings = 2
     }
 
+    private enum PreviewToolbarLayoutMode
+    {
+        Wide = 0,
+        Compact = 1,
+        Narrow = 2
+    }
+
     private enum StatusOperationType
     {
         None = 0,
@@ -181,6 +188,7 @@ public partial class MainWindow : Window
     private Border? _treeIsland;
     private Border? _previewIsland;
     private Border? _previewLineNumbersBackground;
+    private ItemsControl? _toastHost;
     private SearchBarView? _searchBar;
     private FilterBarView? _filterBar;
     private ScrollViewer? _previewTextScrollViewer;
@@ -204,8 +212,8 @@ public partial class MainWindow : Window
     private const double SettingsPanelWidth = 328.0;
     private const double SettingsPanelMinWidth = 248.0;
     private static readonly TimeSpan SettingsPanelAnimationDuration = TimeSpan.FromMilliseconds(300);
-    private const double SplitTreePaneMinWidth = 220.0;
-    private const double SplitPreviewPaneMinWidth = 280.0;
+    private const double SplitTreePaneMinWidth = 240.0;
+    private const double SplitPreviewPaneMinWidth = 320.0;
     private const double TreePreviewSplitterWidth = 4.0;
     private const double PreviewSettingsSplitterWidth = 4.0;
     private const string SplitterDraggingClass = "splitter-dragging";
@@ -256,6 +264,13 @@ public partial class MainWindow : Window
     private static readonly TimeSpan PreviewSegmentThumbAnimationDuration = TimeSpan.FromMilliseconds(220);
     private const double PanelIslandSpacing = 4.0;
     private const int PreviewWarmupFileLimit = 24;
+    private const double DefaultWindowMinWidth = 850.0;
+    private const double WindowMinimumWidthSafetyPadding = 32.0;
+    private const double PreviewToolbarWideThreshold = 380.0;
+    private const double PreviewToolbarCompactThreshold = 320.0;
+    private const double ToastHostBottomMargin = 38.0;
+    private const double ToastHostHorizontalInset = 12.0;
+    private PreviewToolbarLayoutMode _previewToolbarLayoutMode = PreviewToolbarLayoutMode.Wide;
 
     // Preview generation
     private CancellationTokenSource? _previewBuildCts;
@@ -392,6 +407,7 @@ public partial class MainWindow : Window
         _previewSettingsSplitter = this.FindControl<Border>("PreviewSettingsSplitter");
         _treeIsland = this.FindControl<Border>("TreeIsland");
         _previewIsland = this.FindControl<Border>("PreviewIsland");
+        _toastHost = this.FindControl<ItemsControl>("ToastHost");
         if (_workspaceGrid is not null && _workspaceGrid.ColumnDefinitions.Count >= 5)
         {
             _treePaneColumn = _workspaceGrid.ColumnDefinitions[0];
@@ -478,6 +494,8 @@ public partial class MainWindow : Window
 
         if (_previewSegmentGrid is not null)
             _previewSegmentGrid.SizeChanged += OnPreviewSegmentGridSizeChanged;
+        if (_previewBar is not null)
+            _previewBar.SizeChanged += OnPreviewBarSizeChanged;
 
         if (_treeView is not null)
         {
@@ -573,6 +591,7 @@ public partial class MainWindow : Window
         UpdatePreviewSegmentThumbPosition(animate: false);
         UpdateTreeVisualResources();
         UpdateWorkspaceLayoutForCurrentMode();
+        UpdateAdaptiveWorkspaceChrome(forcePreviewLabels: true);
 
         AddHandler(KeyDownEvent, OnKeyDown, RoutingStrategies.Tunnel);
 
@@ -621,6 +640,8 @@ public partial class MainWindow : Window
         }
         if (_previewSegmentGrid is not null)
             _previewSegmentGrid.SizeChanged -= OnPreviewSegmentGridSizeChanged;
+        if (_previewBar is not null)
+            _previewBar.SizeChanged -= OnPreviewBarSizeChanged;
 
         // Unsubscribe from tunneled/bubbled events
         RemoveHandler(PointerWheelChangedEvent, OnWindowPointerWheelChanged);
@@ -756,6 +777,7 @@ public partial class MainWindow : Window
                 NormalizeSplitPaneWidthsToStar();
             ClampSettingsPanelWidthToAvailableSpace(applyToVisual: _viewModel.SettingsVisible && !_settingsAnimating);
             UpdatePreviewSettingsSplitterState();
+            UpdateAdaptiveWorkspaceChrome();
             if (_hasStatusMetricsSnapshot && _viewModel.StatusMetricsVisible)
                 RenderStatusBarMetrics();
             if (_hasPreviewSelectionMetricsSnapshot)
@@ -771,6 +793,12 @@ public partial class MainWindow : Window
             return;
 
         UpdatePreviewSegmentThumbPosition(animate: false);
+    }
+
+    private void OnPreviewBarSizeChanged(object? sender, SizeChangedEventArgs e)
+    {
+        UpdatePreviewToolbarPresentation(forceRefreshContent: false);
+        UpdateToastHostLayout();
     }
 
     private void OnDeactivated(object? sender, EventArgs e)
@@ -789,6 +817,7 @@ public partial class MainWindow : Window
     {
         try
         {
+            UpdateAdaptiveWorkspaceChrome(forcePreviewLabels: true);
             ApplyStartupThemePreset();
 
             if (!string.IsNullOrWhiteSpace(_startupOptions.Path))
@@ -1012,6 +1041,180 @@ public partial class MainWindow : Window
 
         if (_treePreviewSplitter is not null)
             _treePreviewSplitter.IsVisible = _viewModel.IsSplitMode;
+
+        UpdateAdaptiveWorkspaceChrome();
+    }
+
+    private void UpdateAdaptiveWorkspaceChrome(bool forcePreviewLabels = false)
+    {
+        UpdateWindowMinimumWidth();
+        UpdatePreviewToolbarPresentation(forcePreviewLabels);
+        UpdateToastHostLayout();
+    }
+
+    private void UpdateWindowMinimumWidth()
+    {
+        var computedMinWidth = Math.Max(DefaultWindowMinWidth, GetRequiredWindowWorkspaceWidth() + WindowMinimumWidthSafetyPadding);
+        MinWidth = Math.Ceiling(computedMinWidth);
+    }
+
+    private double GetRequiredWindowWorkspaceWidth()
+    {
+        if (!_viewModel.IsProjectLoaded)
+            return DefaultWindowMinWidth;
+
+        var minimumWidth = GetMinimumLeadingWorkspaceWidth();
+        if (ShouldReserveSettingsWidth())
+            minimumWidth += SettingsPanelMinWidth + PreviewSettingsSplitterWidth;
+
+        return minimumWidth;
+    }
+
+    private bool ShouldReserveSettingsWidth()
+    {
+        if (_settingsAnimating || _viewModel.SettingsVisible)
+            return true;
+
+        var currentVisibleWidth = _settingsContainer?.Width ?? 0;
+        return currentVisibleWidth > 0.5 || (_settingsContainer?.Bounds.Width ?? 0) > 0.5;
+    }
+
+    private void UpdatePreviewToolbarPresentation(bool forceRefreshContent)
+    {
+        var nextLayoutMode = DeterminePreviewToolbarLayoutMode();
+        if (nextLayoutMode != _previewToolbarLayoutMode)
+        {
+            _previewToolbarLayoutMode = nextLayoutMode;
+            ApplyPreviewToolbarLayoutMode();
+            forceRefreshContent = true;
+        }
+
+        if (forceRefreshContent)
+            ApplyPreviewToolbarLabels();
+    }
+
+    private PreviewToolbarLayoutMode DeterminePreviewToolbarLayoutMode()
+    {
+        var previewBarWidth = _previewBar?.Bounds.Width ?? _previewBarContainer?.Bounds.Width ?? 0;
+        if (previewBarWidth <= 0)
+            return _previewToolbarLayoutMode;
+
+        if (previewBarWidth < PreviewToolbarCompactThreshold)
+            return PreviewToolbarLayoutMode.Narrow;
+
+        if (previewBarWidth < PreviewToolbarWideThreshold)
+            return PreviewToolbarLayoutMode.Compact;
+
+        return PreviewToolbarLayoutMode.Wide;
+    }
+
+    private void ApplyPreviewToolbarLayoutMode()
+    {
+        if (_previewBar is null)
+            return;
+
+        _previewBar.Classes.Remove("preview-toolbar-compact");
+        _previewBar.Classes.Remove("preview-toolbar-narrow");
+
+        switch (_previewToolbarLayoutMode)
+        {
+            case PreviewToolbarLayoutMode.Compact:
+                _previewBar.Classes.Add("preview-toolbar-compact");
+                break;
+
+            case PreviewToolbarLayoutMode.Narrow:
+                _previewBar.Classes.Add("preview-toolbar-compact");
+                _previewBar.Classes.Add("preview-toolbar-narrow");
+                break;
+        }
+    }
+
+    private void ApplyPreviewToolbarLabels()
+    {
+        if (_previewTreeModeButton is null || _previewContentModeButton is null || _previewTreeAndContentModeButton is null)
+            return;
+
+        var useShortLabels = _previewToolbarLayoutMode != PreviewToolbarLayoutMode.Wide;
+        _previewTreeModeButton.Content = useShortLabels ? _viewModel.PreviewModeTreeShort : _viewModel.PreviewModeTree;
+        _previewContentModeButton.Content = useShortLabels ? _viewModel.PreviewModeContentShort : _viewModel.PreviewModeContent;
+        _previewTreeAndContentModeButton.Content = useShortLabels ? _viewModel.PreviewModeTreeAndContentShort : _viewModel.PreviewModeTreeAndContent;
+
+        ToolTip.SetTip(_previewTreeModeButton, _viewModel.PreviewModeTree);
+        ToolTip.SetTip(_previewContentModeButton, _viewModel.PreviewModeContent);
+        ToolTip.SetTip(_previewTreeAndContentModeButton, _viewModel.PreviewModeTreeAndContent);
+    }
+
+    private void UpdateToastHostLayout()
+    {
+        if (_toastHost is null)
+            return;
+
+        if (_toastHost.Parent is not Visual toastHostParent)
+            return;
+
+        var targetVisual = ResolveToastHostTarget();
+        if (targetVisual is null)
+        {
+            ResetToastHostLayout();
+            return;
+        }
+
+        var translatedOrigin = targetVisual.TranslatePoint(default, toastHostParent);
+        if (translatedOrigin is null)
+        {
+            ResetToastHostLayout();
+            return;
+        }
+
+        var targetWidth = targetVisual.Bounds.Width;
+        if (targetWidth <= 1)
+        {
+            ResetToastHostLayout();
+            return;
+        }
+
+        var horizontalInset = Math.Min(ToastHostHorizontalInset, targetWidth / 8);
+        var hostWidth = Math.Max(0, targetWidth - (horizontalInset * 2));
+        if (hostWidth <= 1)
+        {
+            ResetToastHostLayout();
+            return;
+        }
+
+        _toastHost.HorizontalAlignment = HorizontalAlignment.Left;
+        _toastHost.Width = hostWidth;
+        _toastHost.MaxWidth = hostWidth;
+        _toastHost.Margin = new Thickness(
+            translatedOrigin.Value.X + horizontalInset,
+            0,
+            0,
+            ToastHostBottomMargin);
+    }
+
+    private Control? ResolveToastHostTarget()
+    {
+        if (_viewModel.IsProjectLoaded)
+        {
+            if (_viewModel.IsSplitMode)
+                return _treeIsland;
+
+            return _viewModel.IsPreviewMode
+                ? _previewIsland
+                : _treeIsland;
+        }
+
+        return _dropZoneContainer;
+    }
+
+    private void ResetToastHostLayout()
+    {
+        if (_toastHost is null)
+            return;
+
+        _toastHost.HorizontalAlignment = HorizontalAlignment.Center;
+        _toastHost.Width = double.NaN;
+        _toastHost.MaxWidth = double.PositiveInfinity;
+        _toastHost.Margin = new Thickness(0, 0, 0, ToastHostBottomMargin);
     }
 
     private void CaptureSplitPaneLayout()
@@ -1269,6 +1472,8 @@ public partial class MainWindow : Window
         var newPreviewWidth = totalWidth - newTreeWidth;
         _treePaneColumn.Width = new GridLength(newTreeWidth);
         _previewPaneColumn.Width = new GridLength(newPreviewWidth);
+        UpdatePreviewToolbarPresentation(forceRefreshContent: false);
+        UpdateToastHostLayout();
     }
 
     private void ResizeSettingsPane(double deltaX)
@@ -1284,6 +1489,8 @@ public partial class MainWindow : Window
 
         _currentSettingsPanelWidth = clampedWidth;
         ApplySettingsPanelWidth(clampedWidth, animate: false);
+        UpdatePreviewToolbarPresentation(forceRefreshContent: false);
+        UpdateToastHostLayout();
     }
 
     private void CompleteActiveWorkspaceResize(bool releasePointer)
@@ -1319,6 +1526,7 @@ public partial class MainWindow : Window
             activePointer?.Capture(null);
 
         UpdatePreviewSettingsSplitterState();
+        UpdateAdaptiveWorkspaceChrome();
         ScheduleWorkspaceChromeRefresh();
     }
 
@@ -1502,12 +1710,14 @@ public partial class MainWindow : Window
     private void ApplyLocalization()
     {
         _viewModel.UpdateLocalization();
+        UpdatePreviewToolbarPresentation(forceRefreshContent: true);
         RecalculateMetricsAsync(); // Update metrics text with new localization
         if (_hasPreviewSelectionMetricsSnapshot)
             RenderPreviewSelectionMetrics();
         if (_viewModel.IsAnyPreviewVisible)
             SchedulePreviewRefresh(immediate: true);
         UpdateTitle();
+        UpdateToastHostLayout();
 
         if (_currentPath is not null)
         {
@@ -3170,6 +3380,7 @@ public partial class MainWindow : Window
         {
             _settingsAnimating = false;
             UpdatePreviewSettingsSplitterState();
+            UpdateAdaptiveWorkspaceChrome();
         }
     }
 

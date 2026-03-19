@@ -1134,6 +1134,9 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
     public string PreviewModeTree { get; private set; } = string.Empty;
     public string PreviewModeContent { get; private set; } = string.Empty;
     public string PreviewModeTreeAndContent { get; private set; } = string.Empty;
+    public string PreviewModeTreeShort { get; private set; } = string.Empty;
+    public string PreviewModeContentShort { get; private set; } = string.Empty;
+    public string PreviewModeTreeAndContentShort { get; private set; } = string.Empty;
     public string PreviewLoadingText { get; private set; } = string.Empty;
     public string PreviewNoDataText { get; private set; } = string.Empty;
     public string PreviewSelectionCopy { get; private set; } = string.Empty;
@@ -1248,6 +1251,9 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         PreviewModeTree = _localization["Preview.Mode.Tree"];
         PreviewModeContent = _localization["Preview.Mode.Content"];
         PreviewModeTreeAndContent = _localization["Preview.Mode.TreeAndContent"];
+        PreviewModeTreeShort = _localization["Preview.Mode.Tree.Short"];
+        PreviewModeContentShort = _localization["Preview.Mode.Content.Short"];
+        PreviewModeTreeAndContentShort = _localization["Preview.Mode.TreeAndContent.Short"];
         PreviewLoadingText = _localization["Preview.Loading"];
         PreviewNoDataText = _localization["Preview.NoData"];
         PreviewSelectionCopy = _localization["Preview.Selection.Copy"];
@@ -1374,6 +1380,9 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         RaisePropertyChanged(nameof(PreviewModeTree));
         RaisePropertyChanged(nameof(PreviewModeContent));
         RaisePropertyChanged(nameof(PreviewModeTreeAndContent));
+        RaisePropertyChanged(nameof(PreviewModeTreeShort));
+        RaisePropertyChanged(nameof(PreviewModeContentShort));
+        RaisePropertyChanged(nameof(PreviewModeTreeAndContentShort));
         RaisePropertyChanged(nameof(PreviewLoadingText));
         RaisePropertyChanged(nameof(PreviewNoDataText));
         RaisePropertyChanged(nameof(PreviewSelectionCopy));
