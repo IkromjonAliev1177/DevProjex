@@ -960,6 +960,7 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
 
     public double TreeIconSize => Math.Max(12, Math.Round(TreeFontSize * TreeIconScale, 0));
 
+    // Change "top" parameter in Thickness for vertical width
     public Thickness TreeTextMargin =>
         string.Equals(_selectedFontFamily?.Name, "Consolas", StringComparison.OrdinalIgnoreCase)
             ? (IsCompactModeEffective

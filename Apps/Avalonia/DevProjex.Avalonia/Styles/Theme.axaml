@@ -226,14 +226,16 @@
         <Setter Property="MinHeight" Value="0" />
     </Style>
 
-    <!-- Reduce internal padding in TreeViewItem template for compact mode -->
+    <!-- Tighten compact tree rows by slightly overlapping template containers vertically. -->
     <Style Selector="Window.compact-mode TreeViewItem /template/ Border#PART_LayoutRoot">
         <Setter Property="Padding" Value="0" />
-        <Setter Property="Margin" Value="0" />
+        <!-- Change margin's top and bottom value for edit vertical width on TreeView -->
+        <Setter Property="Margin" Value="0,-1,0,-1" />
     </Style>
 
     <Style Selector="Window.compact-mode TreeViewItem /template/ ContentPresenter#PART_HeaderPresenter">
-        <Setter Property="Margin" Value="0" />
+        <!-- Change margin's top and bottom value for edit vertical width on TreeView -->
+        <Setter Property="Margin" Value="0,-1,0,-1" />
     </Style>
 
     <!-- Add horizontal gap between icon and text in compact mode -->
