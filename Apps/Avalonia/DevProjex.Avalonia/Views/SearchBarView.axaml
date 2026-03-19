@@ -6,7 +6,7 @@
   <Border Classes="search-panel"
           IsEnabled="{Binding IsProjectLoaded}"
           UseLayoutRounding="True"
-          MinWidth="418">
+          MinWidth="408">
     <Grid ColumnDefinitions="Auto,Auto,Auto,Auto,*" ColumnSpacing="8" Margin="12,6">
       <TextBox Name="SearchBox"
                Grid.Column="0"

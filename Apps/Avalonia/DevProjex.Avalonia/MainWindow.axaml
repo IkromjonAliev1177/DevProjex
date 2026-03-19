@@ -508,6 +508,7 @@
                     Name="SearchBarContainer"
                     UseLayoutRounding="True"
                     ClipToBounds="True"
+                    Padding="0,0,4,0"
                     Height="0">
               <views:SearchBarView Name="SearchBar"
                                    RenderTransformOrigin="50%,0%"
@@ -526,6 +527,7 @@
                     Name="FilterBarContainer"
                     UseLayoutRounding="True"
                     ClipToBounds="True"
+                    Padding="0,0,4,0"
                     Height="0">
               <views:FilterBarView Name="FilterBar"
                                    RenderTransformOrigin="50%,0%"

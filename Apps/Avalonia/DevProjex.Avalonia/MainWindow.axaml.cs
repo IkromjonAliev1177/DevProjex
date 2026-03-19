@@ -209,7 +209,7 @@ public partial class MainWindow : Window
     private Border? _settingsIsland;
     private TranslateTransform? _settingsTransform;
     private bool _settingsAnimating;
-    private const double SearchToolbarMinWidth = 415.0;
+    private const double SearchToolbarMinWidth = 418.0;
     private const double FilterToolbarMinWidth = 338.0;
     private const double SettingsPanelWidth = 328.0;
     private const double SettingsPanelMinWidth = 248.0;
