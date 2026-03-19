@@ -3,7 +3,10 @@
              xmlns:vm="using:DevProjex.Avalonia.ViewModels"
              x:Class="DevProjex.Avalonia.Views.FilterBarView"
              x:DataType="vm:MainWindowViewModel">
-  <Border Classes="filter-panel" IsEnabled="{Binding IsProjectLoaded}" UseLayoutRounding="True">
+  <Border Classes="filter-panel"
+          IsEnabled="{Binding IsProjectLoaded}"
+          UseLayoutRounding="True"
+          MinWidth="338">
     <Grid ColumnDefinitions="Auto,Auto,*" ColumnSpacing="8" Margin="12,6">
       <TextBox Name="FilterBox"
                Grid.Column="0"

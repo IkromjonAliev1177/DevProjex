@@ -3,7 +3,10 @@
              xmlns:vm="using:DevProjex.Avalonia.ViewModels"
              x:Class="DevProjex.Avalonia.Views.SearchBarView"
              x:DataType="vm:MainWindowViewModel">
-  <Border Classes="search-panel" IsEnabled="{Binding IsProjectLoaded}" UseLayoutRounding="True">
+  <Border Classes="search-panel"
+          IsEnabled="{Binding IsProjectLoaded}"
+          UseLayoutRounding="True"
+          MinWidth="418">
     <Grid ColumnDefinitions="Auto,Auto,Auto,Auto,*" ColumnSpacing="8" Margin="12,6">
       <TextBox Name="SearchBox"
                Grid.Column="0"

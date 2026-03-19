@@ -1114,4 +1114,13 @@
         <Setter Property="Opacity" Value="{DynamicResource PreviewIconOpacity}" />
     </Style>
 
+    <Style Selector="TextBlock.split-icon-text">
+        <Setter Property="Opacity" Value="{DynamicResource PreviewIconOpacity}" />
+        <Setter Property="FontFamily" Value="Consolas, monospace" />
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="TextAlignment" Value="Center" />
+    </Style>
+
 </Styles>

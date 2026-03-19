@@ -135,12 +135,9 @@
           <TextBlock Text="{Binding SplitTooltip}" />
         </ToolTip>
       </ToolTip.Tip>
-      <Path Classes="split-icon"
-            Width="22"
-            Height="22"
-            Stretch="Uniform"
-            Fill="{DynamicResource AppTextBrush}"
-            Data="M4,4 H20 A2,2 0 0 1 22,6 V18 A2,2 0 0 1 20,20 H4 A2,2 0 0 1 2,18 V6 A2,2 0 0 1 4,4 Z M4.75,6.5 V17.5 H19.25 V6.5 Z M11,6.5 H13 V17.5 H11 Z" />
+      <TextBlock Classes="split-icon-text"
+                 Text="[|]"
+                 Foreground="{DynamicResource AppTextBrush}" />
     </Button>
 
     <Button Grid.Column="3"

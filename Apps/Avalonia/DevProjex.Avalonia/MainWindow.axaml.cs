@@ -209,10 +209,12 @@ public partial class MainWindow : Window
     private Border? _settingsIsland;
     private TranslateTransform? _settingsTransform;
     private bool _settingsAnimating;
+    private const double SearchToolbarMinWidth = 415.0;
+    private const double FilterToolbarMinWidth = 338.0;
     private const double SettingsPanelWidth = 328.0;
     private const double SettingsPanelMinWidth = 248.0;
     private static readonly TimeSpan SettingsPanelAnimationDuration = TimeSpan.FromMilliseconds(300);
-    private const double SplitTreePaneMinWidth = 240.0;
+    private const double SplitTreePaneMinWidth = SearchToolbarMinWidth;
     private const double SplitPreviewPaneMinWidth = 320.0;
     private const double TreePreviewSplitterWidth = 4.0;
     private const double PreviewSettingsSplitterWidth = 4.0;
