@@ -207,6 +207,7 @@ public partial class MainWindow : Window
     // Settings panel animation
     private Border? _settingsContainer;
     private Border? _settingsIsland;
+    private SettingsPanelView? _settingsPanel;
     private TranslateTransform? _settingsTransform;
     private bool _settingsAnimating;
     private const double SearchToolbarMinWidth = 418.0;
@@ -222,6 +223,7 @@ public partial class MainWindow : Window
     private GridLength _savedSplitTreeColumnWidth = new(5, GridUnitType.Star);
     private GridLength _savedSplitPreviewColumnWidth = new(6, GridUnitType.Star);
     private double _currentSettingsPanelWidth = SettingsPanelWidth;
+    private double _effectiveSettingsPanelMinWidth = SettingsPanelMinWidth;
     private WorkspaceResizeTarget _activeWorkspaceResizeTarget;
     private IPointer? _activeWorkspaceResizePointer;
     private double _lastWorkspaceResizePointerX;
@@ -441,6 +443,7 @@ public partial class MainWindow : Window
         }
         _settingsContainer = this.FindControl<Border>("SettingsContainer");
         _settingsIsland = this.FindControl<Border>("SettingsIsland");
+        _settingsPanel = this.FindControl<SettingsPanelView>("SettingsPanel");
 
         if (_settingsIsland is not null && _settingsContainer is not null)
         {
@@ -450,6 +453,12 @@ public partial class MainWindow : Window
             _settingsContainer.Width = 0;
             _settingsTransform.X = SettingsPanelWidth;
             _settingsIsland.Opacity = 0;
+        }
+
+        if (_settingsPanel is not null)
+        {
+            _settingsPanel.MinimumWidthChanged += OnSettingsPanelMinimumWidthChanged;
+            UpdateSettingsPanelMinimumWidth(_settingsPanel.GetRequiredMinimumWidth(), forceCurrentWidthToMinimum: _viewModel.IsSplitMode);
         }
 
         // Initialize search bar animation
@@ -644,6 +653,8 @@ public partial class MainWindow : Window
             _previewSegmentGrid.SizeChanged -= OnPreviewSegmentGridSizeChanged;
         if (_previewBar is not null)
             _previewBar.SizeChanged -= OnPreviewBarSizeChanged;
+        if (_settingsPanel is not null)
+            _settingsPanel.MinimumWidthChanged -= OnSettingsPanelMinimumWidthChanged;
 
         // Unsubscribe from tunneled/bubbled events
         RemoveHandler(PointerWheelChangedEvent, OnWindowPointerWheelChanged);
@@ -777,7 +788,7 @@ public partial class MainWindow : Window
             _viewModel.UpdateHelpPopoverMaxSize(rect.Size);
             if (_viewModel.IsSplitMode)
                 NormalizeSplitPaneWidthsToStar();
-            ClampSettingsPanelWidthToAvailableSpace(applyToVisual: _viewModel.SettingsVisible && !_settingsAnimating);
+            ClampSettingsPanelWidthToAvailableSpace(applyToVisual: ShouldApplySettingsPanelWidthToVisual());
             UpdatePreviewSettingsSplitterState();
             UpdateAdaptiveWorkspaceChrome();
             if (_hasStatusMetricsSnapshot && _viewModel.StatusMetricsVisible)
@@ -999,6 +1010,8 @@ public partial class MainWindow : Window
             Classes.Add("compact-mode");
         else
             Classes.Remove("compact-mode");
+
+        _settingsPanel?.RequestMinimumWidthRefresh();
     }
 
     private WorkspaceDisplayMode GetCurrentDisplayMode()
@@ -1016,7 +1029,11 @@ public partial class MainWindow : Window
         if (_treePaneColumn is null || _treePreviewSplitterColumn is null || _previewPaneColumn is null)
             return;
 
-        switch (GetCurrentDisplayMode())
+        var displayMode = GetCurrentDisplayMode();
+        if (displayMode == WorkspaceDisplayMode.Split)
+            _currentSettingsPanelWidth = _effectiveSettingsPanelMinWidth;
+
+        switch (displayMode)
         {
             case WorkspaceDisplayMode.Preview:
                 SetWorkspacePaneState(_treePaneColumn, visible: false, width: new GridLength(0), minWidth: 0);
@@ -1038,7 +1055,7 @@ public partial class MainWindow : Window
                 break;
         }
 
-        ClampSettingsPanelWidthToAvailableSpace(applyToVisual: _viewModel.SettingsVisible && !_settingsAnimating);
+        ClampSettingsPanelWidthToAvailableSpace(applyToVisual: ShouldApplySettingsPanelWidthToVisual());
         UpdatePreviewSettingsSplitterState();
 
         if (_treePreviewSplitter is not null)
@@ -1067,7 +1084,7 @@ public partial class MainWindow : Window
 
         var minimumWidth = GetMinimumLeadingWorkspaceWidth();
         if (ShouldReserveSettingsWidth())
-            minimumWidth += SettingsPanelMinWidth + PreviewSettingsSplitterWidth;
+            minimumWidth += _effectiveSettingsPanelMinWidth + PreviewSettingsSplitterWidth;
 
         return minimumWidth;
     }
@@ -1077,8 +1094,7 @@ public partial class MainWindow : Window
         if (_settingsAnimating || _viewModel.SettingsVisible)
             return true;
 
-        var currentVisibleWidth = _settingsContainer?.Width ?? 0;
-        return currentVisibleWidth > 0.5 || (_settingsContainer?.Bounds.Width ?? 0) > 0.5;
+        return HasVisibleSettingsPanelWidth();
     }
 
     private void UpdatePreviewToolbarPresentation(bool forceRefreshContent)
@@ -1275,7 +1291,10 @@ public partial class MainWindow : Window
         _previewSettingsSplitterColumn.Width = new GridLength(isVisible ? PreviewSettingsSplitterWidth : 0);
 
         if (_previewSettingsSplitter is not null)
+        {
             _previewSettingsSplitter.IsVisible = isVisible;
+            _previewSettingsSplitter.IsHitTestVisible = isVisible && !_viewModel.IsSplitMode;
+        }
     }
 
     private bool ShouldShowPreviewSettingsSplitter()
@@ -1283,12 +1302,28 @@ public partial class MainWindow : Window
         if (!_viewModel.IsProjectLoaded)
             return false;
 
-        if (_settingsAnimating || _viewModel.SettingsVisible)
+        if (_settingsAnimating)
             return true;
 
+        return HasVisibleSettingsPanelWidth();
+    }
+
+    private bool ShouldApplySettingsPanelWidthToVisual()
+    {
+        if (_settingsAnimating)
+            return false;
+
+        return HasVisibleSettingsPanelWidth();
+    }
+
+    private bool HasVisibleSettingsPanelWidth()
+    {
         var containerWidth = _settingsContainer?.Width ?? 0;
+        if (containerWidth > 0.5)
+            return true;
+
         var actualWidth = _settingsContainer?.Bounds.Width ?? 0;
-        return containerWidth > 0.5 || actualWidth > 0.5;
+        return actualWidth > 0.5;
     }
 
     private void ClampSettingsPanelWidthToAvailableSpace(bool applyToVisual)
@@ -1309,7 +1344,10 @@ public partial class MainWindow : Window
         if (maxWidth <= 0)
             return 0;
 
-        var minWidth = Math.Min(SettingsPanelMinWidth, maxWidth);
+        var minWidth = Math.Min(_effectiveSettingsPanelMinWidth, maxWidth);
+        if (_viewModel.IsSplitMode)
+            return minWidth;
+
         return Math.Clamp(desiredWidth, minWidth, maxWidth);
     }
 
@@ -1324,7 +1362,8 @@ public partial class MainWindow : Window
 
         var reservedWidth = GetMinimumLeadingWorkspaceWidth() + PreviewSettingsSplitterWidth;
         var maxWidth = workspaceWidth - reservedWidth;
-        return Math.Min(SettingsPanelWidth, Math.Max(0, maxWidth));
+        var preferredWidth = Math.Max(SettingsPanelWidth, _effectiveSettingsPanelMinWidth);
+        return Math.Min(preferredWidth, Math.Max(0, maxWidth));
     }
 
     private double GetMinimumLeadingWorkspaceWidth()
@@ -1480,7 +1519,7 @@ public partial class MainWindow : Window
 
     private void ResizeSettingsPane(double deltaX)
     {
-        if (_settingsAnimating || _settingsContainer is null)
+        if (_viewModel.IsSplitMode || _settingsAnimating || _settingsContainer is null)
             return;
 
         var currentWidth = GetVisibleSettingsPanelWidth();
@@ -1521,7 +1560,7 @@ public partial class MainWindow : Window
         }
         else if (activeTarget == WorkspaceResizeTarget.PreviewSettings)
         {
-            ClampSettingsPanelWidthToAvailableSpace(applyToVisual: _viewModel.SettingsVisible && !_settingsAnimating);
+            ClampSettingsPanelWidthToAvailableSpace(applyToVisual: ShouldApplySettingsPanelWidthToVisual());
         }
 
         if (releasePointer)
@@ -1712,6 +1751,7 @@ public partial class MainWindow : Window
     private void ApplyLocalization()
     {
         _viewModel.UpdateLocalization();
+        _settingsPanel?.RequestMinimumWidthRefresh();
         UpdatePreviewToolbarPresentation(forceRefreshContent: true);
         RecalculateMetricsAsync(); // Update metrics text with new localization
         if (_hasPreviewSelectionMetricsSnapshot)
@@ -3367,6 +3407,8 @@ public partial class MainWindow : Window
         try
         {
             EnsureSettingsPanelTransitions();
+            if (_viewModel.IsSplitMode)
+                _currentSettingsPanelWidth = _effectiveSettingsPanelMinWidth;
             _currentSettingsPanelWidth = GetClampedSettingsPanelWidth(_currentSettingsPanelWidth);
             var targetVisibleWidth = _currentSettingsPanelWidth;
 
@@ -3384,6 +3426,27 @@ public partial class MainWindow : Window
             UpdatePreviewSettingsSplitterState();
             UpdateAdaptiveWorkspaceChrome();
         }
+    }
+
+    private void OnSettingsPanelMinimumWidthChanged(object? sender, SettingsPanelMinimumWidthChangedEventArgs e)
+    {
+        UpdateSettingsPanelMinimumWidth(e.MinimumWidth, forceCurrentWidthToMinimum: _viewModel.IsSplitMode);
+    }
+
+    private void UpdateSettingsPanelMinimumWidth(double minimumWidth, bool forceCurrentWidthToMinimum)
+    {
+        var normalizedMinimumWidth = Math.Max(SettingsPanelMinWidth, Math.Ceiling(minimumWidth));
+        if (Math.Abs(normalizedMinimumWidth - _effectiveSettingsPanelMinWidth) < 0.5 && !forceCurrentWidthToMinimum)
+            return;
+
+        _effectiveSettingsPanelMinWidth = normalizedMinimumWidth;
+        if (forceCurrentWidthToMinimum)
+            _currentSettingsPanelWidth = _effectiveSettingsPanelMinWidth;
+        else if (_currentSettingsPanelWidth < _effectiveSettingsPanelMinWidth)
+            _currentSettingsPanelWidth = _effectiveSettingsPanelMinWidth;
+
+        ClampSettingsPanelWidthToAvailableSpace(applyToVisual: ShouldApplySettingsPanelWidthToVisual());
+        UpdateAdaptiveWorkspaceChrome();
     }
 
     private async void AnimateSearchBar(bool show)
