@@ -690,29 +690,10 @@
             <Grid>
               <Grid RowDefinitions="Auto,*"
                     ColumnDefinitions="Auto,*">
-                <Border Grid.Row="0"
-                        Grid.Column="0"
-                        Name="PreviewStickyHeaderCap"
-                        Classes="preview-sticky-header-cap"
-                        IsVisible="False" />
-
-                <Border Grid.Row="0"
-                        Grid.Column="1"
-                        Name="PreviewStickyHeaderContainer"
-                        Classes="preview-sticky-header"
-                        IsVisible="False">
-                  <TextBlock Name="PreviewStickyHeaderText"
-                             Classes="preview-sticky-header-text"
-                             FontFamily="{Binding SelectedFontFamily}"
-                             FontSize="{Binding PreviewFontSize}"
-                             Margin="10,4,16,4"
-                             VerticalAlignment="Center"
-                             TextTrimming="CharacterEllipsis" />
-                </Border>
-
                 <!-- Persistent line-number background that spans the full preview height -->
                 <Grid Grid.Row="1"
-                      Grid.Column="0">
+                      Grid.Column="0"
+                      ClipToBounds="True">
                   <Border Name="PreviewLineNumbersBackground"
                           Classes="preview-line-numbers" />
                   <controls:VirtualizedLineNumbersControl Name="PreviewLineNumbersControl"
@@ -730,7 +711,8 @@
                 </Grid>
 
                 <Grid Grid.Row="1"
-                      Grid.Column="1">
+                      Grid.Column="1"
+                      ClipToBounds="True">
                   <ScrollViewer Name="PreviewTextScrollViewer"
                                 Classes="preview-scroll"
                                 Margin="0,0,0,8"
@@ -757,6 +739,26 @@
                                                             VerticalAlignment="Top" />
                   </ScrollViewer>
                 </Grid>
+
+                <Border Grid.Row="0"
+                        Grid.Column="0"
+                        Name="PreviewStickyHeaderCap"
+                        Classes="preview-sticky-header-cap"
+                        IsVisible="False" />
+
+                <Border Grid.Row="0"
+                        Grid.Column="1"
+                        Name="PreviewStickyHeaderContainer"
+                        Classes="preview-sticky-header"
+                        IsVisible="False">
+                  <TextBlock Name="PreviewStickyHeaderText"
+                             Classes="preview-sticky-header-text"
+                             FontFamily="{Binding SelectedFontFamily}"
+                             FontSize="{Binding PreviewFontSize}"
+                             Margin="10,4,16,4"
+                             VerticalAlignment="Center"
+                             TextTrimming="CharacterEllipsis" />
+                </Border>
               </Grid>
             </Grid>
           </Border>
