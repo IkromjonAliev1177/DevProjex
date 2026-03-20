@@ -7,7 +7,8 @@ public sealed class FileBackedPreviewTextDocument(
     long[] lineOffsets,
     long fileLength,
     int maxLineLength,
-    long characterCount)
+    long characterCount,
+    IReadOnlyList<PreviewDocumentSection>? sections = null)
     : IPreviewTextDocument
 {
     private static readonly UTF8Encoding Utf8WithoutBom = new(encoderShouldEmitUTF8Identifier: false);
@@ -27,6 +28,9 @@ public sealed class FileBackedPreviewTextDocument(
     public int MaxLineLength { get; } = maxLineLength;
 
     public long CharacterCount { get; } = characterCount;
+
+    public IReadOnlyList<PreviewDocumentSection> Sections { get; } =
+        sections is { Count: > 0 } ? sections.ToArray() : Array.Empty<PreviewDocumentSection>();
 
     public string GetLineText(int lineNumber)
     {

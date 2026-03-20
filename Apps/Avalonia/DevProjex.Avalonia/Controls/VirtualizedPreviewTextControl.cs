@@ -1,4 +1,5 @@
 using Avalonia.Media.TextFormatting;
+using DevProjex.Application.Preview;
 
 namespace DevProjex.Avalonia.Controls;
 
@@ -49,6 +50,9 @@ public sealed class VirtualizedPreviewTextControl : Control
 
     public static readonly StyledProperty<IBrush?> TextBrushProperty =
         AvaloniaProperty.Register<VirtualizedPreviewTextControl, IBrush?>(nameof(TextBrush));
+
+    public static readonly StyledProperty<IBrush?> SectionDividerBrushProperty =
+        AvaloniaProperty.Register<VirtualizedPreviewTextControl, IBrush?>(nameof(SectionDividerBrush));
 
     public static readonly StyledProperty<string> CopyMenuHeaderProperty =
         AvaloniaProperty.Register<VirtualizedPreviewTextControl, string>(nameof(CopyMenuHeader), "Copy");
@@ -102,6 +106,7 @@ public sealed class VirtualizedPreviewTextControl : Control
             TextFontFamilyProperty,
             TextFontSizeProperty,
             TextBrushProperty,
+            SectionDividerBrushProperty,
             CopyMenuHeaderProperty,
             SelectAllMenuHeaderProperty,
             ClearSelectionMenuHeaderProperty);
@@ -215,6 +220,12 @@ public sealed class VirtualizedPreviewTextControl : Control
         set => SetValue(TextBrushProperty, value);
     }
 
+    public IBrush? SectionDividerBrush
+    {
+        get => GetValue(SectionDividerBrushProperty);
+        set => SetValue(SectionDividerBrushProperty, value);
+    }
+
     public string CopyMenuHeader
     {
         get => GetValue(CopyMenuHeaderProperty);
@@ -276,6 +287,18 @@ public sealed class VirtualizedPreviewTextControl : Control
         return TryStartSelection(pointer, documentPoint, keyModifiers);
     }
 
+    public int GetLineNumberAtVerticalOffset(double verticalOffset)
+    {
+        var typeface = ResolveTypeface();
+        var lineHeight = ResolveLineHeight(typeface);
+        if (lineHeight <= 0)
+            return 1;
+
+        var normalizedOffset = Math.Max(0, verticalOffset);
+        var lineNumber = (int)Math.Floor((normalizedOffset - TopPadding) / lineHeight) + 1;
+        return Math.Clamp(lineNumber, 1, ResolveLineCount());
+    }
+
     protected override Size MeasureOverride(Size availableSize)
     {
         var typeface = ResolveTypeface();
@@ -316,6 +339,8 @@ public sealed class VirtualizedPreviewTextControl : Control
 
         var origin = new Point(LeftPadding, TopPadding + (firstVisibleLine - 1) * lineHeight);
         var formattedText = BuildFormattedText(visibleWindow.Text, typeface);
+
+        DrawVisibleSectionDividers(context, firstVisibleLine, lastVisibleLine, lineHeight);
 
         if (TryGetVisibleSelectionRange(visibleWindow, out var selectionStart, out var selectionLength))
         {
@@ -914,6 +939,40 @@ public sealed class VirtualizedPreviewTextControl : Control
     }
 
     private int ResolveLineCount() => Document?.LineCount ?? _lineCount;
+
+    private void DrawVisibleSectionDividers(
+        DrawingContext context,
+        int firstVisibleLine,
+        int lastVisibleLine,
+        double lineHeight)
+    {
+        if (SectionDividerBrush is null || Document?.Sections is not { Count: > 0 } sections)
+            return;
+
+        var firstSectionIndex = PreviewDocumentSectionLookup.FindFirstIntersectingSectionIndex(sections, firstVisibleLine);
+        if (firstSectionIndex < 0)
+            return;
+
+        var right = Math.Max(LeftPadding + 24.0, Bounds.Width - RightPadding);
+        if (right <= LeftPadding)
+            return;
+
+        var dividerPen = new Pen(SectionDividerBrush, 1);
+        var dividerOffset = Math.Max(2.0, Math.Floor(lineHeight * 0.35));
+
+        for (var i = firstSectionIndex; i < sections.Count; i++)
+        {
+            var section = sections[i];
+            if (section.StartLine > lastVisibleLine)
+                break;
+
+            if (section.StartLine <= 1)
+                continue;
+
+            var y = TopPadding + ((section.HeaderLine - 1) * lineHeight) - dividerOffset;
+            context.DrawLine(dividerPen, new Point(LeftPadding, y), new Point(right, y));
+        }
+    }
 
     private Typeface ResolveTypeface() =>
         new(TextFontFamily ?? FontFamily.Default, FontStyle.Normal, FontWeight.Normal);

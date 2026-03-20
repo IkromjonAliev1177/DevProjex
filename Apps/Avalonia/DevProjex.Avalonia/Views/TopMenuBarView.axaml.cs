@@ -28,7 +28,6 @@ public partial class TopMenuBarView : UserControl
     public event EventHandler<RoutedEventArgs>? ToggleAdvancedCountsRequested;
     public event EventHandler<RoutedEventArgs>? ToggleSearchRequested;
     public event EventHandler<RoutedEventArgs>? ToggleSettingsRequested;
-    public event EventHandler<RoutedEventArgs>? ToggleSplitRequested;
     public event EventHandler<RoutedEventArgs>? TogglePreviewRequested;
     public event EventHandler<RoutedEventArgs>? ToggleFilterRequested;
     public event EventHandler<RoutedEventArgs>? ThemeMenuClickRequested;
@@ -148,13 +147,11 @@ public partial class TopMenuBarView : UserControl
 
     private void OnToggleSettings(object? sender, RoutedEventArgs e) => ToggleSettingsRequested?.Invoke(sender, e);
 
-    private void OnToggleSplit(object? sender, RoutedEventArgs e) => ToggleSplitRequested?.Invoke(sender, e);
-
     private void OnTogglePreview(object? sender, RoutedEventArgs e) => TogglePreviewRequested?.Invoke(sender, e);
 
     private void OnToggleSearch(object? sender, RoutedEventArgs e)
     {
-        if (DataContext is MainWindowViewModel { IsPreviewMode: true })
+        if (DataContext is MainWindowViewModel { IsSearchFilterAvailable: false })
             return;
 
         ToggleSearchRequested?.Invoke(sender, e);
@@ -162,7 +159,7 @@ public partial class TopMenuBarView : UserControl
 
     private void OnToggleFilter(object? sender, RoutedEventArgs e)
     {
-        if (DataContext is MainWindowViewModel { IsPreviewMode: true })
+        if (DataContext is MainWindowViewModel { IsSearchFilterAvailable: false })
             return;
 
         ToggleFilterRequested?.Invoke(sender, e);

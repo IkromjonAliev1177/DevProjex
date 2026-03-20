@@ -1088,6 +1088,34 @@
         <Setter Property="Background" Value="{DynamicResource AppBorderBrush}" />
     </Style>
 
+    <Style Selector="Button.tree-island-close-button">
+        <Setter Property="Background" Value="{DynamicResource AppBackgroundBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource AppBorderBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="6" />
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+
+    <Style Selector="Button.tree-island-close-button:pointerover">
+        <Setter Property="Background" Value="{DynamicResource AppBorderBrush}" />
+    </Style>
+
+    <Style Selector="Border.preview-sticky-path">
+        <Setter Property="Background" Value="{DynamicResource AppPanelBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource AppBorderBrush}" />
+        <Setter Property="BorderThickness" Value="0,0,0,1" />
+        <Setter Property="Padding" Value="10,7,10,7" />
+    </Style>
+
+    <Style Selector="TextBlock.preview-sticky-path-text">
+        <Setter Property="Foreground" Value="{DynamicResource AppTextBrush}" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="TextWrapping" Value="NoWrap" />
+        <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+        <Setter Property="Opacity" Value="0.9" />
+    </Style>
+
     <Style Selector="Border.preview-panel.preview-toolbar-compact Grid#PreviewBarLayoutGrid">
         <Setter Property="Margin" Value="10,4" />
     </Style>
@@ -1120,23 +1148,8 @@
         <Setter Property="Margin" Value="2,0,0,0" />
     </Style>
 
-    <Style Selector="Path.preview-icon, Path.split-icon">
+    <Style Selector="Path.preview-icon">
         <Setter Property="Opacity" Value="{DynamicResource PreviewIconOpacity}" />
-    </Style>
-
-    <Style Selector="TextBlock.split-icon-text">
-        <Setter Property="Opacity" Value="{DynamicResource PreviewIconOpacity}" />
-        <Setter Property="FontFamily" Value="Cascadia Mono, Consolas, monospace" />
-        <Setter Property="FontSize" Value="15" />
-        <Setter Property="FontWeight" Value="SemiBold" />
-        <Setter Property="HorizontalAlignment" Value="Center" />
-        <Setter Property="VerticalAlignment" Value="Center" />
-        <Setter Property="Width" Value="24" />
-        <Setter Property="Height" Value="20" />
-        <Setter Property="LineHeight" Value="20" />
-        <Setter Property="Margin" Value="-1,-1,1,0" />
-        <Setter Property="TextAlignment" Value="Center" />
-        <Setter Property="UseLayoutRounding" Value="True" />
     </Style>
 
 </Styles>

@@ -11,6 +11,7 @@ using DevProjex.Application.Preview;
 using DevProjex.Avalonia.Controls;
 using DevProjex.Avalonia.Coordinators;
 using DevProjex.Avalonia.Services;
+using DevProjex.Avalonia.ViewModels;
 using DevProjex.Avalonia.Views;
 using DevProjex.Kernel;
 using UserSettingsStore = DevProjex.Infrastructure.ThemePresets.UserSettingsStore;
@@ -27,8 +28,8 @@ public partial class MainWindow : Window
     private enum WorkspaceDisplayMode
     {
         Tree = 0,
-        Preview = 1,
-        Split = 2
+        PreviewWithTree = 1,
+        PreviewOnly = 2
     }
 
     private enum ZoomSurfaceTarget
@@ -103,8 +104,7 @@ public partial class MainWindow : Window
         bool SettingsVisible,
         bool SearchVisible,
         bool FilterVisible,
-        bool IsPreviewMode,
-        bool IsSplitMode,
+        PreviewWorkspaceMode PreviewWorkspaceMode,
         bool StatusMetricsVisible,
         string StatusTreeStatsText,
         string StatusContentStatsText,
@@ -179,6 +179,7 @@ public partial class MainWindow : Window
     private TreeView? _treeView;
     private TopMenuBarView? _topMenuBar;
     private Grid? _workspaceGrid;
+    private Grid? _treePaneRoot;
     private ColumnDefinition? _treePaneColumn;
     private ColumnDefinition? _treePreviewSplitterColumn;
     private ColumnDefinition? _previewPaneColumn;
@@ -188,6 +189,8 @@ public partial class MainWindow : Window
     private Border? _treeIsland;
     private Border? _previewIsland;
     private Border? _previewLineNumbersBackground;
+    private Border? _previewStickyPathHost;
+    private TextBlock? _previewStickyPathText;
     private ItemsControl? _toastHost;
     private SearchBarView? _searchBar;
     private FilterBarView? _filterBar;
@@ -255,6 +258,12 @@ public partial class MainWindow : Window
     private const double FilterBarHeight = 46.0;
     private static readonly TimeSpan FilterBarAnimationDuration = TimeSpan.FromMilliseconds(250);
 
+    // Tree pane animation inside preview workspace
+    private TranslateTransform? _treePaneTransform;
+    private bool _treePaneAnimating;
+    private const double PreviewTreePaneSlideOffset = 18.0;
+    private static readonly TimeSpan PreviewTreePaneAnimationDuration = TimeSpan.FromMilliseconds(180);
+
     // Preview bar animation
     private Border? _previewBarContainer;
     private Border? _previewBar;
@@ -294,8 +303,8 @@ public partial class MainWindow : Window
     private int _previewModeSwitchVersion;
     private bool _previewModeSwitchInProgress;
     private bool _clearPreviewBeforeNextRefresh;
-    private bool _restoreSearchAfterPreview;
-    private bool _restoreFilterAfterPreview;
+    private bool _restoreSearchAfterTreePaneReveal;
+    private bool _restoreFilterAfterTreePaneReveal;
     private bool _previewFontInitialized;
     private int _suppressSearchFilterRealtimeDepth;
     private static readonly int TreeViewModelBuildParallelism =
@@ -410,10 +419,13 @@ public partial class MainWindow : Window
         _treeView = this.FindControl<TreeView>("ProjectTree");
         _topMenuBar = this.FindControl<TopMenuBarView>("TopMenuBar");
         _workspaceGrid = this.FindControl<Grid>("WorkspaceGrid");
+        _treePaneRoot = this.FindControl<Grid>("TreePaneRoot");
         _treePreviewSplitter = this.FindControl<Border>("TreePreviewSplitter");
         _previewSettingsSplitter = this.FindControl<Border>("PreviewSettingsSplitter");
         _treeIsland = this.FindControl<Border>("TreeIsland");
         _previewIsland = this.FindControl<Border>("PreviewIsland");
+        _previewStickyPathHost = this.FindControl<Border>("PreviewStickyPathHost");
+        _previewStickyPathText = this.FindControl<TextBlock>("PreviewStickyPathText");
         _toastHost = this.FindControl<ItemsControl>("ToastHost");
         if (_workspaceGrid is not null && _workspaceGrid.ColumnDefinitions.Count >= 5)
         {
@@ -435,6 +447,11 @@ public partial class MainWindow : Window
         _previewTextScrollViewer = this.FindControl<ScrollViewer>("PreviewTextScrollViewer");
         _previewTextControl = this.FindControl<VirtualizedPreviewTextControl>("PreviewTextControl");
         _previewLineNumbersControl = this.FindControl<VirtualizedLineNumbersControl>("PreviewLineNumbersControl");
+        if (_treePaneRoot is not null)
+        {
+            _treePaneTransform = _treePaneRoot.RenderTransform as TranslateTransform ?? new TranslateTransform();
+            _treePaneRoot.RenderTransform = _treePaneTransform;
+        }
         if (_previewTextScrollViewer is not null && _previewTextControl is not null)
         {
             _previewTextScrollViewer.Cursor = new Cursor(StandardCursorType.Ibeam);
@@ -592,6 +609,11 @@ public partial class MainWindow : Window
             {
                 if (!_previewModeSwitchInProgress)
                     UpdatePreviewSegmentThumbPosition(animate: false);
+            }
+            else if (args.PropertyName is nameof(MainWindowViewModel.PreviewFontSize)
+                     or nameof(MainWindowViewModel.SelectedFontFamily))
+            {
+                Dispatcher.UIThread.Post(UpdatePreviewStickyPath, DispatcherPriority.Render);
             }
             else if (args.PropertyName is nameof(MainWindowViewModel.TreeItemSpacing)
                      or nameof(MainWindowViewModel.TreeItemPadding)
@@ -794,7 +816,7 @@ public partial class MainWindow : Window
             _lastWindowBoundsWidth = rect.Width;
 
             _viewModel.UpdateHelpPopoverMaxSize(rect.Size);
-            if (_viewModel.IsSplitMode)
+            if (_viewModel.IsPreviewTreeVisible)
                 AdjustSplitPaneWidthsForWindowResize(widthDelta);
             ClampSettingsPanelWidthToAvailableSpace(applyToVisual: ShouldApplySettingsPanelWidthToVisual());
             UpdatePreviewSettingsSplitterState();
@@ -1024,11 +1046,11 @@ public partial class MainWindow : Window
 
     private WorkspaceDisplayMode GetCurrentDisplayMode()
     {
-        if (_viewModel.IsSplitMode)
-            return WorkspaceDisplayMode.Split;
+        if (_viewModel.IsPreviewTreeVisible)
+            return WorkspaceDisplayMode.PreviewWithTree;
 
         return _viewModel.IsPreviewMode
-            ? WorkspaceDisplayMode.Preview
+            ? WorkspaceDisplayMode.PreviewOnly
             : WorkspaceDisplayMode.Tree;
     }
 
@@ -1041,13 +1063,13 @@ public partial class MainWindow : Window
 
         switch (displayMode)
         {
-            case WorkspaceDisplayMode.Preview:
+            case WorkspaceDisplayMode.PreviewOnly:
                 SetWorkspacePaneState(_treePaneColumn, visible: false, width: new GridLength(0), minWidth: 0);
                 SetWorkspacePaneState(_previewPaneColumn, visible: true, width: new GridLength(1, GridUnitType.Star), minWidth: SplitPreviewPaneMinWidth);
                 _treePreviewSplitterColumn.Width = new GridLength(0);
                 break;
 
-            case WorkspaceDisplayMode.Split:
+            case WorkspaceDisplayMode.PreviewWithTree:
                 EnsureSavedSplitPaneWidths();
                 SetWorkspacePaneState(_treePaneColumn, visible: true, width: _savedSplitTreeColumnWidth, minWidth: SplitTreePaneMinWidth);
                 SetWorkspacePaneState(_previewPaneColumn, visible: true, width: _savedSplitPreviewColumnWidth, minWidth: SplitPreviewPaneMinWidth);
@@ -1065,7 +1087,7 @@ public partial class MainWindow : Window
         UpdatePreviewSettingsSplitterState();
 
         if (_treePreviewSplitter is not null)
-            _treePreviewSplitter.IsVisible = _viewModel.IsSplitMode;
+            _treePreviewSplitter.IsVisible = _viewModel.IsPreviewTreeVisible;
 
         UpdateAdaptiveWorkspaceChrome();
     }
@@ -1219,7 +1241,7 @@ public partial class MainWindow : Window
     {
         if (_viewModel.IsProjectLoaded)
         {
-            if (_viewModel.IsSplitMode)
+            if (_viewModel.IsPreviewTreeVisible)
                 return _treeIsland;
 
             return _viewModel.IsPreviewMode
@@ -1258,7 +1280,7 @@ public partial class MainWindow : Window
 
     private void NormalizeSplitPaneWidthsToStar()
     {
-        if (!_viewModel.IsSplitMode)
+        if (!_viewModel.IsPreviewTreeVisible)
             return;
 
         CaptureSplitPaneLayout();
@@ -1271,7 +1293,7 @@ public partial class MainWindow : Window
 
     private void AdjustSplitPaneWidthsForWindowResize(double widthDelta)
     {
-        if (!_viewModel.IsSplitMode)
+        if (!_viewModel.IsPreviewTreeVisible)
             return;
 
         if (Math.Abs(widthDelta) < 0.5)
@@ -1428,8 +1450,8 @@ public partial class MainWindow : Window
     {
         return GetCurrentDisplayMode() switch
         {
-            WorkspaceDisplayMode.Split => SplitTreePaneMinWidth + SplitPreviewPaneMinWidth + TreePreviewSplitterWidth,
-            WorkspaceDisplayMode.Preview => SplitPreviewPaneMinWidth,
+            WorkspaceDisplayMode.PreviewWithTree => SplitTreePaneMinWidth + SplitPreviewPaneMinWidth + TreePreviewSplitterWidth,
+            WorkspaceDisplayMode.PreviewOnly => SplitPreviewPaneMinWidth,
             _ => SplitTreePaneMinWidth
         };
     }
@@ -1486,7 +1508,7 @@ public partial class MainWindow : Window
         if (!e.GetCurrentPoint(splitter).Properties.IsLeftButtonPressed)
             return;
 
-        if (target == WorkspaceResizeTarget.TreePreview && !_viewModel.IsSplitMode)
+        if (target == WorkspaceResizeTarget.TreePreview && !_viewModel.IsPreviewTreeVisible)
             return;
 
         if (target == WorkspaceResizeTarget.PreviewSettings && !ShouldShowPreviewSettingsSplitter())
@@ -1587,7 +1609,7 @@ public partial class MainWindow : Window
             return;
 
         _currentSettingsPanelWidth = clampedWidth;
-        if (!_viewModel.IsSplitMode)
+        if (!_viewModel.IsPreviewMode)
             _savedNonSplitSettingsPanelWidth = clampedWidth;
         ApplySettingsPanelWidth(clampedWidth, animate: false);
         UpdatePreviewToolbarPresentation(forceRefreshContent: false);
@@ -2288,6 +2310,60 @@ public partial class MainWindow : Window
         {
             _previewScrollSyncActive = false;
         }
+
+        UpdatePreviewStickyPath();
+    }
+
+    private void UpdatePreviewStickyPath()
+    {
+        if (_previewStickyPathHost is null || _previewStickyPathText is null || _previewTextControl is null)
+            return;
+
+        if (!_viewModel.IsAnyPreviewVisible)
+        {
+            HidePreviewStickyPath();
+            return;
+        }
+
+        var document = _previewTextControl.Document ?? _viewModel.PreviewDocument;
+        if (document?.Sections is not { Count: > 0 } sections)
+        {
+            HidePreviewStickyPath();
+            return;
+        }
+
+        var verticalOffset = _previewTextScrollViewer?.Offset.Y ?? _previewTextControl.VerticalOffset;
+        var topLine = _previewTextControl.GetLineNumberAtVerticalOffset(verticalOffset);
+        var currentSection = PreviewDocumentSectionLookup.FindContainingSection(sections, topLine);
+        if (currentSection is null)
+        {
+            var nextSection = PreviewDocumentSectionLookup.FindContainingOrNextSection(sections, topLine);
+            if (nextSection is null || nextSection.StartLine - topLine > 2)
+            {
+                HidePreviewStickyPath();
+                return;
+            }
+
+            currentSection = nextSection;
+        }
+
+        if (currentSection is null)
+        {
+            HidePreviewStickyPath();
+            return;
+        }
+
+        _previewStickyPathText.Text = currentSection.DisplayPath;
+        _previewStickyPathHost.IsVisible = true;
+    }
+
+    private void HidePreviewStickyPath()
+    {
+        if (_previewStickyPathHost is not null)
+            _previewStickyPathHost.IsVisible = false;
+
+        if (_previewStickyPathText is not null)
+            _previewStickyPathText.Text = string.Empty;
     }
 
     private void OnPreviewScrollViewerPointerPressed(object? sender, PointerPressedEventArgs e)
@@ -2660,6 +2736,9 @@ public partial class MainWindow : Window
 
         if (!ReferenceEquals(previousDocument, document))
             previousDocument?.Dispose();
+
+        UpdatePreviewStickyPath();
+        Dispatcher.UIThread.Post(UpdatePreviewStickyPath, DispatcherPriority.Render);
     }
 
     private void ClearPreviewDocument()
@@ -2670,6 +2749,7 @@ public partial class MainWindow : Window
         _viewModel.PreviewText = string.Empty;
         _viewModel.PreviewLineCount = 1;
         previousDocument?.Dispose();
+        HidePreviewStickyPath();
     }
 
     private static int CountPreviewLines(string text) => PreviewFileCollectionPolicy.CountPreviewLines(text);
@@ -2914,7 +2994,7 @@ public partial class MainWindow : Window
 
     private void OnZoomReset(object? sender, RoutedEventArgs e)
     {
-        if (_viewModel.IsSplitMode)
+        if (_viewModel.IsPreviewTreeVisible)
         {
             ResetTreeZoom();
             ResetPreviewZoom();
@@ -2932,7 +3012,7 @@ public partial class MainWindow : Window
 
     private void AdjustZoomFontSize(double delta, ZoomSurfaceTarget? target = null)
     {
-        if (_viewModel.IsSplitMode && target is null)
+        if (_viewModel.IsPreviewTreeVisible && target is null)
         {
             _viewModel.TreeFontSize = ClampZoomFontSize(_viewModel.TreeFontSize + delta);
             _viewModel.PreviewFontSize = ClampZoomFontSize(_viewModel.PreviewFontSize + delta);
@@ -2964,12 +3044,12 @@ public partial class MainWindow : Window
         _previewFontInitialized = true;
     }
 
-    private void CapturePreviewRestoreState()
+    private void CapturePreviewTreeToolRestoreState()
     {
-        _restoreSearchAfterPreview = _viewModel.SearchVisible;
-        _restoreFilterAfterPreview = _viewModel.FilterVisible;
-        if (_restoreSearchAfterPreview && _restoreFilterAfterPreview)
-            _restoreFilterAfterPreview = false;
+        _restoreSearchAfterTreePaneReveal = _viewModel.SearchVisible;
+        _restoreFilterAfterTreePaneReveal = _viewModel.FilterVisible;
+        if (_restoreSearchAfterTreePaneReveal && _restoreFilterAfterTreePaneReveal)
+            _restoreFilterAfterTreePaneReveal = false;
     }
 
     private void OnToggleSettings(object? sender, RoutedEventArgs e)
@@ -2989,34 +3069,30 @@ public partial class MainWindow : Window
 
         if (_viewModel.IsPreviewMode)
             ClosePreviewMode();
-        else if (_viewModel.IsSplitMode)
-            SwitchSplitModeToPreviewMode();
         else
             OpenPreviewMode();
     }
 
-    private void OnToggleSplit(object? sender, RoutedEventArgs e)
+    private void OnPreviewClose(object? sender, RoutedEventArgs e)
     {
         if (!_viewModel.IsProjectLoaded)
             return;
 
-        if (_viewModel.IsSplitMode)
-            CloseSplitMode();
-        else if (_viewModel.IsPreviewMode)
-            OpenSplitModeFromPreviewMode();
-        else
-            OpenSplitMode();
-    }
-
-    private void OnPreviewClose(object? sender, RoutedEventArgs e)
-    {
-        if (_viewModel.IsSplitMode)
+        if (_viewModel.IsPreviewOnlyMode)
         {
-            CloseSplitMode();
+            RestorePreviewTreePane();
             return;
         }
 
         ClosePreviewMode();
+    }
+
+    private void OnPreviewTreeHide(object? sender, RoutedEventArgs e)
+    {
+        if (!_viewModel.IsPreviewTreeVisible)
+            return;
+
+        HidePreviewTreePane();
     }
 
     private async void OnPreviewTreeModeClick(object? sender, RoutedEventArgs e)
@@ -3147,14 +3223,13 @@ public partial class MainWindow : Window
     {
         if (!_viewModel.IsProjectLoaded)
             return;
-        if (_previewBarAnimating)
+        if (_previewBarAnimating || _treePaneAnimating)
             return;
 
-        CapturePreviewRestoreState();
         PreparePreviewPane();
-        ForceCloseSearchAndFilterForPreview();
-        _viewModel.IsSplitMode = false;
-        _viewModel.IsPreviewMode = true;
+        CaptureNonSplitSettingsPanelWidth();
+        _currentSettingsPanelWidth = _effectiveSettingsPanelMinWidth;
+        _viewModel.PreviewWorkspaceMode = PreviewWorkspaceMode.TreeAndPreview;
         UpdateCompactModeVisualState();
         UpdateWorkspaceLayoutForCurrentMode();
         UpdatePreviewSegmentThumbPosition(animate: false);
@@ -3167,131 +3242,88 @@ public partial class MainWindow : Window
         // smooth across different refresh rates and GPU speeds.
         await WaitForPreviewRenderPassesAsync();
 
-        // Move keyboard focus from hidden search/filter text boxes to preview surface.
-        FocusPreviewSurface();
-
         // Start loading preview content after preview host is painted.
+        _treeView?.Focus();
         SchedulePreviewRefresh(immediate: true);
     }
 
     private async void ClosePreviewMode()
     {
-        if (_previewBarAnimating)
+        if (_previewBarAnimating || _treePaneAnimating)
             return;
+
+        var shouldRestoreTreeTools = _viewModel.IsPreviewOnlyMode;
+        if (_viewModel.IsPreviewTreeVisible)
+            CaptureSplitPaneLayout();
 
         _previewModeSwitchCts?.Cancel();
         _previewModeSwitchInProgress = false;
         CancelPreviewRefresh();
         await AnimatePreviewBarAsync(show: false);
 
-        _viewModel.IsPreviewMode = false;
-        _viewModel.IsSplitMode = false;
+        _viewModel.PreviewWorkspaceMode = PreviewWorkspaceMode.Off;
         UpdateCompactModeVisualState();
+        RestoreNonSplitSettingsPanelWidth();
         UpdateWorkspaceLayoutForCurrentMode();
+        if (shouldRestoreTreeTools)
+            RestorePreviewTreeToolsAfterReveal();
         ClearPreviewSelectionMetrics();
-        RestoreSearchAndFilterAfterPreview();
         ClearPreviewMemory();
         SchedulePreviewMemoryCleanup(force: true);
         _treeView?.Focus();
     }
 
-    private async void OpenSplitMode()
+    private async void HidePreviewTreePane()
     {
-        if (!_viewModel.IsProjectLoaded)
+        if (!_viewModel.IsPreviewTreeVisible)
             return;
-        if (_previewBarAnimating)
-            return;
-
-        CaptureNonSplitSettingsPanelWidth();
-        _currentSettingsPanelWidth = _effectiveSettingsPanelMinWidth;
-        PreparePreviewPane();
-        _viewModel.IsPreviewMode = false;
-        _viewModel.IsSplitMode = true;
-        UpdateCompactModeVisualState();
-        UpdateWorkspaceLayoutForCurrentMode();
-        UpdatePreviewSegmentThumbPosition(animate: false);
-
-        await AnimatePreviewBarAsync(show: true);
-        UpdatePreviewSegmentThumbPosition(animate: false);
-        await WaitForPreviewRenderPassesAsync();
-
-        _treeView?.Focus();
-        SchedulePreviewRefresh(immediate: true);
-    }
-
-    private async void OpenSplitModeFromPreviewMode()
-    {
-        if (!_viewModel.IsProjectLoaded)
-            return;
-        if (_previewBarAnimating)
-            return;
-
-        CaptureNonSplitSettingsPanelWidth();
-        _currentSettingsPanelWidth = _effectiveSettingsPanelMinWidth;
-        _viewModel.IsPreviewMode = false;
-        _viewModel.IsSplitMode = true;
-        UpdateCompactModeVisualState();
-        UpdateWorkspaceLayoutForCurrentMode();
-        UpdatePreviewSegmentThumbPosition(animate: false);
-        await WaitForPreviewRenderPassesAsync();
-
-        RestoreSearchAndFilterAfterPreview();
-        if (!_viewModel.SearchVisible && !_viewModel.FilterVisible)
-            _treeView?.Focus();
-    }
-
-    private async void SwitchSplitModeToPreviewMode()
-    {
-        if (!_viewModel.IsProjectLoaded)
-            return;
-        if (_previewBarAnimating)
+        if (_previewBarAnimating || _treePaneAnimating)
             return;
 
         CaptureSplitPaneLayout();
-        CapturePreviewRestoreState();
-        ForceCloseSearchAndFilterForPreview();
-        _viewModel.IsSplitMode = false;
-        _viewModel.IsPreviewMode = true;
-        RestoreNonSplitSettingsPanelWidth();
+        CapturePreviewTreeToolRestoreState();
+        ForceCloseSearchAndFilterForHiddenTree();
+        await AnimatePreviewTreePaneAsync(show: false);
+
+        _viewModel.PreviewWorkspaceMode = PreviewWorkspaceMode.PreviewOnly;
         UpdateCompactModeVisualState();
         UpdateWorkspaceLayoutForCurrentMode();
         UpdatePreviewSegmentThumbPosition(animate: false);
+        ResetPreviewTreePaneVisualState(hidden: false);
         await WaitForPreviewRenderPassesAsync();
         FocusPreviewSurface();
     }
 
-    private async void CloseSplitMode()
+    private async void RestorePreviewTreePane()
     {
-        if (_previewBarAnimating)
+        if (!_viewModel.IsPreviewOnlyMode)
+            return;
+        if (_previewBarAnimating || _treePaneAnimating)
             return;
 
-        CaptureSplitPaneLayout();
-        _previewModeSwitchCts?.Cancel();
-        _previewModeSwitchInProgress = false;
-        CancelPreviewRefresh();
-        await AnimatePreviewBarAsync(show: false);
-
-        _viewModel.IsSplitMode = false;
-        _viewModel.IsPreviewMode = false;
-        RestoreNonSplitSettingsPanelWidth();
+        _viewModel.PreviewWorkspaceMode = PreviewWorkspaceMode.TreeAndPreview;
         UpdateCompactModeVisualState();
         UpdateWorkspaceLayoutForCurrentMode();
-        ClearPreviewSelectionMetrics();
-        ClearPreviewMemory();
-        SchedulePreviewMemoryCleanup(force: true);
-        _treeView?.Focus();
+        UpdatePreviewSegmentThumbPosition(animate: false);
+        ResetPreviewTreePaneVisualState(hidden: true);
+        await WaitForPreviewRenderPassesAsync();
+        await AnimatePreviewTreePaneAsync(show: true);
+        RestorePreviewTreeToolsAfterReveal();
+
+        if (!_viewModel.SearchVisible && !_viewModel.FilterVisible)
+            _treeView?.Focus();
     }
 
-    private void RestoreSearchAndFilterAfterPreview()
+    private void RestorePreviewTreeToolsAfterReveal()
     {
         // Restore only one tool to keep search/filter behavior predictable.
-        if (_restoreSearchAfterPreview && !_viewModel.SearchVisible)
+        if (_restoreSearchAfterTreePaneReveal && !_viewModel.SearchVisible)
             ShowSearch(focusInput: true, selectAllOnFocus: false);
-        else if (_restoreFilterAfterPreview && !_viewModel.FilterVisible)
+        else if (_restoreFilterAfterTreePaneReveal && !_viewModel.FilterVisible)
             ShowFilter(focusInput: true, selectAllOnFocus: false);
 
-        _restoreSearchAfterPreview = false;
-        _restoreFilterAfterPreview = false;
+        _restoreSearchAfterTreePaneReveal = false;
+        _restoreFilterAfterTreePaneReveal = false;
     }
 
     private void ClearPreviewMemory()
@@ -3464,6 +3496,75 @@ public partial class MainWindow : Window
         await Task.Delay(140, cancellationToken);
     }
 
+    private void EnsurePreviewTreePaneTransitions()
+    {
+        if (_treePaneRoot is null || _treePaneTransform is null)
+            return;
+
+        if (_treePaneRoot.Transitions is null)
+        {
+            _treePaneRoot.Transitions =
+            [
+                new DoubleTransition
+                {
+                    Property = OpacityProperty,
+                    Duration = PreviewTreePaneAnimationDuration,
+                    Easing = new CubicEaseInOut()
+                }
+            ];
+        }
+
+        if (_treePaneTransform.Transitions is null)
+        {
+            _treePaneTransform.Transitions =
+            [
+                new DoubleTransition
+                {
+                    Property = TranslateTransform.XProperty,
+                    Duration = PreviewTreePaneAnimationDuration,
+                    Easing = new CubicEaseInOut()
+                }
+            ];
+        }
+    }
+
+    private void ResetPreviewTreePaneVisualState(bool hidden)
+    {
+        if (_treePaneRoot is null || _treePaneTransform is null)
+            return;
+
+        var cachedRootTransitions = _treePaneRoot.Transitions;
+        var cachedTransformTransitions = _treePaneTransform.Transitions;
+        _treePaneRoot.Transitions = null;
+        _treePaneTransform.Transitions = null;
+        _treePaneRoot.Opacity = hidden ? 0.0 : 1.0;
+        _treePaneTransform.X = hidden ? -PreviewTreePaneSlideOffset : 0.0;
+        _treePaneRoot.Transitions = cachedRootTransitions;
+        _treePaneTransform.Transitions = cachedTransformTransitions;
+    }
+
+    private async Task AnimatePreviewTreePaneAsync(bool show)
+    {
+        if (_treePaneRoot is null || _treePaneTransform is null)
+            return;
+
+        if (_treePaneAnimating)
+            return;
+
+        _treePaneAnimating = true;
+        try
+        {
+            EnsurePreviewTreePaneTransitions();
+            _treePaneRoot.Opacity = show ? 1.0 : 0.0;
+            _treePaneTransform.X = show ? 0.0 : -PreviewTreePaneSlideOffset;
+            await WaitForPanelAnimationAsync(PreviewTreePaneAnimationDuration);
+        }
+        finally
+        {
+            _treePaneAnimating = false;
+        }
+    }
+
     private async void AnimateSettingsPanel(bool show)
     {
         if (_settingsIsland is null || _settingsTransform is null || _settingsContainer is null) return;
@@ -3513,11 +3614,11 @@ public partial class MainWindow : Window
         UpdateAdaptiveWorkspaceChrome();
     }
 
-    // Split mode starts from the computed minimum width, but outside split
-    // the user's regular settings width should remain restorable.
+    // Preview workspace starts from the computed minimum width,
+    // but the user's regular tree-only settings width should remain restorable.
     private void CaptureNonSplitSettingsPanelWidth()
     {
-        if (_viewModel.IsSplitMode)
+        if (_viewModel.IsPreviewMode)
             return;
 
         var currentWidth = GetVisibleSettingsPanelWidth();
@@ -4495,7 +4596,7 @@ public partial class MainWindow : Window
     private async void OnToggleSearch(object? sender, RoutedEventArgs e)
     {
         if (!_viewModel.IsProjectLoaded) return;
-        if (_viewModel.IsPreviewMode) return;
+        if (!_viewModel.IsSearchFilterAvailable) return;
 
         if (_viewModel.SearchVisible)
         {
@@ -4515,7 +4616,7 @@ public partial class MainWindow : Window
     private async void OnToggleFilter(object? sender, RoutedEventArgs e)
     {
         if (!_viewModel.IsProjectLoaded) return;
-        if (_viewModel.IsPreviewMode) return;
+        if (!_viewModel.IsSearchFilterAvailable) return;
 
         if (_viewModel.FilterVisible)
         {
@@ -4544,7 +4645,7 @@ public partial class MainWindow : Window
     private void ShowFilter(bool focusInput = true, bool selectAllOnFocus = true)
     {
         if (!_viewModel.IsProjectLoaded) return;
-        if (_viewModel.IsPreviewMode) return;
+        if (!_viewModel.IsSearchFilterAvailable) return;
         if (_filterBarAnimating) return;
 
         SuppressFilterBoxAccentVisual();
@@ -4600,11 +4701,11 @@ public partial class MainWindow : Window
         }
     }
 
-    private void ForceCloseSearchAndFilterForPreview()
+    private void ForceCloseSearchAndFilterForHiddenTree()
     {
-        // Only hide search/filter islands visually for preview mode.
+        // Hide tree-related toolbars before the tree pane collapses.
         // Do not clear queries or re-apply filters here, otherwise tree selection state
-        // can be rebuilt and preview will diverge from copy/export behavior.
+        // can be rebuilt and preview can diverge from copy/export behavior.
         Interlocked.Increment(ref _searchFocusRequestVersion);
         Interlocked.Increment(ref _filterFocusRequestVersion);
         _viewModel.SearchVisible = false;
@@ -4905,7 +5006,7 @@ public partial class MainWindow : Window
         // Ctrl+E Expand All
         if (mods == KeyModifiers.Control && e.Key == Key.E)
         {
-            if (!_viewModel.IsPreviewMode)
+            if (_viewModel.IsTreePaneVisible)
                 ExpandCollapseTree(expand: true);
             e.Handled = true;
             return;
@@ -4914,7 +5015,7 @@ public partial class MainWindow : Window
         // Ctrl+W Collapse All
         if (mods == KeyModifiers.Control && e.Key == Key.W)
         {
-            if (!_viewModel.IsPreviewMode)
+            if (_viewModel.IsTreePaneVisible)
                 ExpandCollapseTree(expand: false);
             e.Handled = true;
             return;
@@ -4952,7 +5053,7 @@ public partial class MainWindow : Window
 
     private void OnTreePointerEntered(object? sender, PointerEventArgs e)
     {
-        if (_viewModel.SearchVisible || _viewModel.FilterVisible || _viewModel.IsPreviewMode)
+        if (_viewModel.SearchVisible || _viewModel.FilterVisible || !_viewModel.IsTreePaneVisible)
             return;
 
         _treeView?.Focus();
@@ -5052,7 +5153,7 @@ public partial class MainWindow : Window
         {
             try
             {
-                if (!_viewModel.IsProjectLoaded || _viewModel.IsPreviewMode)
+                if (!_viewModel.IsProjectLoaded || !_viewModel.IsSearchFilterAvailable)
                     return;
 
                 toggleAction(this);
@@ -5070,7 +5171,7 @@ public partial class MainWindow : Window
     private void ShowSearch(bool focusInput = true, bool selectAllOnFocus = true)
     {
         if (!_viewModel.IsProjectLoaded) return;
-        if (_viewModel.IsPreviewMode) return;
+        if (!_viewModel.IsSearchFilterAvailable) return;
         if (_searchBarAnimating) return;
 
         SuppressSearchBoxAccentVisual();
@@ -5087,7 +5188,7 @@ public partial class MainWindow : Window
     private async Task FocusSearchBoxAfterOpenAnimationAsync(bool selectAllOnFocus, int focusRequestVersion)
     {
         await WaitForPanelAnimationAsync(SearchBarAnimationDuration);
-        if (!_viewModel.SearchVisible || _viewModel.IsPreviewMode || !IsSearchFocusRequestCurrent(focusRequestVersion))
+        if (!_viewModel.SearchVisible || !_viewModel.IsSearchFilterAvailable || !IsSearchFocusRequestCurrent(focusRequestVersion))
             return;
 
         await TryFocusSearchBoxWithRetryAsync(selectAllOnFocus, focusRequestVersion);
@@ -5096,7 +5197,7 @@ public partial class MainWindow : Window
     private async Task FocusFilterBoxAfterOpenAnimationAsync(bool selectAllOnFocus, int focusRequestVersion)
     {
         await WaitForPanelAnimationAsync(FilterBarAnimationDuration);
-        if (!_viewModel.FilterVisible || _viewModel.IsPreviewMode || !IsFilterFocusRequestCurrent(focusRequestVersion))
+        if (!_viewModel.FilterVisible || !_viewModel.IsSearchFilterAvailable || !IsFilterFocusRequestCurrent(focusRequestVersion))
             return;
 
         await TryFocusFilterBoxWithRetryAsync(selectAllOnFocus, focusRequestVersion);
@@ -5291,7 +5392,7 @@ public partial class MainWindow : Window
         await Dispatcher.UIThread.InvokeAsync(static () => { }, DispatcherPriority.Render);
         await Dispatcher.UIThread.InvokeAsync(static () => { }, DispatcherPriority.Render);
 
-        if (!_viewModel.SearchVisible || _viewModel.IsPreviewMode)
+        if (!_viewModel.SearchVisible || !_viewModel.IsSearchFilterAvailable)
             return;
 
         RestoreSearchBoxAccentVisual();
@@ -5302,7 +5403,7 @@ public partial class MainWindow : Window
         await Dispatcher.UIThread.InvokeAsync(static () => { }, DispatcherPriority.Render);
         await Dispatcher.UIThread.InvokeAsync(static () => { }, DispatcherPriority.Render);
 
-        if (!_viewModel.FilterVisible || _viewModel.IsPreviewMode)
+        if (!_viewModel.FilterVisible || !_viewModel.IsSearchFilterAvailable)
             return;
 
         RestoreFilterBoxAccentVisual();
@@ -5732,8 +5833,8 @@ public partial class MainWindow : Window
     /// </summary>
     private void ClearPreviousProjectState(bool forceCompactingGc = false)
     {
-        _restoreSearchAfterPreview = false;
-        _restoreFilterAfterPreview = false;
+        _restoreSearchAfterTreePaneReveal = false;
+        _restoreFilterAfterTreePaneReveal = false;
         _previewMemoryCleanupCts?.Cancel();
         _previewMemoryCleanupCts?.Dispose();
         _previewMemoryCleanupCts = null;
@@ -6459,8 +6560,7 @@ public partial class MainWindow : Window
             SettingsVisible: _viewModel.SettingsVisible,
             SearchVisible: _viewModel.SearchVisible,
             FilterVisible: _viewModel.FilterVisible,
-            IsPreviewMode: _viewModel.IsPreviewMode,
-            IsSplitMode: _viewModel.IsSplitMode,
+            PreviewWorkspaceMode: _viewModel.PreviewWorkspaceMode,
             StatusMetricsVisible: _viewModel.StatusMetricsVisible,
             StatusTreeStatsText: _viewModel.StatusTreeStatsText,
             StatusContentStatsText: _viewModel.StatusContentStatsText,
@@ -6516,8 +6616,7 @@ public partial class MainWindow : Window
         _viewModel.SettingsVisible = snapshot.SettingsVisible;
         _viewModel.SearchVisible = snapshot.SearchVisible;
         _viewModel.FilterVisible = snapshot.FilterVisible;
-        _viewModel.IsPreviewMode = snapshot.IsPreviewMode;
-        _viewModel.IsSplitMode = snapshot.IsSplitMode;
+        _viewModel.PreviewWorkspaceMode = snapshot.PreviewWorkspaceMode;
         _viewModel.StatusMetricsVisible = snapshot.StatusMetricsVisible;
         _viewModel.StatusTreeStatsText = snapshot.StatusTreeStatsText;
         _viewModel.StatusContentStatsText = snapshot.StatusContentStatsText;
@@ -6601,8 +6700,7 @@ public partial class MainWindow : Window
         _viewModel.SettingsVisible = false;
         _viewModel.SearchVisible = false;
         _viewModel.FilterVisible = false;
-        _viewModel.IsPreviewMode = false;
-        _viewModel.IsSplitMode = false;
+        _viewModel.PreviewWorkspaceMode = PreviewWorkspaceMode.Off;
         _viewModel.StatusMetricsVisible = false;
         _viewModel.ProjectSourceType = ProjectSourceType.LocalFolder;
         _viewModel.CurrentBranch = string.Empty;

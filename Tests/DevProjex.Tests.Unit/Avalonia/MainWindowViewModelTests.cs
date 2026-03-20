@@ -336,39 +336,55 @@ public sealed class MainWindowViewModelTests
     }
 
     [Fact]
-    public void IsSplitMode_EnablesPreviewPaneAndLocksCompactMode()
+    public void PreviewWorkspaceMode_TreeAndPreview_EnablesPreviewPaneAndLocksCompactMode()
     {
         var viewModel = CreateViewModel();
 
-        viewModel.IsSplitMode = true;
+        viewModel.PreviewWorkspaceMode = PreviewWorkspaceMode.TreeAndPreview;
 
-        Assert.True(viewModel.IsSplitMode);
+        Assert.True(viewModel.IsPreviewMode);
         Assert.True(viewModel.IsAnyPreviewVisible);
         Assert.True(viewModel.IsPreviewPaneVisible);
         Assert.True(viewModel.IsTreePaneVisible);
+        Assert.True(viewModel.IsPreviewTreeVisible);
         Assert.True(viewModel.IsCompactModeEffective);
         Assert.False(viewModel.CanToggleCompactMode);
     }
 
     [Fact]
-    public void IsSplitMode_KeepsSearchAndFilterAvailable_WhenProjectLoaded()
+    public void PreviewWorkspaceMode_TreeAndPreview_KeepsSearchAndFilterAvailable_WhenProjectLoaded()
     {
         var viewModel = CreateViewModel();
         viewModel.IsProjectLoaded = true;
 
-        viewModel.IsSplitMode = true;
+        viewModel.PreviewWorkspaceMode = PreviewWorkspaceMode.TreeAndPreview;
 
         Assert.True(viewModel.IsSearchFilterAvailable);
         Assert.True(viewModel.AreFilterSettingsEnabled);
     }
 
     [Fact]
-    public void IsCompactModeEffective_UsesSplitOverride_WithoutChangingUserSetting()
+    public void PreviewWorkspaceMode_PreviewOnly_HidesTreeAndSearchButKeepsSettingsEnabled()
+    {
+        var viewModel = CreateViewModel();
+        viewModel.IsProjectLoaded = true;
+
+        viewModel.PreviewWorkspaceMode = PreviewWorkspaceMode.PreviewOnly;
+
+        Assert.True(viewModel.IsPreviewMode);
+        Assert.True(viewModel.IsPreviewOnlyMode);
+        Assert.False(viewModel.IsTreePaneVisible);
+        Assert.False(viewModel.IsSearchFilterAvailable);
+        Assert.True(viewModel.AreFilterSettingsEnabled);
+    }
+
+    [Fact]
+    public void IsCompactModeEffective_UsesPreviewOverride_WithoutChangingUserSetting()
     {
         var viewModel = CreateViewModel();
         viewModel.IsCompactMode = false;
 
-        viewModel.IsSplitMode = true;
+        viewModel.PreviewWorkspaceMode = PreviewWorkspaceMode.TreeAndPreview;
 
         Assert.False(viewModel.IsCompactMode);
         Assert.True(viewModel.IsCompactModeEffective);
@@ -411,14 +427,14 @@ public sealed class MainWindowViewModelTests
     }
 
     [Fact]
-    public void SplitTooltip_UsesLocalizedValue()
+    public void PreviewHideTreeTooltip_UsesLocalizedValue()
     {
         var viewModel = CreateViewModel(new Dictionary<string, string>
         {
-            ["Split.Tooltip"] = "Split mode"
+            ["Preview.HideTree.Tooltip"] = "Hide tree pane"
         });
 
-        Assert.Equal("Split mode", viewModel.SplitTooltip);
+        Assert.Equal("Hide tree pane", viewModel.PreviewHideTreeTooltip);
     }
 
     [Fact]
