@@ -57,6 +57,24 @@ public sealed class MainWindowViewModelTests
     }
 
     [Fact]
+    public void IsProjectLoaded_RaisesAreFilterSettingsEnabledPropertyChanged()
+    {
+        var viewModel = CreateViewModel();
+        var raised = false;
+
+        viewModel.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(MainWindowViewModel.AreFilterSettingsEnabled))
+                raised = true;
+        };
+
+        viewModel.IsProjectLoaded = true;
+
+        Assert.True(raised);
+        Assert.True(viewModel.AreFilterSettingsEnabled);
+    }
+
+    [Fact]
     public void IsProjectLoaded_CanToggleFalse()
     {
         var viewModel = CreateViewModel();
@@ -349,6 +367,17 @@ public sealed class MainWindowViewModelTests
         Assert.True(viewModel.IsPreviewTreeVisible);
         Assert.True(viewModel.IsCompactModeEffective);
         Assert.False(viewModel.CanToggleCompactMode);
+    }
+
+    [Fact]
+    public void Constructor_DefaultPreviewContentMode_IsTree()
+    {
+        var viewModel = CreateViewModel();
+
+        Assert.Equal(PreviewContentMode.Tree, viewModel.SelectedPreviewContentMode);
+        Assert.True(viewModel.IsPreviewTreeSelected);
+        Assert.False(viewModel.IsPreviewContentSelected);
+        Assert.False(viewModel.IsPreviewTreeAndContentSelected);
     }
 
     [Fact]

@@ -189,7 +189,7 @@ public partial class MainWindow : Window
     private Border? _treeIsland;
     private Border? _previewIsland;
     private Border? _previewLineNumbersBackground;
-    private Border? _previewStickyPathHost;
+    private Control? _previewStickyPathHost;
     private TextBlock? _previewStickyPathText;
     private ItemsControl? _toastHost;
     private SearchBarView? _searchBar;
@@ -424,7 +424,7 @@ public partial class MainWindow : Window
         _previewSettingsSplitter = this.FindControl<Border>("PreviewSettingsSplitter");
         _treeIsland = this.FindControl<Border>("TreeIsland");
         _previewIsland = this.FindControl<Border>("PreviewIsland");
-        _previewStickyPathHost = this.FindControl<Border>("PreviewStickyPathHost");
+        _previewStickyPathHost = this.FindControl<Control>("PreviewStickyPathHost");
         _previewStickyPathText = this.FindControl<TextBlock>("PreviewStickyPathText");
         _toastHost = this.FindControl<ItemsControl>("ToastHost");
         if (_workspaceGrid is not null && _workspaceGrid.ColumnDefinitions.Count >= 5)
@@ -3226,6 +3226,7 @@ public partial class MainWindow : Window
         if (_previewBarAnimating || _treePaneAnimating)
             return;
 
+        await CloseTreeToolsForPreviewOpenAsync();
         PreparePreviewPane();
         CaptureNonSplitSettingsPanelWidth();
         _currentSettingsPanelWidth = _effectiveSettingsPanelMinWidth;
@@ -3245,6 +3246,17 @@ public partial class MainWindow : Window
         // Start loading preview content after preview host is painted.
         _treeView?.Focus();
         SchedulePreviewRefresh(immediate: true);
+    }
+
+    private async Task CloseTreeToolsForPreviewOpenAsync()
+    {
+        // Keep preview entry deterministic: the workspace opens from a clean tree surface,
+        // matching the previous preview-mode behavior.
+        if (IsSearchBarEffectivelyVisible())
+            await CloseSearchAsync(focusTree: false);
+
+        if (IsFilterBarEffectivelyVisible())
+            await CloseFilterAsync(focusTree: false);
     }
 
     private async void ClosePreviewMode()

@@ -67,7 +67,7 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
     private bool _isAdvancedIgnoreCountsEnabled;
     private bool _filterVisible;
     private ExportFormat _selectedExportFormat = ExportFormat.Ascii;
-    private PreviewContentMode _selectedPreviewContentMode = PreviewContentMode.Content;
+    private PreviewContentMode _selectedPreviewContentMode = PreviewContentMode.Tree;
     private bool _isMicaEnabled;
     private bool _isAcrylicEnabled;
     private bool _isTransparentEnabled = true;
@@ -276,6 +276,7 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
             _isProjectLoaded = value;
             RaisePropertyChanged();
             RaisePropertyChanged(nameof(IsSearchFilterAvailable));
+            RaisePropertyChanged(nameof(AreFilterSettingsEnabled));
         }
     }
 

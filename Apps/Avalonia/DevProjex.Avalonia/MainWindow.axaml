@@ -3,6 +3,7 @@
         xmlns:vm="using:DevProjex.Avalonia.ViewModels"
         xmlns:views="using:DevProjex.Avalonia.Views"
         xmlns:controls="using:DevProjex.Avalonia.Controls"
+        xmlns:media="using:Avalonia.Media"
         xmlns:converters="using:DevProjex.Avalonia.Converters"
         x:Class="DevProjex.Avalonia.MainWindow"
         x:DataType="vm:MainWindowViewModel"
@@ -735,18 +736,30 @@
                                                             VerticalAlignment="Top" />
                   </ScrollViewer>
 
-                  <Border Name="PreviewStickyPathHost"
-                          Classes="preview-sticky-path"
-                          IsVisible="False"
-                          IsHitTestVisible="False"
-                          HorizontalAlignment="Stretch"
-                          VerticalAlignment="Top"
-                          Margin="0,0,10,0">
+                  <Grid Name="PreviewStickyPathHost"
+                        IsVisible="False"
+                        IsHitTestVisible="False"
+                        HorizontalAlignment="Stretch"
+                        VerticalAlignment="Top"
+                        Margin="0,0,10,0">
+                    <ExperimentalAcrylicBorder Classes="preview-sticky-path-material">
+                      <ExperimentalAcrylicBorder.Material>
+                        <media:ExperimentalAcrylicMaterial BackgroundSource="Digger"
+                                                           TintColor="{DynamicResource PreviewStickyPathTintColor}"
+                                                           TintOpacity="0.78"
+                                                           MaterialOpacity="0.58"
+                                                           FallbackColor="{DynamicResource PreviewStickyPathFallbackColor}" />
+                      </ExperimentalAcrylicBorder.Material>
+                    </ExperimentalAcrylicBorder>
+
+                    <Border Classes="preview-sticky-path-chrome" />
+
                     <TextBlock Name="PreviewStickyPathText"
                                Classes="preview-sticky-path-text"
+                               Margin="10,7,10,7"
                                FontFamily="{Binding SelectedFontFamily}"
                                FontSize="{Binding PreviewFontSize}" />
-                  </Border>
+                  </Grid>
                 </Grid>
               </Grid>
             </Grid>
