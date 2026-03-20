@@ -20,8 +20,8 @@
     <Color x:Key="MenuHoverColor">#E6E6E6</Color>
     <Color x:Key="MenuPressedColor">#D9D9D9</Color>
     <Color x:Key="ToastSurfaceColor">#F3F3F3</Color>
-    <Color x:Key="PreviewStickyPathTintColor">#F8FBFF</Color>
-    <Color x:Key="PreviewStickyPathFallbackColor">#EAF3F8</Color>
+    <Color x:Key="PreviewStickyPathTintColor">#F6FAFE</Color>
+    <Color x:Key="PreviewStickyPathFallbackColor">#E2EDF5</Color>
 
     <!-- Drop Zone Colors - Light Theme -->
     <Color x:Key="DropZoneBorderColor">#0066CC</Color>
@@ -85,8 +85,8 @@
     <Color x:Key="MenuHoverColor">#3A3D44</Color>
     <Color x:Key="MenuPressedColor">#4A4D54</Color>
     <Color x:Key="ToastSurfaceColor">#1B1D22</Color>
-    <Color x:Key="PreviewStickyPathTintColor">#16181D</Color>
-    <Color x:Key="PreviewStickyPathFallbackColor">#171A20</Color>
+    <Color x:Key="PreviewStickyPathTintColor">#151920</Color>
+    <Color x:Key="PreviewStickyPathFallbackColor">#1A1F27</Color>
 
     <!-- Drop Zone Colors - Dark Theme -->
     <Color x:Key="DropZoneBorderColor">#4DA6FF</Color>
@@ -1114,6 +1114,7 @@
         <Setter Property="BorderThickness" Value="0,0,0,1" />
         <Setter Property="Background" Value="Transparent" />
         <Setter Property="IsHitTestVisible" Value="False" />
+        <Setter Property="BoxShadow" Value="0 6 18 -16 #8A000000" />
     </Style>
 
     <Style Selector="TextBlock.preview-sticky-path-text">
@@ -1121,7 +1122,7 @@
         <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="TextWrapping" Value="NoWrap" />
         <Setter Property="TextTrimming" Value="CharacterEllipsis" />
-        <Setter Property="Opacity" Value="0.9" />
+        <Setter Property="Opacity" Value="0.96" />
     </Style>
 
     <Style Selector="Border.preview-panel.preview-toolbar-compact Grid#PreviewBarLayoutGrid">

@@ -741,13 +741,13 @@
                         IsHitTestVisible="False"
                         HorizontalAlignment="Stretch"
                         VerticalAlignment="Top"
-                        Margin="0,0,10,0">
+                        Margin="0,-6,0,0">
                     <ExperimentalAcrylicBorder Classes="preview-sticky-path-material">
                       <ExperimentalAcrylicBorder.Material>
                         <media:ExperimentalAcrylicMaterial BackgroundSource="Digger"
                                                            TintColor="{DynamicResource PreviewStickyPathTintColor}"
-                                                           TintOpacity="0.78"
-                                                           MaterialOpacity="0.58"
+                                                           TintOpacity="0.86"
+                                                           MaterialOpacity="0.74"
                                                            FallbackColor="{DynamicResource PreviewStickyPathFallbackColor}" />
                       </ExperimentalAcrylicBorder.Material>
                     </ExperimentalAcrylicBorder>
@@ -756,7 +756,7 @@
 
                     <TextBlock Name="PreviewStickyPathText"
                                Classes="preview-sticky-path-text"
-                               Margin="10,7,10,7"
+                               Margin="10,4,14,5"
                                FontFamily="{Binding SelectedFontFamily}"
                                FontSize="{Binding PreviewFontSize}" />
                   </Grid>
