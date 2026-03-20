@@ -746,8 +746,8 @@
                       <ExperimentalAcrylicBorder.Material>
                         <media:ExperimentalAcrylicMaterial BackgroundSource="Digger"
                                                            TintColor="{DynamicResource PreviewStickyPathTintColor}"
-                                                           TintOpacity="0.86"
-                                                           MaterialOpacity="0.74"
+                                                           TintOpacity="0.92"
+                                                           MaterialOpacity="0.78"
                                                            FallbackColor="{DynamicResource PreviewStickyPathFallbackColor}" />
                       </ExperimentalAcrylicBorder.Material>
                     </ExperimentalAcrylicBorder>
