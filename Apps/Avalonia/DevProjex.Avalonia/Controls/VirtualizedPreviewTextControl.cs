@@ -1030,7 +1030,7 @@ public sealed class VirtualizedPreviewTextControl : Control
         if (right <= LeftPadding)
             return;
 
-        var dividerPen = new Pen(SectionDividerBrush, 1);
+        var dividerPen = new Pen(SectionDividerBrush, 1.25);
         var dividerOffset = Math.Max(2.0, Math.Floor(lineHeight * 0.35));
 
         for (var i = firstSectionIndex; i < sections.Count; i++)

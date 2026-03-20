@@ -20,6 +20,7 @@
     <Color x:Key="MenuHoverColor">#E6E6E6</Color>
     <Color x:Key="MenuPressedColor">#D9D9D9</Color>
     <Color x:Key="ToastSurfaceColor">#F3F3F3</Color>
+    <Color x:Key="PreviewSectionDividerColor">#A8ACB3</Color>
 
     <!-- Drop Zone Colors - Light Theme -->
     <Color x:Key="DropZoneBorderColor">#0066CC</Color>
@@ -54,6 +55,7 @@
     <SolidColorBrush x:Key="MenuChildHoverBrush" Color="{StaticResource MenuHoverColor}"/>
     <SolidColorBrush x:Key="MenuChildPressedBrush" Color="{StaticResource MenuPressedColor}"/>
     <SolidColorBrush x:Key="ToastSurfaceBrush" Color="{StaticResource ToastSurfaceColor}" />
+    <SolidColorBrush x:Key="PreviewSectionDividerBrush" Color="{StaticResource PreviewSectionDividerColor}" />
 
     <!-- Drop Zone Brushes - Light Theme -->
     <SolidColorBrush x:Key="DropZoneBorderBrush" Color="{StaticResource DropZoneBorderColor}" />
@@ -83,6 +85,7 @@
     <Color x:Key="MenuHoverColor">#3A3D44</Color>
     <Color x:Key="MenuPressedColor">#4A4D54</Color>
     <Color x:Key="ToastSurfaceColor">#1B1D22</Color>
+    <Color x:Key="PreviewSectionDividerColor">#4A5566</Color>
 
     <!-- Drop Zone Colors - Dark Theme -->
     <Color x:Key="DropZoneBorderColor">#4DA6FF</Color>
@@ -117,6 +120,7 @@
     <SolidColorBrush x:Key="MenuChildHoverBrush" Color="{StaticResource MenuHoverColor}"/>
     <SolidColorBrush x:Key="MenuChildPressedBrush" Color="{StaticResource MenuPressedColor}"/>
     <SolidColorBrush x:Key="ToastSurfaceBrush" Color="{StaticResource ToastSurfaceColor}" />
+    <SolidColorBrush x:Key="PreviewSectionDividerBrush" Color="{StaticResource PreviewSectionDividerColor}" />
 
     <!-- Drop Zone Brushes - Dark Theme -->
     <SolidColorBrush x:Key="DropZoneBorderBrush" Color="{StaticResource DropZoneBorderColor}" />

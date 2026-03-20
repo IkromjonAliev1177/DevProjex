@@ -730,7 +730,7 @@
                                                             TextFontFamily="{Binding SelectedFontFamily}"
                                                             TextFontSize="{Binding PreviewFontSize}"
                                                             TextBrush="{DynamicResource AppTextBrush}"
-                                                            SectionDividerBrush="{DynamicResource AppBorderBrush}"
+                                                            SectionDividerBrush="{DynamicResource PreviewSectionDividerBrush}"
                                                             TopPadding="10"
                                                             BottomPadding="10"
                                                             LeftPadding="10"
