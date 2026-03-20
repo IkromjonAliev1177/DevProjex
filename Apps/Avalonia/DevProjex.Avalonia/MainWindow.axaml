@@ -3,7 +3,6 @@
         xmlns:vm="using:DevProjex.Avalonia.ViewModels"
         xmlns:views="using:DevProjex.Avalonia.Views"
         xmlns:controls="using:DevProjex.Avalonia.Controls"
-        xmlns:media="using:Avalonia.Media"
         xmlns:converters="using:DevProjex.Avalonia.Converters"
         x:Class="DevProjex.Avalonia.MainWindow"
         x:DataType="vm:MainWindowViewModel"
@@ -689,12 +688,33 @@
                   Classes="island-panel content-island"
                   IsVisible="{Binding IsPreviewPaneVisible}">
             <Grid>
-              <Grid Margin="0,6,0,0" ColumnDefinitions="Auto,*">
+              <Grid RowDefinitions="Auto,*"
+                    ColumnDefinitions="Auto,*">
+                <Border Grid.Row="0"
+                        Grid.Column="0"
+                        Name="PreviewStickyHeaderCap"
+                        Classes="preview-sticky-header-cap"
+                        IsVisible="False" />
+
+                <Border Grid.Row="0"
+                        Grid.Column="1"
+                        Name="PreviewStickyHeaderContainer"
+                        Classes="preview-sticky-header"
+                        IsVisible="False">
+                  <TextBlock Name="PreviewStickyHeaderText"
+                             Classes="preview-sticky-header-text"
+                             FontFamily="{Binding SelectedFontFamily}"
+                             FontSize="{Binding PreviewFontSize}"
+                             Margin="10,4,16,4"
+                             VerticalAlignment="Center"
+                             TextTrimming="CharacterEllipsis" />
+                </Border>
+
                 <!-- Persistent line-number background that spans the full preview height -->
-                <Grid Grid.Column="0">
+                <Grid Grid.Row="1"
+                      Grid.Column="0">
                   <Border Name="PreviewLineNumbersBackground"
-                          Classes="preview-line-numbers"
-                          Margin="0,-6,0,0" />
+                          Classes="preview-line-numbers" />
                   <controls:VirtualizedLineNumbersControl Name="PreviewLineNumbersControl"
                                                           IsHitTestVisible="False"
                                                           VerticalAlignment="Stretch"
@@ -709,7 +729,8 @@
                                                           RightPadding="8" />
                 </Grid>
 
-                <Grid Grid.Column="1">
+                <Grid Grid.Row="1"
+                      Grid.Column="1">
                   <ScrollViewer Name="PreviewTextScrollViewer"
                                 Classes="preview-scroll"
                                 Margin="0,0,0,8"
@@ -735,31 +756,6 @@
                                                             HorizontalAlignment="Left"
                                                             VerticalAlignment="Top" />
                   </ScrollViewer>
-
-                  <Grid Name="PreviewStickyPathHost"
-                        IsVisible="False"
-                        IsHitTestVisible="False"
-                        HorizontalAlignment="Stretch"
-                        VerticalAlignment="Top"
-                        Margin="0,-6,0,0">
-                    <ExperimentalAcrylicBorder Classes="preview-sticky-path-material">
-                      <ExperimentalAcrylicBorder.Material>
-                        <media:ExperimentalAcrylicMaterial BackgroundSource="Digger"
-                                                           TintColor="{DynamicResource PreviewStickyPathTintColor}"
-                                                           TintOpacity="0.92"
-                                                           MaterialOpacity="0.78"
-                                                           FallbackColor="{DynamicResource PreviewStickyPathFallbackColor}" />
-                      </ExperimentalAcrylicBorder.Material>
-                    </ExperimentalAcrylicBorder>
-
-                    <Border Classes="preview-sticky-path-chrome" />
-
-                    <TextBlock Name="PreviewStickyPathText"
-                               Classes="preview-sticky-path-text"
-                               Margin="10,4,14,5"
-                               FontFamily="{Binding SelectedFontFamily}"
-                               FontSize="{Binding PreviewFontSize}" />
-                  </Grid>
                 </Grid>
               </Grid>
             </Grid>

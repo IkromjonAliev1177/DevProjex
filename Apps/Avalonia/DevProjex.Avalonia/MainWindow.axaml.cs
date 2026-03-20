@@ -189,8 +189,9 @@ public partial class MainWindow : Window
     private Border? _treeIsland;
     private Border? _previewIsland;
     private Border? _previewLineNumbersBackground;
-    private Control? _previewStickyPathHost;
-    private TextBlock? _previewStickyPathText;
+    private Border? _previewStickyHeaderCap;
+    private Border? _previewStickyHeaderContainer;
+    private TextBlock? _previewStickyHeaderText;
     private ItemsControl? _toastHost;
     private SearchBarView? _searchBar;
     private FilterBarView? _filterBar;
@@ -424,8 +425,6 @@ public partial class MainWindow : Window
         _previewSettingsSplitter = this.FindControl<Border>("PreviewSettingsSplitter");
         _treeIsland = this.FindControl<Border>("TreeIsland");
         _previewIsland = this.FindControl<Border>("PreviewIsland");
-        _previewStickyPathHost = this.FindControl<Control>("PreviewStickyPathHost");
-        _previewStickyPathText = this.FindControl<TextBlock>("PreviewStickyPathText");
         _toastHost = this.FindControl<ItemsControl>("ToastHost");
         if (_workspaceGrid is not null && _workspaceGrid.ColumnDefinitions.Count >= 5)
         {
@@ -439,6 +438,9 @@ public partial class MainWindow : Window
         _previewBarContainer = this.FindControl<Border>("PreviewBarContainer");
         _previewBar = this.FindControl<Border>("PreviewBar");
         _previewLineNumbersBackground = this.FindControl<Border>("PreviewLineNumbersBackground");
+        _previewStickyHeaderCap = this.FindControl<Border>("PreviewStickyHeaderCap");
+        _previewStickyHeaderContainer = this.FindControl<Border>("PreviewStickyHeaderContainer");
+        _previewStickyHeaderText = this.FindControl<TextBlock>("PreviewStickyHeaderText");
         _previewSegmentGrid = this.FindControl<Grid>("PreviewSegmentGrid");
         _previewSegmentThumb = this.FindControl<Border>("PreviewSegmentThumb");
         _previewTreeModeButton = this.FindControl<Button>("PreviewTreeModeButton");
@@ -2285,6 +2287,7 @@ public partial class MainWindow : Window
 
         if (_previewTextControl is not null)
         {
+            _previewTextControl.HorizontalOffset = Math.Max(0, textScrollViewer.Offset.X);
             _previewTextControl.VerticalOffset = Math.Max(0, textScrollViewer.Offset.Y);
             _previewTextControl.ViewportHeight = Math.Max(0, textScrollViewer.Viewport.Height);
             _previewTextControl.ViewportWidth = Math.Max(0, textScrollViewer.Viewport.Width);
@@ -2316,7 +2319,7 @@ public partial class MainWindow : Window
 
     private void UpdatePreviewStickyPath()
     {
-        if (_previewStickyPathHost is null || _previewStickyPathText is null || _previewTextControl is null)
+        if (_previewTextControl is null)
             return;
 
         if (!_viewModel.IsAnyPreviewVisible)
@@ -2334,18 +2337,9 @@ public partial class MainWindow : Window
 
         var verticalOffset = _previewTextScrollViewer?.Offset.Y ?? _previewTextControl.VerticalOffset;
         var topLine = _previewTextControl.GetLineNumberAtVerticalOffset(verticalOffset);
-        var currentSection = PreviewDocumentSectionLookup.FindContainingSection(sections, topLine);
-        if (currentSection is null)
-        {
-            var nextSection = PreviewDocumentSectionLookup.FindContainingOrNextSection(sections, topLine);
-            if (nextSection is null || nextSection.StartLine - topLine > 2)
-            {
-                HidePreviewStickyPath();
-                return;
-            }
-
-            currentSection = nextSection;
-        }
+        var currentSection = PreviewDocumentSectionLookup.FindContainingSection(sections, topLine) ??
+                             PreviewDocumentSectionLookup.FindContainingOrNextSection(sections, topLine) ??
+                             sections[0];
 
         if (currentSection is null)
         {
@@ -2353,17 +2347,49 @@ public partial class MainWindow : Window
             return;
         }
 
-        _previewStickyPathText.Text = currentSection.DisplayPath;
-        _previewStickyPathHost.IsVisible = true;
+        if (_previewStickyHeaderText is not null)
+            _previewStickyHeaderText.Text = currentSection.DisplayPath;
+
+        if (_previewStickyHeaderContainer is not null)
+            _previewStickyHeaderContainer.IsVisible = true;
+
+        if (_previewStickyHeaderCap is not null)
+            _previewStickyHeaderCap.IsVisible = true;
+
+        _previewTextControl.StickyHeaderReserved = false;
+        _previewTextControl.StickyHeaderVisible = false;
+        _previewTextControl.StickyHeaderText = string.Empty;
+
+        if (_previewLineNumbersControl is not null)
+        {
+            _previewLineNumbersControl.StickyHeaderReserved = false;
+            _previewLineNumbersControl.StickyHeaderVisible = false;
+        }
     }
 
     private void HidePreviewStickyPath()
     {
-        if (_previewStickyPathHost is not null)
-            _previewStickyPathHost.IsVisible = false;
+        if (_previewStickyHeaderText is not null)
+            _previewStickyHeaderText.Text = string.Empty;
 
-        if (_previewStickyPathText is not null)
-            _previewStickyPathText.Text = string.Empty;
+        if (_previewStickyHeaderContainer is not null)
+            _previewStickyHeaderContainer.IsVisible = false;
+
+        if (_previewStickyHeaderCap is not null)
+            _previewStickyHeaderCap.IsVisible = false;
+
+        if (_previewTextControl is not null)
+        {
+            _previewTextControl.StickyHeaderReserved = false;
+            _previewTextControl.StickyHeaderVisible = false;
+            _previewTextControl.StickyHeaderText = string.Empty;
+        }
+
+        if (_previewLineNumbersControl is not null)
+        {
+            _previewLineNumbersControl.StickyHeaderReserved = false;
+            _previewLineNumbersControl.StickyHeaderVisible = false;
+        }
     }
 
     private void OnPreviewScrollViewerPointerPressed(object? sender, PointerPressedEventArgs e)

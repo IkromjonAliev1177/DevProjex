@@ -20,8 +20,6 @@
     <Color x:Key="MenuHoverColor">#E6E6E6</Color>
     <Color x:Key="MenuPressedColor">#D9D9D9</Color>
     <Color x:Key="ToastSurfaceColor">#F3F3F3</Color>
-    <Color x:Key="PreviewStickyPathTintColor">#F3F3F3</Color>
-    <Color x:Key="PreviewStickyPathFallbackColor">#F3F3F3</Color>
 
     <!-- Drop Zone Colors - Light Theme -->
     <Color x:Key="DropZoneBorderColor">#0066CC</Color>
@@ -85,8 +83,6 @@
     <Color x:Key="MenuHoverColor">#3A3D44</Color>
     <Color x:Key="MenuPressedColor">#4A4D54</Color>
     <Color x:Key="ToastSurfaceColor">#1B1D22</Color>
-    <Color x:Key="PreviewStickyPathTintColor">#17171A</Color>
-    <Color x:Key="PreviewStickyPathFallbackColor">#17171A</Color>
 
     <!-- Drop Zone Colors - Dark Theme -->
     <Color x:Key="DropZoneBorderColor">#4DA6FF</Color>
@@ -533,6 +529,26 @@
         <Setter Property="BorderBrush" Value="{DynamicResource AppBorderBrush}" />
         <Setter Property="BorderThickness" Value="0,0,1,0" />
         <Setter Property="VerticalAlignment" Value="Stretch" />
+    </Style>
+
+    <Style Selector="Border.preview-sticky-header-cap">
+        <Setter Property="Background" Value="{DynamicResource AppPanelBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource AppBorderBrush}" />
+        <Setter Property="BorderThickness" Value="0,0,1,1" />
+        <Setter Property="VerticalAlignment" Value="Stretch" />
+    </Style>
+
+    <Style Selector="Border.preview-sticky-header">
+        <Setter Property="Background" Value="{DynamicResource AppPanelBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource AppBorderBrush}" />
+        <Setter Property="BorderThickness" Value="0,0,0,1" />
+        <Setter Property="VerticalAlignment" Value="Stretch" />
+        <Setter Property="ClipToBounds" Value="True" />
+    </Style>
+
+    <Style Selector="TextBlock.preview-sticky-header-text">
+        <Setter Property="Foreground" Value="{DynamicResource AppTextBrush}" />
+        <Setter Property="Opacity" Value="0.78" />
     </Style>
 
 
@@ -1103,25 +1119,6 @@
 
     <Style Selector="Button.tree-island-close-button:pointerover">
         <Setter Property="Background" Value="{DynamicResource AppBorderBrush}" />
-    </Style>
-
-    <Style Selector="ExperimentalAcrylicBorder.preview-sticky-path-material">
-        <Setter Property="IsHitTestVisible" Value="False" />
-    </Style>
-
-    <Style Selector="Border.preview-sticky-path-chrome">
-        <Setter Property="BorderBrush" Value="{DynamicResource AppBorderBrush}" />
-        <Setter Property="BorderThickness" Value="0,0,0,1" />
-        <Setter Property="Background" Value="Transparent" />
-        <Setter Property="IsHitTestVisible" Value="False" />
-    </Style>
-
-    <Style Selector="TextBlock.preview-sticky-path-text">
-        <Setter Property="Foreground" Value="{DynamicResource AppTextBrush}" />
-        <Setter Property="FontWeight" Value="SemiBold" />
-        <Setter Property="TextWrapping" Value="NoWrap" />
-        <Setter Property="TextTrimming" Value="CharacterEllipsis" />
-        <Setter Property="Opacity" Value="0.96" />
     </Style>
 
     <Style Selector="Border.preview-panel.preview-toolbar-compact Grid#PreviewBarLayoutGrid">
