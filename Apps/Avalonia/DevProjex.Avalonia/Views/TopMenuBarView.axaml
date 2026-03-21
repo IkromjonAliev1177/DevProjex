@@ -123,7 +123,6 @@
 
     <Button Grid.Column="2"
             Classes="menu-icon-button toolbar-mode-icon-button"
-            Classes.mode-active="{Binding IsPreviewMode}"
             Click="OnTogglePreview"
             IsEnabled="{Binding IsProjectLoaded}"
             IsVisible="{Binding IsProjectLoaded}"

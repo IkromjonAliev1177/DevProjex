@@ -304,8 +304,6 @@ public partial class MainWindow : Window
     private int _previewModeSwitchVersion;
     private bool _previewModeSwitchInProgress;
     private bool _clearPreviewBeforeNextRefresh;
-    private bool _restoreSearchAfterTreePaneReveal;
-    private bool _restoreFilterAfterTreePaneReveal;
     private bool _previewFontInitialized;
     private int _suppressSearchFilterRealtimeDepth;
     private static readonly int TreeViewModelBuildParallelism =
@@ -3077,14 +3075,6 @@ public partial class MainWindow : Window
         _previewFontInitialized = true;
     }
 
-    private void CapturePreviewTreeToolRestoreState()
-    {
-        _restoreSearchAfterTreePaneReveal = _viewModel.SearchVisible;
-        _restoreFilterAfterTreePaneReveal = _viewModel.FilterVisible;
-        if (_restoreSearchAfterTreePaneReveal && _restoreFilterAfterTreePaneReveal)
-            _restoreFilterAfterTreePaneReveal = false;
-    }
-
     private void OnToggleSettings(object? sender, RoutedEventArgs e)
     {
         if (!_viewModel.IsProjectLoaded) return;
@@ -3110,12 +3100,6 @@ public partial class MainWindow : Window
     {
         if (!_viewModel.IsProjectLoaded)
             return;
-
-        if (_viewModel.IsPreviewOnlyMode)
-        {
-            RestorePreviewTreePane();
-            return;
-        }
 
         ClosePreviewMode();
     }
@@ -3297,7 +3281,9 @@ public partial class MainWindow : Window
         if (_previewBarAnimating || _treePaneAnimating)
             return;
 
-        var shouldRestoreTreeTools = _viewModel.IsPreviewOnlyMode;
+        if (_viewModel.IsPreviewOnlyMode)
+            await ResetTreeToolStateForPreviewOnlyAsync();
+
         if (_viewModel.IsPreviewTreeVisible)
             CaptureSplitPaneLayout();
 
@@ -3310,8 +3296,6 @@ public partial class MainWindow : Window
         UpdateCompactModeVisualState();
         RestoreNonSplitSettingsPanelWidth();
         UpdateWorkspaceLayoutForCurrentMode();
-        if (shouldRestoreTreeTools)
-            RestorePreviewTreeToolsAfterReveal();
         ClearPreviewSelectionMetrics();
         ClearPreviewMemory();
         SchedulePreviewMemoryCleanup(force: true);
@@ -3326,8 +3310,7 @@ public partial class MainWindow : Window
             return;
 
         CaptureSplitPaneLayout();
-        CapturePreviewTreeToolRestoreState();
-        ForceCloseSearchAndFilterForHiddenTree();
+        await ResetTreeToolStateForPreviewOnlyAsync();
         await AnimatePreviewTreePaneAsync(show: false);
 
         _viewModel.PreviewWorkspaceMode = PreviewWorkspaceMode.PreviewOnly;
@@ -3337,38 +3320,6 @@ public partial class MainWindow : Window
         ResetPreviewTreePaneVisualState(hidden: false);
         await WaitForPreviewRenderPassesAsync();
         FocusPreviewSurface();
-    }
-
-    private async void RestorePreviewTreePane()
-    {
-        if (!_viewModel.IsPreviewOnlyMode)
-            return;
-        if (_previewBarAnimating || _treePaneAnimating)
-            return;
-
-        _viewModel.PreviewWorkspaceMode = PreviewWorkspaceMode.TreeAndPreview;
-        UpdateCompactModeVisualState();
-        UpdateWorkspaceLayoutForCurrentMode();
-        UpdatePreviewSegmentThumbPosition(animate: false);
-        ResetPreviewTreePaneVisualState(hidden: true);
-        await WaitForPreviewRenderPassesAsync();
-        await AnimatePreviewTreePaneAsync(show: true);
-        RestorePreviewTreeToolsAfterReveal();
-
-        if (!_viewModel.SearchVisible && !_viewModel.FilterVisible)
-            _treeView?.Focus();
-    }
-
-    private void RestorePreviewTreeToolsAfterReveal()
-    {
-        // Restore only one tool to keep search/filter behavior predictable.
-        if (_restoreSearchAfterTreePaneReveal && !_viewModel.SearchVisible)
-            ShowSearch(focusInput: true, selectAllOnFocus: false);
-        else if (_restoreFilterAfterTreePaneReveal && !_viewModel.FilterVisible)
-            ShowFilter(focusInput: true, selectAllOnFocus: false);
-
-        _restoreSearchAfterTreePaneReveal = false;
-        _restoreFilterAfterTreePaneReveal = false;
     }
 
     private void ClearPreviewMemory()
@@ -4746,48 +4697,56 @@ public partial class MainWindow : Window
         }
     }
 
-    private void ForceCloseSearchAndFilterForHiddenTree()
+    private async Task ResetTreeToolStateForPreviewOnlyAsync()
     {
-        // Hide tree-related toolbars before the tree pane collapses.
-        // Do not clear queries or re-apply filters here, otherwise tree selection state
-        // can be rebuilt and preview can diverge from copy/export behavior.
+        // Preview-only mode should not carry hidden tree-tool state forward.
+        // Clear both visual bars and their logical queries so returning from preview
+        // always restores the plain tree surface instead of an old hidden filter/search session.
         Interlocked.Increment(ref _searchFocusRequestVersion);
         Interlocked.Increment(ref _filterFocusRequestVersion);
+
+        var hadSearchQuery = !string.IsNullOrEmpty(_viewModel.SearchQuery);
+        var hadFilterQuery = !string.IsNullOrEmpty(_viewModel.NameFilter);
+
         _viewModel.SearchVisible = false;
         _viewModel.FilterVisible = false;
 
         _searchBarAnimating = false;
         _filterBarAnimating = false;
+        _searchBarClosePending = false;
+        _filterBarClosePending = false;
 
-        // Cancel any pending debounce operations to avoid wasted background work
+        ForceHideSearchBarVisualState();
+        ForceHideFilterBarVisualState();
+
         _searchCoordinator.CancelPending();
         _filterCoordinator.CancelPending();
 
-        if (_searchBarContainer is not null)
+        Interlocked.Increment(ref _suppressSearchFilterRealtimeDepth);
+        try
         {
-            _searchBarContainer.Height = 0;
-            _searchBarContainer.Margin = new Thickness(0);
-            _searchBarContainer.IsVisible = false;
+            if (hadSearchQuery)
+            {
+                _viewModel.SearchQuery = string.Empty;
+                _searchCoordinator.UpdateSearchMatches();
+                ScheduleBackgroundMemoryCleanup();
+            }
+
+            if (!hadFilterQuery)
+                return;
+
+            _viewModel.NameFilter = string.Empty;
+        }
+        finally
+        {
+            Interlocked.Decrement(ref _suppressSearchFilterRealtimeDepth);
         }
 
-        if (_searchBarTransform is not null)
-            _searchBarTransform.Y = 0;
-
-        if (_searchBar is not null)
-            _searchBar.Opacity = 0;
-
-        if (_filterBarContainer is not null)
-        {
-            _filterBarContainer.Height = 0;
-            _filterBarContainer.Margin = new Thickness(0);
-            _filterBarContainer.IsVisible = false;
-        }
-
-        if (_filterBarTransform is not null)
-            _filterBarTransform.Y = 0;
-
-        if (_filterBar is not null)
-            _filterBar.Opacity = 0;
+        _filterExpansionSnapshot = null;
+        ResetInteractiveFilterCache();
+        Interlocked.Increment(ref _filterApplyVersion);
+        await ApplyFilterRealtimeAsync(CancellationToken.None);
+        ScheduleBackgroundMemoryCleanup();
     }
 
     private void FocusPreviewSurface()
@@ -5878,8 +5837,6 @@ public partial class MainWindow : Window
     /// </summary>
     private void ClearPreviousProjectState(bool forceCompactingGc = false)
     {
-        _restoreSearchAfterTreePaneReveal = false;
-        _restoreFilterAfterTreePaneReveal = false;
         _previewMemoryCleanupCts?.Cancel();
         _previewMemoryCleanupCts?.Dispose();
         _previewMemoryCleanupCts = null;
