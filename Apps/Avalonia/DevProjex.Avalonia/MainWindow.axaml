@@ -614,10 +614,15 @@
             <Border Name="TreePaneAnimationSnapshotHost"
                     ClipToBounds="True"
                     IsVisible="False"
+                    IsHitTestVisible="False"
+                    UseLayoutRounding="True"
+                    HorizontalAlignment="Left"
+                    VerticalAlignment="Top"
                     ZIndex="1000">
               <Image Name="TreePaneAnimationSnapshotImage"
                      IsVisible="False"
-                     Stretch="Fill"
+                     Stretch="None"
+                     UseLayoutRounding="True"
                      HorizontalAlignment="Left"
                      VerticalAlignment="Top"
                      Opacity="0">
@@ -642,18 +647,16 @@
         <Border Grid.Column="2"
                 Name="PreviewPaneContainer"
                 ClipToBounds="True">
-          <Grid RowDefinitions="Auto,*">
-          <!-- Animated preview bar container -->
-          <Border Grid.Row="0"
-                  Name="PreviewBarContainer"
-                  ClipToBounds="True"
-                  Height="0">
-            <Border Name="PreviewBar"
-                    Classes="preview-panel"
-                    RenderTransformOrigin="50%,0%">
-              <Border.RenderTransform>
-                <TranslateTransform Y="0" />
-              </Border.RenderTransform>
+          <Grid>
+            <Grid Name="PreviewPaneRoot"
+                  RowDefinitions="Auto,*">
+            <!-- Animated preview bar container -->
+            <Border Grid.Row="0"
+                    Name="PreviewBarContainer"
+                    ClipToBounds="True"
+                    Margin="0,0,0,6">
+              <Border Name="PreviewBar"
+                      Classes="preview-panel">
               <Grid Name="PreviewBarLayoutGrid"
                     ColumnDefinitions="*,Auto"
                     Margin="12,4"
@@ -696,14 +699,14 @@
                         Content="✕"
                         Click="OnPreviewClose" />
               </Grid>
+              </Border>
             </Border>
-          </Border>
 
-          <!-- Preview content island -->
-          <Border Grid.Row="1"
-                  Name="PreviewIsland"
-                  Classes="island-panel content-island"
-                  IsVisible="{Binding IsPreviewPaneVisible}">
+            <!-- Preview content island -->
+            <Border Grid.Row="1"
+                    Name="PreviewIsland"
+                    Classes="island-panel content-island"
+                    IsVisible="{Binding IsPreviewPaneVisible}">
             <Grid>
               <Grid RowDefinitions="Auto,*"
                     ColumnDefinitions="Auto,*">
@@ -778,7 +781,25 @@
                 </Border>
               </Grid>
             </Grid>
-          </Border>
+            </Border>
+            </Grid>
+
+            <Border Name="PreviewPaneAnimationSnapshotHost"
+                    ClipToBounds="True"
+                    IsVisible="False"
+                    IsHitTestVisible="False"
+                    UseLayoutRounding="True"
+                    HorizontalAlignment="Left"
+                    VerticalAlignment="Top"
+                    ZIndex="1000">
+              <Image Name="PreviewPaneAnimationSnapshotImage"
+                     IsVisible="False"
+                     Stretch="None"
+                     UseLayoutRounding="True"
+                     HorizontalAlignment="Left"
+                     VerticalAlignment="Top"
+                     Opacity="0" />
+            </Border>
           </Grid>
         </Border>
 

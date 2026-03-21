@@ -354,7 +354,7 @@ public sealed class MainWindowViewModelTests
     }
 
     [Fact]
-    public void PreviewWorkspaceMode_TreeAndPreview_EnablesPreviewPaneAndLocksCompactMode()
+    public void PreviewWorkspaceMode_TreeAndPreview_EnablesPreviewPane_WithoutForcingCompactUntilActivated()
     {
         var viewModel = CreateViewModel();
 
@@ -365,6 +365,19 @@ public sealed class MainWindowViewModelTests
         Assert.True(viewModel.IsPreviewPaneVisible);
         Assert.True(viewModel.IsTreePaneVisible);
         Assert.True(viewModel.IsPreviewTreeVisible);
+        Assert.False(viewModel.IsCompactModeEffective);
+        Assert.False(viewModel.CanToggleCompactMode);
+    }
+
+    [Fact]
+    public void SetPreviewCompactModeActive_AppliesCompactOverride_OnlyAfterPreviewIsOpen()
+    {
+        var viewModel = CreateViewModel();
+        viewModel.IsCompactMode = false;
+        viewModel.PreviewWorkspaceMode = PreviewWorkspaceMode.TreeAndPreview;
+
+        viewModel.SetPreviewCompactModeActive(true);
+
         Assert.True(viewModel.IsCompactModeEffective);
         Assert.False(viewModel.CanToggleCompactMode);
     }
@@ -423,6 +436,7 @@ public sealed class MainWindowViewModelTests
         };
 
         viewModel.PreviewWorkspaceMode = PreviewWorkspaceMode.TreeAndPreview;
+        viewModel.SetPreviewCompactModeActive(true);
         compactNotifications = 0;
 
         viewModel.PreviewWorkspaceMode = PreviewWorkspaceMode.PreviewOnly;
@@ -439,6 +453,7 @@ public sealed class MainWindowViewModelTests
         viewModel.IsCompactMode = false;
 
         viewModel.PreviewWorkspaceMode = PreviewWorkspaceMode.TreeAndPreview;
+        viewModel.SetPreviewCompactModeActive(true);
 
         Assert.False(viewModel.IsCompactMode);
         Assert.True(viewModel.IsCompactModeEffective);

@@ -72,6 +72,7 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
     private bool _isAcrylicEnabled;
     private bool _isTransparentEnabled = true;
     private PreviewWorkspaceMode _previewWorkspaceMode;
+    private bool _isPreviewCompactModeActive;
     private bool _isPreviewLoading;
     private string _previewText = string.Empty;
     private IPreviewTextDocument? _previewDocument;
@@ -286,7 +287,6 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         set
         {
             if (_previewWorkspaceMode == value) return;
-            var previousIsPreviewMode = IsPreviewMode;
             var previousIsCompactModeEffective = IsCompactModeEffective;
             _previewWorkspaceMode = value;
             RaisePropertyChanged();
@@ -294,9 +294,9 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
             RaisePropertyChanged(nameof(IsPreviewTreeVisible));
             RaisePropertyChanged(nameof(IsPreviewOnlyMode));
             RaisePreviewStatePropertiesChanged();
+            RaisePropertyChanged(nameof(CanToggleCompactMode));
 
-            if (previousIsPreviewMode != IsPreviewMode ||
-                previousIsCompactModeEffective != IsCompactModeEffective)
+            if (previousIsCompactModeEffective != IsCompactModeEffective)
             {
                 RaiseCompactModePropertiesChanged();
             }
@@ -418,9 +418,20 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         }
     }
 
-    public bool IsCompactModeEffective => IsPreviewMode || _isCompactMode;
+    public bool IsCompactModeEffective => _isCompactMode || (IsPreviewMode && _isPreviewCompactModeActive);
 
     public bool CanToggleCompactMode => !IsPreviewMode;
+
+    public void SetPreviewCompactModeActive(bool active)
+    {
+        if (_isPreviewCompactModeActive == active)
+            return;
+
+        var previousIsCompactModeEffective = IsCompactModeEffective;
+        _isPreviewCompactModeActive = active;
+        if (previousIsCompactModeEffective != IsCompactModeEffective)
+            RaiseCompactModePropertiesChanged();
+    }
 
     public bool IsTreeAnimationEnabled
     {
