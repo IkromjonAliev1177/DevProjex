@@ -54,6 +54,13 @@ public partial class MainWindow : Window
         Narrow = 2
     }
 
+    private enum SuspendedTreeToolMode
+    {
+        None = 0,
+        Search = 1,
+        Filter = 2
+    }
+
     private enum StatusOperationType
     {
         None = 0,
@@ -211,8 +218,7 @@ public partial class MainWindow : Window
     private VirtualizedLineNumbersControl? _previewLineNumbersControl;
     private HashSet<string>? _filterExpansionSnapshot;
     private int _filterApplyVersion;
-    private bool _previewOnlySearchResetPending;
-    private bool _previewOnlyFilterResetPending;
+    private SuspendedTreeToolMode _previewOnlySuspendedTreeToolMode;
     private CancellationTokenSource? _projectOperationCts;
     private CancellationTokenSource? _refreshCts;
     private CancellationTokenSource? _gitCloneCts;
@@ -773,8 +779,7 @@ public partial class MainWindow : Window
         _currentTree = null;
         _filterBaseTree = null;
         _filterExpansionSnapshot = null;
-        _previewOnlySearchResetPending = false;
-        _previewOnlyFilterResetPending = false;
+        _previewOnlySuspendedTreeToolMode = SuspendedTreeToolMode.None;
         ResetPreviewTreePaneVisualState();
         ResetInteractiveFilterCache();
         InvalidateComputedMetricsCaches();
@@ -3398,7 +3403,6 @@ public partial class MainWindow : Window
         if (_previewPaneAnimating || _treePaneAnimating)
             return;
 
-        await CloseTreeToolsForPreviewOpenAsync();
         PreparePreviewPane();
         CaptureNonSplitSettingsPanelWidth();
         _currentSettingsPanelWidth = _effectiveSettingsPanelMinWidth;
@@ -3423,17 +3427,6 @@ public partial class MainWindow : Window
         UpdatePreviewSegmentThumbPosition(animate: false);
         _treeView?.Focus();
         SchedulePreviewRefresh(immediate: true);
-    }
-
-    private async Task CloseTreeToolsForPreviewOpenAsync()
-    {
-        // Keep preview entry deterministic: the workspace opens from a clean tree surface,
-        // matching the previous preview-mode behavior.
-        if (IsSearchBarEffectivelyVisible())
-            await CloseSearchAsync(focusTree: false);
-
-        if (IsFilterBarEffectivelyVisible())
-            await CloseFilterAsync(focusTree: false);
     }
 
     private async void ClosePreviewMode()
@@ -3479,7 +3472,7 @@ public partial class MainWindow : Window
             ResetPreviewPaneSnapshotVisualState();
 
             if (startedFromPreviewOnly)
-                await ResetTreeToolStateForPreviewOnlyAsync();
+                RestoreTreeToolStateAfterPreviewOnly();
 
             ClearPreviewSelectionMetrics();
             ClearPreviewMemory();
@@ -3504,6 +3497,7 @@ public partial class MainWindow : Window
         {
             var shouldResumePreviewRefresh = SuspendPreviewRefreshForTreeHide();
             SuspendTreeToolActivityForPreviewTreeHide();
+            SuspendTreeToolStateForPreviewOnly();
             CaptureSplitPaneLayout();
             PreparePreviewTreePaneCollapseLayout();
             await Dispatcher.UIThread.InvokeAsync(
@@ -3516,11 +3510,6 @@ public partial class MainWindow : Window
             UpdateWorkspaceLayoutForCurrentMode();
             UpdatePreviewSegmentThumbPosition(animate: false);
             ResetPreviewTreePaneVisualState();
-
-            await Dispatcher.UIThread.InvokeAsync(
-                static () => { },
-                DispatcherPriority.Background);
-            await ResetTreeToolStateForPreviewOnlyAsync(refreshTreeSurface: false);
             await WaitForPreviewRenderPassesAsync();
 
             if (shouldResumePreviewRefresh && _viewModel.IsAnyPreviewVisible)
@@ -5276,16 +5265,21 @@ public partial class MainWindow : Window
         }
     }
 
-    private async Task ResetTreeToolStateForPreviewOnlyAsync(bool refreshTreeSurface = true)
+    private void SuspendTreeToolStateForPreviewOnly()
     {
-        // Preview-only mode should not carry hidden tree-tool state forward.
-        // Clear both visual bars and their logical queries so returning from preview
-        // always restores the plain tree surface instead of an old hidden filter/search session.
+        // Preview-only mode should temporarily hide tree tools without destroying the
+        // current search/filter session. This keeps tree state intact when the user
+        // closes preview-only or re-enters preview with the tree pane visible again.
         Interlocked.Increment(ref _searchFocusRequestVersion);
         Interlocked.Increment(ref _filterFocusRequestVersion);
 
-        var hadSearchQuery = !string.IsNullOrEmpty(_viewModel.SearchQuery);
-        var hadFilterQuery = !string.IsNullOrEmpty(_viewModel.NameFilter);
+        var searchWasVisible = _viewModel.SearchVisible || IsSearchBarEffectivelyVisible();
+        var filterWasVisible = !searchWasVisible && (_viewModel.FilterVisible || IsFilterBarEffectivelyVisible());
+        _previewOnlySuspendedTreeToolMode = searchWasVisible
+            ? SuspendedTreeToolMode.Search
+            : filterWasVisible
+                ? SuspendedTreeToolMode.Filter
+                : SuspendedTreeToolMode.None;
 
         _viewModel.SearchVisible = false;
         _viewModel.FilterVisible = false;
@@ -5300,52 +5294,26 @@ public partial class MainWindow : Window
 
         _searchCoordinator.CancelPending();
         _filterCoordinator.CancelPending();
+    }
 
-        Interlocked.Increment(ref _suppressSearchFilterRealtimeDepth);
-        try
+    private void RestoreTreeToolStateAfterPreviewOnly()
+    {
+        var suspendedToolMode = _previewOnlySuspendedTreeToolMode;
+        _previewOnlySuspendedTreeToolMode = SuspendedTreeToolMode.None;
+
+        switch (suspendedToolMode)
         {
-            if (hadSearchQuery)
-            {
-                _viewModel.SearchQuery = string.Empty;
-                _previewOnlySearchResetPending = true;
-            }
+            case SuspendedTreeToolMode.Search:
+                _viewModel.SearchVisible = true;
+                _viewModel.FilterVisible = false;
+                ForceShowSearchBarVisualState();
+                break;
 
-            if (hadFilterQuery)
-            {
-                _viewModel.NameFilter = string.Empty;
-                _previewOnlyFilterResetPending = true;
-            }
-        }
-        finally
-        {
-            Interlocked.Decrement(ref _suppressSearchFilterRealtimeDepth);
-        }
-
-        if (!refreshTreeSurface)
-            return;
-
-        // When the tree pane is hidden, postpone expensive tree normalization work
-        // until the workspace exits preview-only mode. This keeps the hide animation smooth.
-        if (_previewOnlySearchResetPending)
-        {
-            _searchCoordinator.UpdateSearchMatches();
-            _previewOnlySearchResetPending = false;
-            ScheduleBackgroundMemoryCleanup();
-        }
-
-        if (!_previewOnlyFilterResetPending)
-            return;
-
-        try
-        {
-            ResetInteractiveFilterCache();
-            Interlocked.Increment(ref _filterApplyVersion);
-            await ApplyFilterRealtimeAsync(CancellationToken.None);
-            ScheduleBackgroundMemoryCleanup();
-        }
-        finally
-        {
-            _previewOnlyFilterResetPending = false;
+            case SuspendedTreeToolMode.Filter:
+                _viewModel.FilterVisible = true;
+                _viewModel.SearchVisible = false;
+                ForceShowFilterBarVisualState();
+                break;
         }
     }
 
@@ -7211,8 +7179,7 @@ public partial class MainWindow : Window
         _currentRepositoryUrl = snapshot.RepositoryUrl;
         _currentTree = snapshot.Tree;
         _filterBaseTree = snapshot.Tree;
-        _previewOnlySearchResetPending = false;
-        _previewOnlyFilterResetPending = false;
+        _previewOnlySuspendedTreeToolMode = SuspendedTreeToolMode.None;
         ResetInteractiveFilterCache();
         InvalidateComputedMetricsCaches();
 
@@ -7299,8 +7266,7 @@ public partial class MainWindow : Window
         _currentProjectDisplayName = null;
         _currentRepositoryUrl = null;
         _filterExpansionSnapshot = null;
-        _previewOnlySearchResetPending = false;
-        _previewOnlyFilterResetPending = false;
+        _previewOnlySuspendedTreeToolMode = SuspendedTreeToolMode.None;
         ResetInteractiveFilterCache();
 
         _viewModel.IsProjectLoaded = false;

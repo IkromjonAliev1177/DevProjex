@@ -421,27 +421,24 @@ public sealed class MainWindowViewModelTests
     }
 
     [Fact]
-    public void PreviewWorkspaceMode_TreeToPreviewOnly_DoesNotRaiseCompactModePropertiesAgain()
+    public void PreviewWorkspaceMode_TreeToPreviewOnly_DoesNotRaiseCompactModeEffectiveAgain()
     {
         var viewModel = CreateViewModel();
-        var compactNotifications = 0;
+        var compactModeNotifications = 0;
 
         viewModel.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName == nameof(MainWindowViewModel.IsCompactModeEffective) ||
-                e.PropertyName == nameof(MainWindowViewModel.CanToggleCompactMode))
-            {
-                compactNotifications++;
-            }
+            if (e.PropertyName == nameof(MainWindowViewModel.IsCompactModeEffective))
+                compactModeNotifications++;
         };
 
         viewModel.PreviewWorkspaceMode = PreviewWorkspaceMode.TreeAndPreview;
         viewModel.SetPreviewCompactModeActive(true);
-        compactNotifications = 0;
+        compactModeNotifications = 0;
 
         viewModel.PreviewWorkspaceMode = PreviewWorkspaceMode.PreviewOnly;
 
-        Assert.Equal(0, compactNotifications);
+        Assert.Equal(0, compactModeNotifications);
         Assert.True(viewModel.IsCompactModeEffective);
         Assert.False(viewModel.CanToggleCompactMode);
     }

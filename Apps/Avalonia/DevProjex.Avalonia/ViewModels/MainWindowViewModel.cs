@@ -288,13 +288,16 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         {
             if (_previewWorkspaceMode == value) return;
             var previousIsCompactModeEffective = IsCompactModeEffective;
+            var previousCanToggleCompactMode = CanToggleCompactMode;
             _previewWorkspaceMode = value;
             RaisePropertyChanged();
             RaisePropertyChanged(nameof(IsPreviewMode));
             RaisePropertyChanged(nameof(IsPreviewTreeVisible));
             RaisePropertyChanged(nameof(IsPreviewOnlyMode));
             RaisePreviewStatePropertiesChanged();
-            RaisePropertyChanged(nameof(CanToggleCompactMode));
+
+            if (previousCanToggleCompactMode != CanToggleCompactMode)
+                RaisePropertyChanged(nameof(CanToggleCompactMode));
 
             if (previousIsCompactModeEffective != IsCompactModeEffective)
             {

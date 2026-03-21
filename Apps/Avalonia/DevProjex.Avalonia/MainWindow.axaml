@@ -599,7 +599,6 @@
                   <Button Name="PreviewTreeHideButton"
                           Classes="menu-icon-button tree-island-close-button"
                           IsVisible="{Binding IsPreviewMode}"
-                          ToolTip.Tip="{Binding PreviewHideTreeTooltip}"
                           HorizontalAlignment="Right"
                           VerticalAlignment="Top"
                           Margin="0,8,8,0"

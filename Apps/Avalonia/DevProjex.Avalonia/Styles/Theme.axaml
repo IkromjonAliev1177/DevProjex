@@ -574,6 +574,7 @@
         <Setter Property="BorderThickness" Value="0" />
         <Setter Property="Padding" Value="8,4" />
         <Setter Property="Margin" Value="0" />
+        <Setter Property="Focusable" Value="False" />
         <Setter Property="VerticalAlignment" Value="Center" />
         <Setter Property="Transitions" Value="{x:Null}" />
     </Style>
@@ -1005,6 +1006,7 @@
         <Setter Property="BorderThickness" Value="0" />
         <Setter Property="Foreground" Value="{DynamicResource AppMutedTextBrush}" />
         <Setter Property="Padding" Value="0,3" />
+        <Setter Property="Focusable" Value="False" />
         <Setter Property="Width" Value="48" />
         <Setter Property="MinHeight" Value="0" />
         <Setter Property="HorizontalContentAlignment" Value="Center" />
