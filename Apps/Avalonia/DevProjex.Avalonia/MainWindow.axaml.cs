@@ -5,6 +5,7 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using Avalonia.Animation;
 using Avalonia.Animation.Easings;
+using Avalonia.Media.Imaging;
 using Avalonia.Platform.Storage;
 using DevProjex.Application;
 using DevProjex.Application.Preview;
@@ -180,6 +181,11 @@ public partial class MainWindow : Window
     private TopMenuBarView? _topMenuBar;
     private Grid? _workspaceGrid;
     private Grid? _treePaneRoot;
+    private Border? _treePaneContainer;
+    private Border? _treePaneSnapshotHost;
+    private Image? _treePaneSnapshotImage;
+    private TranslateTransform? _treePaneSnapshotTransform;
+    private RenderTargetBitmap? _treePaneSnapshotBitmap;
     private ColumnDefinition? _treePaneColumn;
     private ColumnDefinition? _treePreviewSplitterColumn;
     private ColumnDefinition? _previewPaneColumn;
@@ -200,6 +206,8 @@ public partial class MainWindow : Window
     private VirtualizedLineNumbersControl? _previewLineNumbersControl;
     private HashSet<string>? _filterExpansionSnapshot;
     private int _filterApplyVersion;
+    private bool _previewOnlySearchResetPending;
+    private bool _previewOnlyFilterResetPending;
     private CancellationTokenSource? _projectOperationCts;
     private CancellationTokenSource? _refreshCts;
     private CancellationTokenSource? _gitCloneCts;
@@ -227,6 +235,7 @@ public partial class MainWindow : Window
     private const string SplitterDraggingClass = "splitter-dragging";
     private GridLength _savedSplitTreeColumnWidth = new(5, GridUnitType.Star);
     private GridLength _savedSplitPreviewColumnWidth = new(6, GridUnitType.Star);
+    private double _currentPreviewTreePaneWidth;
     private double _currentSettingsPanelWidth = SettingsPanelWidth;
     private double _savedNonSplitSettingsPanelWidth = SettingsPanelWidth;
     private double _effectiveSettingsPanelMinWidth = SettingsPanelMinWidth;
@@ -260,10 +269,9 @@ public partial class MainWindow : Window
     private static readonly TimeSpan FilterBarAnimationDuration = TimeSpan.FromMilliseconds(250);
 
     // Tree pane animation inside preview workspace
-    private TranslateTransform? _treePaneTransform;
     private bool _treePaneAnimating;
-    private const double PreviewTreePaneSlideOffset = 18.0;
-    private static readonly TimeSpan PreviewTreePaneAnimationDuration = TimeSpan.FromMilliseconds(180);
+    private const double PreviewTreePaneSlideOffset = 32.0;
+    private static readonly TimeSpan PreviewTreePaneAnimationDuration = SettingsPanelAnimationDuration;
 
     // Preview bar animation
     private Border? _previewBarContainer;
@@ -418,6 +426,9 @@ public partial class MainWindow : Window
         _treeView = this.FindControl<TreeView>("ProjectTree");
         _topMenuBar = this.FindControl<TopMenuBarView>("TopMenuBar");
         _workspaceGrid = this.FindControl<Grid>("WorkspaceGrid");
+        _treePaneContainer = this.FindControl<Border>("TreePaneContainer");
+        _treePaneSnapshotHost = this.FindControl<Border>("TreePaneAnimationSnapshotHost");
+        _treePaneSnapshotImage = this.FindControl<Image>("TreePaneAnimationSnapshotImage");
         _treePaneRoot = this.FindControl<Grid>("TreePaneRoot");
         _treePreviewSplitter = this.FindControl<Border>("TreePreviewSplitter");
         _previewSettingsSplitter = this.FindControl<Border>("PreviewSettingsSplitter");
@@ -447,10 +458,10 @@ public partial class MainWindow : Window
         _previewTextScrollViewer = this.FindControl<ScrollViewer>("PreviewTextScrollViewer");
         _previewTextControl = this.FindControl<VirtualizedPreviewTextControl>("PreviewTextControl");
         _previewLineNumbersControl = this.FindControl<VirtualizedLineNumbersControl>("PreviewLineNumbersControl");
-        if (_treePaneRoot is not null)
+        if (_treePaneSnapshotImage is not null)
         {
-            _treePaneTransform = _treePaneRoot.RenderTransform as TranslateTransform ?? new TranslateTransform();
-            _treePaneRoot.RenderTransform = _treePaneTransform;
+            _treePaneSnapshotTransform = _treePaneSnapshotImage.RenderTransform as TranslateTransform ?? new TranslateTransform();
+            _treePaneSnapshotImage.RenderTransform = _treePaneSnapshotTransform;
         }
         if (_previewTextScrollViewer is not null && _previewTextControl is not null)
         {
@@ -759,6 +770,9 @@ public partial class MainWindow : Window
         _currentTree = null;
         _filterBaseTree = null;
         _filterExpansionSnapshot = null;
+        _previewOnlySearchResetPending = false;
+        _previewOnlyFilterResetPending = false;
+        ResetPreviewTreePaneVisualState(hidden: false);
         ResetInteractiveFilterCache();
         InvalidateComputedMetricsCaches();
 
@@ -1070,16 +1084,18 @@ public partial class MainWindow : Window
                 break;
 
             case WorkspaceDisplayMode.PreviewWithTree:
-                EnsureSavedSplitPaneWidths();
-                SetWorkspacePaneState(_treePaneColumn, visible: true, width: _savedSplitTreeColumnWidth, minWidth: SplitTreePaneMinWidth);
-                SetWorkspacePaneState(_previewPaneColumn, visible: true, width: _savedSplitPreviewColumnWidth, minWidth: SplitPreviewPaneMinWidth);
+                SetWorkspacePaneState(_treePaneColumn, visible: true, width: GridLength.Auto, minWidth: 0);
+                SetWorkspacePaneState(_previewPaneColumn, visible: true, width: new GridLength(1, GridUnitType.Star), minWidth: SplitPreviewPaneMinWidth);
                 _treePreviewSplitterColumn.Width = new GridLength(TreePreviewSplitterWidth);
+                ApplyPreviewTreePaneWidth(ResolveDesiredPreviewTreePaneWidth(), animate: false);
                 break;
 
             default:
                 SetWorkspacePaneState(_treePaneColumn, visible: true, width: new GridLength(1, GridUnitType.Star), minWidth: SplitTreePaneMinWidth);
                 SetWorkspacePaneState(_previewPaneColumn, visible: false, width: new GridLength(0), minWidth: 0);
                 _treePreviewSplitterColumn.Width = new GridLength(0);
+                if (_treePaneContainer is not null && !_treePaneAnimating)
+                    ApplyPreviewTreePaneWidth(double.NaN, animate: false);
                 break;
         }
 
@@ -1265,15 +1281,16 @@ public partial class MainWindow : Window
 
     private void CaptureSplitPaneLayout()
     {
-        if (_treePaneColumn is null || _previewPaneColumn is null)
+        if (_previewPaneColumn is null)
             return;
 
-        var treeWidth = _treePaneColumn.ActualWidth;
+        var treeWidth = ResolvePreviewTreePaneVisibleWidth();
         var previewWidth = _previewPaneColumn.ActualWidth;
         var totalWidth = treeWidth + previewWidth;
         if (treeWidth <= 0 || previewWidth <= 0 || totalWidth <= 0)
             return;
 
+        _currentPreviewTreePaneWidth = treeWidth;
         _savedSplitTreeColumnWidth = new GridLength(treeWidth / totalWidth, GridUnitType.Star);
         _savedSplitPreviewColumnWidth = new GridLength(previewWidth / totalWidth, GridUnitType.Star);
     }
@@ -1287,8 +1304,9 @@ public partial class MainWindow : Window
         if (_treePaneColumn is null || _previewPaneColumn is null)
             return;
 
-        _treePaneColumn.Width = _savedSplitTreeColumnWidth;
-        _previewPaneColumn.Width = _savedSplitPreviewColumnWidth;
+        _treePaneColumn.Width = GridLength.Auto;
+        _previewPaneColumn.Width = new GridLength(1, GridUnitType.Star);
+        ApplyPreviewTreePaneWidth(ResolveDesiredPreviewTreePaneWidth(), animate: false);
     }
 
     private void AdjustSplitPaneWidthsForWindowResize(double widthDelta)
@@ -1297,50 +1315,16 @@ public partial class MainWindow : Window
             return;
 
         if (Math.Abs(widthDelta) < 0.5)
-        {
-            NormalizeSplitPaneWidthsToStar();
-            return;
-        }
-
-        if (_treePaneColumn is null || _previewPaneColumn is null)
             return;
 
-        var treeWidth = _treePaneColumn.ActualWidth;
-        var previewWidth = _previewPaneColumn.ActualWidth;
-        var totalWidth = treeWidth + previewWidth;
-        if (treeWidth <= 0 || previewWidth <= 0 || totalWidth <= 0)
-        {
-            NormalizeSplitPaneWidthsToStar();
+        var clampedWidth = GetClampedPreviewTreePaneWidth(_currentPreviewTreePaneWidth > 0.5
+            ? _currentPreviewTreePaneWidth
+            : ResolveDesiredPreviewTreePaneWidth());
+        if (Math.Abs(clampedWidth - ResolvePreviewTreePaneVisibleWidth()) < 0.5)
             return;
-        }
 
-        var minimumTotalWidth = SplitTreePaneMinWidth + SplitPreviewPaneMinWidth;
-        var desiredTotalWidth = Math.Max(minimumTotalWidth, totalWidth + widthDelta);
-
-        // Keep the tree pane stable during window resizes and let preview absorb
-        // most of the delta. Manual splitter drags still redefine the baseline.
-        var desiredTreeWidth = treeWidth;
-        var desiredPreviewWidth = desiredTotalWidth - desiredTreeWidth;
-
-        if (desiredPreviewWidth < SplitPreviewPaneMinWidth)
-        {
-            desiredPreviewWidth = SplitPreviewPaneMinWidth;
-            desiredTreeWidth = desiredTotalWidth - desiredPreviewWidth;
-        }
-
-        if (desiredTreeWidth < SplitTreePaneMinWidth)
-        {
-            desiredTreeWidth = SplitTreePaneMinWidth;
-            desiredPreviewWidth = desiredTotalWidth - desiredTreeWidth;
-        }
-
-        desiredTreeWidth = Math.Max(SplitTreePaneMinWidth, desiredTreeWidth);
-        desiredPreviewWidth = Math.Max(SplitPreviewPaneMinWidth, desiredPreviewWidth);
-
-        _savedSplitTreeColumnWidth = new GridLength(desiredTreeWidth, GridUnitType.Star);
-        _savedSplitPreviewColumnWidth = new GridLength(desiredPreviewWidth, GridUnitType.Star);
-        _treePaneColumn.Width = _savedSplitTreeColumnWidth;
-        _previewPaneColumn.Width = _savedSplitPreviewColumnWidth;
+        _currentPreviewTreePaneWidth = clampedWidth;
+        ApplyPreviewTreePaneWidth(clampedWidth, animate: false);
     }
 
     private void EnsureSavedSplitPaneWidths()
@@ -1360,6 +1344,91 @@ public partial class MainWindow : Window
     {
         column.MinWidth = visible ? minWidth : 0;
         column.Width = visible ? width : new GridLength(0);
+    }
+
+    private void ApplyPreviewTreePaneWidth(double width, bool animate)
+    {
+        if (_treePaneContainer is null)
+            return;
+
+        if (animate)
+        {
+            EnsurePreviewTreePaneTransitions();
+            _treePaneContainer.Width = width;
+            return;
+        }
+
+        var cachedTransitions = _treePaneContainer.Transitions;
+        _treePaneContainer.Transitions = null;
+        _treePaneContainer.Width = width;
+        _treePaneContainer.Transitions = cachedTransitions;
+    }
+
+    private double ResolveDesiredPreviewTreePaneWidth()
+    {
+        if (_currentPreviewTreePaneWidth > 0.5)
+            return GetClampedPreviewTreePaneWidth(_currentPreviewTreePaneWidth);
+
+        return ResolvePreviewTreePaneProjectedWidth();
+    }
+
+    private double ResolvePreviewTreePaneProjectedWidth()
+    {
+        if (_workspaceGrid is null)
+            return SplitTreePaneMinWidth;
+
+        EnsureSavedSplitPaneWidths();
+
+        var workspaceWidth = _workspaceGrid.Bounds.Width;
+        if (workspaceWidth <= 0.5)
+            return SplitTreePaneMinWidth;
+
+        var settingsWidth = ShouldShowPreviewSettingsSplitter()
+            ? GetVisibleSettingsPanelWidth() + PreviewSettingsSplitterWidth
+            : 0.0;
+        var availableWorkspaceWidth = Math.Max(0, workspaceWidth - settingsWidth);
+        var availableSplitWidth = Math.Max(0, availableWorkspaceWidth - TreePreviewSplitterWidth);
+        if (availableSplitWidth <= 0.5)
+            return SplitTreePaneMinWidth;
+
+        var treeWeight = IsUsableSplitPaneWidth(_savedSplitTreeColumnWidth)
+            ? _savedSplitTreeColumnWidth.Value
+            : 5.0;
+        var previewWeight = IsUsableSplitPaneWidth(_savedSplitPreviewColumnWidth)
+            ? _savedSplitPreviewColumnWidth.Value
+            : 6.0;
+        var totalWeight = treeWeight + previewWeight;
+        if (totalWeight <= 0.001)
+            return SplitTreePaneMinWidth;
+
+        return GetClampedPreviewTreePaneWidth(availableSplitWidth * (treeWeight / totalWeight));
+    }
+
+    private double GetClampedPreviewTreePaneWidth(double desiredWidth)
+    {
+        var maxWidth = GetMaximumPreviewTreePaneWidth();
+        if (maxWidth <= 0.5)
+            return SplitTreePaneMinWidth;
+
+        var minWidth = Math.Min(SplitTreePaneMinWidth, maxWidth);
+        return Math.Clamp(desiredWidth, minWidth, maxWidth);
+    }
+
+    private double GetMaximumPreviewTreePaneWidth()
+    {
+        if (_workspaceGrid is null)
+            return SplitTreePaneMinWidth;
+
+        var workspaceWidth = _workspaceGrid.Bounds.Width;
+        if (workspaceWidth <= 0.5)
+            return SplitTreePaneMinWidth;
+
+        var settingsWidth = ShouldShowPreviewSettingsSplitter()
+            ? GetVisibleSettingsPanelWidth() + PreviewSettingsSplitterWidth
+            : 0.0;
+        var availableWorkspaceWidth = Math.Max(0, workspaceWidth - settingsWidth);
+        var availableSplitWidth = Math.Max(0, availableWorkspaceWidth - TreePreviewSplitterWidth);
+        return Math.Max(SplitTreePaneMinWidth, availableSplitWidth - SplitPreviewPaneMinWidth);
     }
 
     private void UpdatePreviewSettingsSplitterState()
@@ -1577,22 +1646,16 @@ public partial class MainWindow : Window
 
     private void ResizeTreePreviewPanes(double deltaX)
     {
-        if (_treePaneColumn is null || _previewPaneColumn is null)
+        if (_treePaneContainer is null)
             return;
 
-        var totalWidth = _treePaneColumn.ActualWidth + _previewPaneColumn.ActualWidth;
-        if (totalWidth <= 0)
+        var currentWidth = ResolvePreviewTreePaneVisibleWidth();
+        var newTreeWidth = GetClampedPreviewTreePaneWidth(currentWidth + deltaX);
+        if (Math.Abs(newTreeWidth - currentWidth) < 0.01)
             return;
 
-        var minTreeWidth = SplitTreePaneMinWidth;
-        var maxTreeWidth = totalWidth - SplitPreviewPaneMinWidth;
-        if (maxTreeWidth <= minTreeWidth)
-            return;
-
-        var newTreeWidth = Math.Clamp(_treePaneColumn.ActualWidth + deltaX, minTreeWidth, maxTreeWidth);
-        var newPreviewWidth = totalWidth - newTreeWidth;
-        _treePaneColumn.Width = new GridLength(newTreeWidth);
-        _previewPaneColumn.Width = new GridLength(newPreviewWidth);
+        _currentPreviewTreePaneWidth = newTreeWidth;
+        ApplyPreviewTreePaneWidth(newTreeWidth, animate: false);
         UpdatePreviewToolbarPresentation(forceRefreshContent: false);
         UpdateToastHostLayout();
     }
@@ -1634,11 +1697,10 @@ public partial class MainWindow : Window
         if (activeTarget == WorkspaceResizeTarget.TreePreview)
         {
             CaptureSplitPaneLayout();
-            if (_treePaneColumn is not null && _previewPaneColumn is not null)
-            {
-                _treePaneColumn.Width = _savedSplitTreeColumnWidth;
-                _previewPaneColumn.Width = _savedSplitPreviewColumnWidth;
-            }
+            if (_treePaneColumn is not null)
+                _treePaneColumn.Width = GridLength.Auto;
+            if (_previewPaneColumn is not null)
+                _previewPaneColumn.Width = new GridLength(1, GridUnitType.Star);
         }
         else if (activeTarget == WorkspaceResizeTarget.PreviewSettings)
         {
@@ -3247,6 +3309,7 @@ public partial class MainWindow : Window
         PreparePreviewPane();
         CaptureNonSplitSettingsPanelWidth();
         _currentSettingsPanelWidth = _effectiveSettingsPanelMinWidth;
+        ResetPreviewTreePaneVisualState(hidden: false);
         _viewModel.PreviewWorkspaceMode = PreviewWorkspaceMode.TreeAndPreview;
         UpdateCompactModeVisualState();
         UpdateWorkspaceLayoutForCurrentMode();
@@ -3309,17 +3372,39 @@ public partial class MainWindow : Window
         if (_previewBarAnimating || _treePaneAnimating)
             return;
 
-        CaptureSplitPaneLayout();
-        await ResetTreeToolStateForPreviewOnlyAsync();
-        await AnimatePreviewTreePaneAsync(show: false);
+        SetPreviewToolbarInteractionSuspended(true);
+        try
+        {
+            var shouldResumePreviewRefresh = SuspendPreviewRefreshForTreeHide();
+            SuspendTreeToolActivityForPreviewTreeHide();
+            CaptureSplitPaneLayout();
+            PreparePreviewTreePaneCollapseLayout();
+            await Dispatcher.UIThread.InvokeAsync(
+                static () => { },
+                DispatcherPriority.Render);
+            TryPreparePreviewTreePaneSnapshot();
+            await AnimatePreviewTreePaneAsync(show: false);
 
-        _viewModel.PreviewWorkspaceMode = PreviewWorkspaceMode.PreviewOnly;
-        UpdateCompactModeVisualState();
-        UpdateWorkspaceLayoutForCurrentMode();
-        UpdatePreviewSegmentThumbPosition(animate: false);
-        ResetPreviewTreePaneVisualState(hidden: false);
-        await WaitForPreviewRenderPassesAsync();
-        FocusPreviewSurface();
+            _viewModel.PreviewWorkspaceMode = PreviewWorkspaceMode.PreviewOnly;
+            UpdateWorkspaceLayoutForCurrentMode();
+            UpdatePreviewSegmentThumbPosition(animate: false);
+            ResetPreviewTreePaneVisualState(hidden: false);
+
+            await Dispatcher.UIThread.InvokeAsync(
+                static () => { },
+                DispatcherPriority.Background);
+            await ResetTreeToolStateForPreviewOnlyAsync(refreshTreeSurface: false);
+            await WaitForPreviewRenderPassesAsync();
+
+            if (shouldResumePreviewRefresh && _viewModel.IsAnyPreviewVisible)
+                SchedulePreviewRefresh(immediate: true);
+
+            FocusPreviewSurface();
+        }
+        finally
+        {
+            SetPreviewToolbarInteractionSuspended(false);
+        }
     }
 
     private void ClearPreviewMemory()
@@ -3494,31 +3579,44 @@ public partial class MainWindow : Window
 
     private void EnsurePreviewTreePaneTransitions()
     {
-        if (_treePaneRoot is null || _treePaneTransform is null)
+        if (_treePaneContainer is null)
             return;
 
-        if (_treePaneRoot.Transitions is null)
+        if (_treePaneContainer.Transitions is null)
         {
-            _treePaneRoot.Transitions =
+            _treePaneContainer.Transitions =
+            [
+                new DoubleTransition
+                {
+                    Property = WidthProperty,
+                    Duration = PreviewTreePaneAnimationDuration,
+                    Easing = new CubicEaseOut()
+                }
+            ];
+        }
+
+        if (_treePaneSnapshotImage is not null && _treePaneSnapshotImage.Transitions is null)
+        {
+            _treePaneSnapshotImage.Transitions =
             [
                 new DoubleTransition
                 {
                     Property = OpacityProperty,
                     Duration = PreviewTreePaneAnimationDuration,
-                    Easing = new CubicEaseInOut()
+                    Easing = new CubicEaseOut()
                 }
             ];
         }
 
-        if (_treePaneTransform.Transitions is null)
+        if (_treePaneSnapshotTransform is not null && _treePaneSnapshotTransform.Transitions is null)
         {
-            _treePaneTransform.Transitions =
+            _treePaneSnapshotTransform.Transitions =
             [
                 new DoubleTransition
                 {
                     Property = TranslateTransform.XProperty,
                     Duration = PreviewTreePaneAnimationDuration,
-                    Easing = new CubicEaseInOut()
+                    Easing = new CubicEaseOut()
                 }
             ];
         }
@@ -3526,22 +3624,20 @@ public partial class MainWindow : Window
 
     private void ResetPreviewTreePaneVisualState(bool hidden)
     {
-        if (_treePaneRoot is null || _treePaneTransform is null)
+        if (_treePaneContainer is null)
             return;
 
-        var cachedRootTransitions = _treePaneRoot.Transitions;
-        var cachedTransformTransitions = _treePaneTransform.Transitions;
-        _treePaneRoot.Transitions = null;
-        _treePaneTransform.Transitions = null;
-        _treePaneRoot.Opacity = hidden ? 0.0 : 1.0;
-        _treePaneTransform.X = hidden ? -PreviewTreePaneSlideOffset : 0.0;
-        _treePaneRoot.Transitions = cachedRootTransitions;
-        _treePaneTransform.Transitions = cachedTransformTransitions;
+        var cachedContainerTransitions = _treePaneContainer.Transitions;
+        _treePaneContainer.Transitions = null;
+        if (hidden)
+            _treePaneContainer.Width = 0.0;
+        _treePaneContainer.Transitions = cachedContainerTransitions;
+        ResetPreviewTreePaneSnapshotVisualState();
     }
 
     private async Task AnimatePreviewTreePaneAsync(bool show)
     {
-        if (_treePaneRoot is null || _treePaneTransform is null)
+        if (_treePaneContainer is null)
             return;
 
         if (_treePaneAnimating)
@@ -3551,14 +3647,229 @@ public partial class MainWindow : Window
         try
         {
             EnsurePreviewTreePaneTransitions();
-            _treePaneRoot.Opacity = show ? 1.0 : 0.0;
-            _treePaneTransform.X = show ? 0.0 : -PreviewTreePaneSlideOffset;
+            _treePaneContainer.Width = show ? ResolveDesiredPreviewTreePaneWidth() : 0.0;
+
+            if (_treePaneSnapshotImage is not null && _treePaneSnapshotTransform is not null && _treePaneSnapshotHost?.IsVisible == true)
+            {
+                _treePaneSnapshotImage.Opacity = show ? 1.0 : 0.0;
+                _treePaneSnapshotTransform.X = show ? 0.0 : -ResolvePreviewTreePaneHiddenOffset();
+            }
+
             await WaitForPanelAnimationAsync(PreviewTreePaneAnimationDuration);
         }
         finally
         {
             _treePaneAnimating = false;
         }
+    }
+
+    private void PreparePreviewTreePaneCollapseLayout()
+    {
+        if (_treePaneColumn is null || _previewPaneColumn is null || _treePaneContainer is null)
+            return;
+
+        var visibleTreeWidth = ResolvePreviewTreePaneWidthForCollapse();
+
+        _currentPreviewTreePaneWidth = visibleTreeWidth;
+        ApplyPreviewTreePaneWidth(visibleTreeWidth, animate: false);
+        _treePaneColumn.MinWidth = 0;
+        _treePaneColumn.Width = GridLength.Auto;
+        _previewPaneColumn.Width = new GridLength(1, GridUnitType.Star);
+        _previewPaneColumn.MinWidth = SplitPreviewPaneMinWidth;
+    }
+
+    private double ResolvePreviewTreePaneWidthForCollapse()
+    {
+        var visibleWidth = ResolvePreviewTreePaneVisibleWidth();
+        if (visibleWidth > 0.5)
+            return visibleWidth;
+
+        if (_workspaceGrid is null)
+            return SplitTreePaneMinWidth;
+
+        var workspaceWidth = _workspaceGrid.Bounds.Width;
+        if (workspaceWidth <= 0.5)
+            return SplitTreePaneMinWidth;
+
+        EnsureSavedSplitPaneWidths();
+
+        var settingsWidth = ShouldShowPreviewSettingsSplitter()
+            ? GetVisibleSettingsPanelWidth() + PreviewSettingsSplitterWidth
+            : 0.0;
+        var availableWorkspaceWidth = Math.Max(0, workspaceWidth - settingsWidth);
+        var availableSplitWidth = Math.Max(0, availableWorkspaceWidth - TreePreviewSplitterWidth);
+
+        if (availableSplitWidth <= 0.5)
+            return SplitTreePaneMinWidth;
+
+        var treeWeight = IsUsableSplitPaneWidth(_savedSplitTreeColumnWidth)
+            ? _savedSplitTreeColumnWidth.Value
+            : 5.0;
+        var previewWeight = IsUsableSplitPaneWidth(_savedSplitPreviewColumnWidth)
+            ? _savedSplitPreviewColumnWidth.Value
+            : 6.0;
+        var totalWeight = treeWeight + previewWeight;
+        if (totalWeight <= 0.001)
+            return SplitTreePaneMinWidth;
+
+        var projectedTreeWidth = availableSplitWidth * (treeWeight / totalWeight);
+        var maximumTreeWidth = Math.Max(SplitTreePaneMinWidth, availableSplitWidth - SplitPreviewPaneMinWidth);
+        return Math.Clamp(projectedTreeWidth, SplitTreePaneMinWidth, maximumTreeWidth);
+    }
+
+    private double ResolvePreviewTreePaneVisibleWidth()
+    {
+        if (_treePaneContainer is null)
+            return 0;
+
+        if (_treePaneContainer.Width > 0)
+            return _treePaneContainer.Width;
+
+        if (_treePaneContainer.Bounds.Width > 0)
+            return _treePaneContainer.Bounds.Width;
+
+        if (_treePaneColumn is not null && _treePaneColumn.ActualWidth > 0)
+            return _treePaneColumn.ActualWidth;
+
+        return 0;
+    }
+
+    private double ResolvePreviewTreePaneHiddenOffset()
+    {
+        if (_treePaneContainer is null)
+            return PreviewTreePaneSlideOffset;
+
+        var paneWidth = _treePaneSnapshotHost?.Width > 0.5
+            ? _treePaneSnapshotHost.Width
+            : ResolvePreviewTreePaneVisibleWidth();
+        if (paneWidth <= 0)
+            return PreviewTreePaneSlideOffset;
+
+        return Math.Max(PreviewTreePaneSlideOffset, Math.Ceiling(Math.Min(paneWidth, 280.0)));
+    }
+
+    private void SuspendTreeToolActivityForPreviewTreeHide()
+    {
+        Interlocked.Increment(ref _searchFocusRequestVersion);
+        Interlocked.Increment(ref _filterFocusRequestVersion);
+        _searchCoordinator.CancelPending();
+        _filterCoordinator.CancelPending();
+    }
+
+    private bool TryPreparePreviewTreePaneSnapshot()
+    {
+        if (_treePaneContainer is null ||
+            _treePaneRoot is null ||
+            _treePaneSnapshotHost is null ||
+            _treePaneSnapshotImage is null ||
+            _treePaneSnapshotTransform is null)
+        {
+            return false;
+        }
+
+        var size = _treePaneContainer.Bounds.Size;
+        if (size.Width <= 0.5 || size.Height <= 0.5)
+            return false;
+
+        try
+        {
+            var topLevel = TopLevel.GetTopLevel(this);
+            var renderScaling = topLevel?.RenderScaling ?? 1.0;
+            var pixelWidth = Math.Max(1, (int)Math.Ceiling(size.Width * renderScaling));
+            var pixelHeight = Math.Max(1, (int)Math.Ceiling(size.Height * renderScaling));
+
+            ResetPreviewTreePaneSnapshotVisualState();
+
+            var bitmap = new RenderTargetBitmap(
+                new PixelSize(pixelWidth, pixelHeight),
+                new Vector(96 * renderScaling, 96 * renderScaling));
+            bitmap.Render(_treePaneContainer);
+            _treePaneSnapshotBitmap = bitmap;
+
+            var cachedImageTransitions = _treePaneSnapshotImage.Transitions;
+            var cachedTransformTransitions = _treePaneSnapshotTransform.Transitions;
+            _treePaneSnapshotImage.Transitions = null;
+            _treePaneSnapshotTransform.Transitions = null;
+
+            _treePaneSnapshotHost.Width = size.Width;
+            _treePaneSnapshotHost.Height = size.Height;
+            _treePaneSnapshotHost.IsVisible = true;
+            _treePaneSnapshotImage.Width = size.Width;
+            _treePaneSnapshotImage.Height = size.Height;
+            _treePaneSnapshotImage.Source = bitmap;
+            _treePaneSnapshotImage.Opacity = 1.0;
+            _treePaneSnapshotImage.IsVisible = true;
+            _treePaneSnapshotTransform.X = 0.0;
+            _treePaneRoot.IsVisible = false;
+
+            _treePaneSnapshotImage.Transitions = cachedImageTransitions;
+            _treePaneSnapshotTransform.Transitions = cachedTransformTransitions;
+            return true;
+        }
+        catch
+        {
+            ResetPreviewTreePaneSnapshotVisualState();
+            return false;
+        }
+    }
+
+    // The tree pane hosts a virtualized TreeView. During collapse we replace it with a
+    // snapshot inside the same clipped container so the layout shrinks like the settings
+    // panel, but repeated animations do not pay the cost of re-rendering the live tree.
+    private void ResetPreviewTreePaneSnapshotVisualState()
+    {
+        if (_treePaneRoot is not null)
+            _treePaneRoot.IsVisible = true;
+
+        if (_treePaneSnapshotHost is not null)
+        {
+            _treePaneSnapshotHost.IsVisible = false;
+            _treePaneSnapshotHost.Width = double.NaN;
+            _treePaneSnapshotHost.Height = double.NaN;
+        }
+
+        if (_treePaneSnapshotImage is not null)
+        {
+            var cachedTransitions = _treePaneSnapshotImage.Transitions;
+            _treePaneSnapshotImage.Transitions = null;
+            _treePaneSnapshotImage.IsVisible = false;
+            _treePaneSnapshotImage.Width = 0.0;
+            _treePaneSnapshotImage.Height = 0.0;
+            _treePaneSnapshotImage.Opacity = 0.0;
+            _treePaneSnapshotImage.Source = null;
+            _treePaneSnapshotImage.Transitions = cachedTransitions;
+        }
+
+        if (_treePaneSnapshotTransform is not null)
+        {
+            var cachedTransitions = _treePaneSnapshotTransform.Transitions;
+            _treePaneSnapshotTransform.Transitions = null;
+            _treePaneSnapshotTransform.X = 0.0;
+            _treePaneSnapshotTransform.Transitions = cachedTransitions;
+        }
+
+        _treePaneSnapshotBitmap?.Dispose();
+        _treePaneSnapshotBitmap = null;
+    }
+
+    private bool SuspendPreviewRefreshForTreeHide()
+    {
+        var shouldResume = _previewRefreshRequested || _viewModel.IsPreviewLoading;
+        CancelPreviewRefresh();
+        return shouldResume;
+    }
+
+    private void SetPreviewToolbarInteractionSuspended(bool suspended)
+    {
+        if (_previewBar is null)
+            return;
+
+        _previewBar.IsHitTestVisible = !suspended;
+
+        if (suspended)
+            _previewBar.Classes.Add("preview-toolbar-suspended");
+        else
+            _previewBar.Classes.Remove("preview-toolbar-suspended");
     }
 
     private async void AnimateSettingsPanel(bool show)
@@ -4697,7 +5008,7 @@ public partial class MainWindow : Window
         }
     }
 
-    private async Task ResetTreeToolStateForPreviewOnlyAsync()
+    private async Task ResetTreeToolStateForPreviewOnlyAsync(bool refreshTreeSurface = true)
     {
         // Preview-only mode should not carry hidden tree-tool state forward.
         // Clear both visual bars and their logical queries so returning from preview
@@ -4728,25 +5039,46 @@ public partial class MainWindow : Window
             if (hadSearchQuery)
             {
                 _viewModel.SearchQuery = string.Empty;
-                _searchCoordinator.UpdateSearchMatches();
-                ScheduleBackgroundMemoryCleanup();
+                _previewOnlySearchResetPending = true;
             }
 
-            if (!hadFilterQuery)
-                return;
-
-            _viewModel.NameFilter = string.Empty;
+            if (hadFilterQuery)
+            {
+                _viewModel.NameFilter = string.Empty;
+                _previewOnlyFilterResetPending = true;
+            }
         }
         finally
         {
             Interlocked.Decrement(ref _suppressSearchFilterRealtimeDepth);
         }
 
-        _filterExpansionSnapshot = null;
-        ResetInteractiveFilterCache();
-        Interlocked.Increment(ref _filterApplyVersion);
-        await ApplyFilterRealtimeAsync(CancellationToken.None);
-        ScheduleBackgroundMemoryCleanup();
+        if (!refreshTreeSurface)
+            return;
+
+        // When the tree pane is hidden, postpone expensive tree normalization work
+        // until the workspace exits preview-only mode. This keeps the hide animation smooth.
+        if (_previewOnlySearchResetPending)
+        {
+            _searchCoordinator.UpdateSearchMatches();
+            _previewOnlySearchResetPending = false;
+            ScheduleBackgroundMemoryCleanup();
+        }
+
+        if (!_previewOnlyFilterResetPending)
+            return;
+
+        try
+        {
+            ResetInteractiveFilterCache();
+            Interlocked.Increment(ref _filterApplyVersion);
+            await ApplyFilterRealtimeAsync(CancellationToken.None);
+            ScheduleBackgroundMemoryCleanup();
+        }
+        finally
+        {
+            _previewOnlyFilterResetPending = false;
+        }
     }
 
     private void FocusPreviewSurface()
@@ -6611,6 +6943,8 @@ public partial class MainWindow : Window
         _currentRepositoryUrl = snapshot.RepositoryUrl;
         _currentTree = snapshot.Tree;
         _filterBaseTree = snapshot.Tree;
+        _previewOnlySearchResetPending = false;
+        _previewOnlyFilterResetPending = false;
         ResetInteractiveFilterCache();
         InvalidateComputedMetricsCaches();
 
@@ -6696,6 +7030,8 @@ public partial class MainWindow : Window
         _currentProjectDisplayName = null;
         _currentRepositoryUrl = null;
         _filterExpansionSnapshot = null;
+        _previewOnlySearchResetPending = false;
+        _previewOnlyFilterResetPending = false;
         ResetInteractiveFilterCache();
 
         _viewModel.IsProjectLoaded = false;

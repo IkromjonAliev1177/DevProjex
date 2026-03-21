@@ -146,7 +146,7 @@
     <Button Grid.Column="3"
             Classes="menu-icon-button"
             Click="OnToggleFilter"
-            IsEnabled="{Binding IsSearchFilterAvailable}"
+            IsEnabled="{Binding IsProjectLoaded}"
             IsVisible="{Binding IsProjectLoaded}"
             ToolTip.ShowDelay="700"
             ToolTip.Placement="Left">

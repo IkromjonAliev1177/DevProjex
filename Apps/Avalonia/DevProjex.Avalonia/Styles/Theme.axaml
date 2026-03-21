@@ -1059,6 +1059,25 @@
         <Setter Property="Foreground" Value="{DynamicResource PrimaryActionForegroundBrush}" />
     </Style>
 
+    <Style Selector="Border.preview-panel.preview-toolbar-suspended Button.segment-text-button:pointerover">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Foreground" Value="{DynamicResource AppMutedTextBrush}" />
+    </Style>
+
+    <Style Selector="Border.preview-panel.preview-toolbar-suspended Button.segment-text-button.segment-selected:pointerover">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Foreground" Value="{DynamicResource PrimaryActionForegroundBrush}" />
+    </Style>
+
+    <Style Selector="Border.preview-panel.preview-toolbar-suspended Button.segment-text-button.segment-selected:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Foreground" Value="{DynamicResource PrimaryActionForegroundBrush}" />
+    </Style>
+
+    <Style Selector="Border.preview-panel.preview-toolbar-suspended Button.preview-close-button:pointerover">
+        <Setter Property="Background" Value="{DynamicResource AppBackgroundBrush}" />
+    </Style>
+
     <!-- Segment control: disabled -->
     <Style Selector="Border.segmented-control:disabled">
         <Setter Property="Opacity" Value="0.5" />
