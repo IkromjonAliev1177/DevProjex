@@ -18,7 +18,7 @@ public sealed class MainWindowPreviewUiTests
             Assert.False(viewModel.IsPreviewMode);
             Assert.True(treeIsland.IsVisible);
             Assert.False(previewIsland.IsVisible);
-            Assert.True(settingsContainer.IsVisible);
+            Assert.True(UiTestDriver.IsActuallyVisibleHorizontally(settingsContainer));
         }
         finally
         {
@@ -49,6 +49,35 @@ public sealed class MainWindowPreviewUiTests
             Assert.True(previewIsland.IsVisible);
             Assert.InRange(previewBounds.Left - treeBounds.Right, 0, 12);
             Assert.InRange(settingsBounds.Left - previewBounds.Right, 0, 12);
+            Assert.True(previewBounds.Width >= 320);
+        }
+        finally
+        {
+            await UiTestDriver.CloseWindowAsync(window);
+        }
+    }
+
+    [AvaloniaFact]
+    public async Task PreviewToggleButton_OpensPreviewNextToTreeWhenSettingsAreCollapsed()
+    {
+        using var project = UiTestProject.CreateDefault();
+        var window = await UiTestDriver.CreateLoadedMainWindowAsync(project);
+
+        try
+        {
+            await UiTestDriver.PressKeyAsync(window, Key.P, RawInputModifiers.Control);
+            await UiTestDriver.WaitForSettingsVisibilityAsync(window, visible: false);
+            await UiTestDriver.OpenPreviewAsync(window);
+
+            var treeIsland = UiTestDriver.GetRequiredControl<Border>(window, "TreeIsland");
+            var previewIsland = UiTestDriver.GetRequiredControl<Border>(window, "PreviewIsland");
+            var settingsContainer = UiTestDriver.GetRequiredControl<Border>(window, "SettingsContainer");
+            var treeBounds = UiTestDriver.GetBoundsInWindow(treeIsland, window);
+            var previewBounds = UiTestDriver.GetBoundsInWindow(previewIsland, window);
+
+            Assert.False(UiTestDriver.GetViewModel(window).SettingsVisible);
+            Assert.False(UiTestDriver.IsActuallyVisibleHorizontally(settingsContainer));
+            Assert.InRange(previewBounds.Left - treeBounds.Right, 0, 12);
             Assert.True(previewBounds.Width >= 320);
         }
         finally

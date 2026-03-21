@@ -30,6 +30,48 @@ public sealed class MainWindowWorkspaceInteractionUiTests
     }
 
     [AvaloniaFact]
+    public async Task FilterButton_IgnoredInPreviewOnly_DoesNotClearSuspendedFilterState()
+    {
+        using var project = UiTestProject.CreateDefault();
+        var window = await UiTestDriver.CreateLoadedMainWindowAsync(project);
+
+        try
+        {
+            await UiTestDriver.OpenFilterAsync(window);
+            var filterBar = UiTestDriver.GetRequiredControl<FilterBarView>(window, "FilterBar");
+            await UiTestDriver.EnterTextAsync(window, Assert.IsType<TextBox>(filterBar.FilterBoxControl), "app");
+            await UiTestDriver.WaitForFilterAppliedAsync(window, "app");
+
+            await UiTestDriver.OpenPreviewAsync(window);
+            await UiTestDriver.HidePreviewTreeAsync(window);
+
+            var filterToggleButton = UiTestDriver.GetRequiredTopMenuControl<Button>(window, "FilterToggleButton");
+            await UiTestDriver.ClickAsync(window, filterToggleButton);
+            await UiTestDriver.WaitForSettledFramesAsync(frameCount: 8);
+
+            var suspendedViewModel = UiTestDriver.GetViewModel(window);
+            Assert.False(suspendedViewModel.FilterVisible);
+            Assert.Equal("app", suspendedViewModel.NameFilter);
+
+            await UiTestDriver.ClosePreviewAsync(window);
+            await UiTestDriver.WaitForConditionAsync(
+                window,
+                () =>
+                {
+                    var viewModel = UiTestDriver.GetViewModel(window);
+                    return viewModel.FilterVisible &&
+                           viewModel.NameFilter == "app" &&
+                           UiTestDriver.GetRequiredControl<Border>(window, "FilterBarContainer").IsVisible;
+                },
+                "suspended filter state to be restored after preview-only close");
+        }
+        finally
+        {
+            await UiTestDriver.CloseWindowAsync(window);
+        }
+    }
+
+    [AvaloniaFact]
     public async Task TreePreviewSplitter_DragResizesTreeAndPreviewPanes()
     {
         using var project = UiTestProject.CreateDefault();

@@ -3403,6 +3403,8 @@ public partial class MainWindow : Window
         if (_previewPaneAnimating || _treePaneAnimating)
             return;
 
+        // Keep the tree live while the preview pane grows in from the right.
+        // Compact mode is applied only after the animation so the tree does not rescale mid-flight.
         PreparePreviewPane();
         CaptureNonSplitSettingsPanelWidth();
         _currentSettingsPanelWidth = _effectiveSettingsPanelMinWidth;
@@ -3452,6 +3454,8 @@ public partial class MainWindow : Window
 
             if (startedFromPreviewOnly)
             {
+                // Rehydrate the hidden tree pane before the close animation starts so the tree
+                // can expand back into the freed width exactly like the settings panel does.
                 _viewModel.PreviewWorkspaceMode = PreviewWorkspaceMode.TreeAndPreview;
                 UpdateWorkspaceLayoutForCurrentMode();
                 UpdatePreviewSegmentThumbPosition(animate: false);
@@ -3468,8 +3472,6 @@ public partial class MainWindow : Window
             await WaitForPreviewRenderPassesAsync();
             ResetPreviewTreePaneVisualState();
             CollapsePreviewPaneVisualState();
-            ResetPreviewTreePaneSnapshotVisualState();
-            ResetPreviewPaneSnapshotVisualState();
 
             if (startedFromPreviewOnly)
                 RestoreTreeToolStateAfterPreviewOnly();
@@ -3495,6 +3497,8 @@ public partial class MainWindow : Window
         SetPreviewToolbarInteractionSuspended(true);
         try
         {
+            // Pause refresh/build pressure before the tree collapse starts.
+            // The animation itself should only touch width/transform state.
             var shouldResumePreviewRefresh = SuspendPreviewRefreshForTreeHide();
             SuspendTreeToolActivityForPreviewTreeHide();
             SuspendTreeToolStateForPreviewOnly();
@@ -3589,6 +3593,8 @@ public partial class MainWindow : Window
         {
             await Dispatcher.UIThread.InvokeAsync(static () => { }, DispatcherPriority.Render);
 
+            // Both containers animate as plain width transitions. The live tree stays visible here,
+            // which avoids bitmap resampling artifacts during preview open.
             EnsurePreviewTreePaneTransitions();
             EnsurePreviewPaneTransitions();
             _treePaneContainer.Width = targetTreeWidth;
@@ -3894,6 +3900,8 @@ public partial class MainWindow : Window
         if (_treePaneColumn is null || _previewPaneColumn is null || _treePaneContainer is null)
             return;
 
+        // Freeze the current width before collapse starts. This keeps the tree anchored on the left
+        // while the preview pane expands into the released space on the right.
         var visibleTreeWidth = ResolvePreviewTreePaneWidthForCollapse();
 
         _currentPreviewTreePaneWidth = visibleTreeWidth;
@@ -4008,6 +4016,8 @@ public partial class MainWindow : Window
 
             ResetPreviewTreePaneSnapshotVisualState();
 
+            // Render the already-laid-out pane into a bitmap so the collapse animation touches
+            // only a static surface instead of a live virtualized TreeView.
             var bitmap = new RenderTargetBitmap(
                 new PixelSize(pixelWidth, pixelHeight),
                 new Vector(96 * renderScaling, 96 * renderScaling));
@@ -4118,6 +4128,8 @@ public partial class MainWindow : Window
 
             ResetPreviewPaneSnapshotVisualState();
 
+            // Freeze the preview surface for close animations so the expensive text surface does
+            // not reflow every frame while the pane width shrinks.
             var bitmap = new RenderTargetBitmap(
                 new PixelSize(pixelWidth, pixelHeight),
                 new Vector(96 * renderScaling, 96 * renderScaling));

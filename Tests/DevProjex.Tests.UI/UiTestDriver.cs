@@ -32,6 +32,19 @@ internal static class UiTestDriver
             },
             "project to finish loading");
 
+        await WaitForConditionAsync(
+            window,
+            () =>
+            {
+                var viewModel = GetViewModel(window);
+                if (!viewModel.SettingsVisible)
+                    return true;
+
+                var settingsContainer = GetRequiredControl<Border>(window, "SettingsContainer");
+                return GetActualWidth(settingsContainer) >= 200;
+            },
+            "initial settings pane to become visually available");
+
         await WaitForSettledFramesAsync(frameCount: 24);
         return window;
     }
@@ -101,6 +114,9 @@ internal static class UiTestDriver
         var physicalKey = key switch
         {
             Key.F => PhysicalKey.F,
+            Key.B => PhysicalKey.B,
+            Key.P => PhysicalKey.P,
+            Key.N => PhysicalKey.N,
             Key.Escape => PhysicalKey.Escape,
             Key.Space => PhysicalKey.Space,
             Key.D0 => PhysicalKey.Digit0,
@@ -199,6 +215,24 @@ internal static class UiTestDriver
             },
             "search bar to open");
         await WaitForSettledFramesAsync(frameCount: 10);
+    }
+
+    public static async Task WaitForSettingsVisibilityAsync(MainWindow window, bool visible)
+    {
+        await WaitForConditionAsync(
+            window,
+            () =>
+            {
+                var viewModel = GetViewModel(window);
+                var settingsContainer = GetRequiredControl<Border>(window, "SettingsContainer");
+                var isEffectivelyVisible = IsActuallyVisibleHorizontally(settingsContainer);
+
+                return viewModel.SettingsVisible == visible &&
+                       isEffectivelyVisible == visible;
+            },
+            $"settings visibility to become {visible}");
+
+        await WaitForSettledFramesAsync(frameCount: 12);
     }
 
     public static async Task SwitchPreviewModeAsync(MainWindow window, PreviewContentMode mode)
@@ -330,6 +364,12 @@ internal static class UiTestDriver
     public static ScrollViewer GetRequiredPreviewScrollViewer(MainWindow window)
         => GetRequiredControl<ScrollViewer>(window, "PreviewTextScrollViewer");
 
+    public static double GetActualWidth(Control control)
+        => control.Bounds.Width;
+
+    public static bool IsActuallyVisibleHorizontally(Control control)
+        => control.IsVisible && GetActualWidth(control) > 0.5;
+
     public static Rect GetBoundsInWindow(Control control, TopLevel topLevel)
     {
         var origin = control.TranslatePoint(default, topLevel);
@@ -370,6 +410,8 @@ internal static class UiTestDriver
     {
         for (var index = 0; index < frameCount; index++)
         {
+            // Drive both dispatcher queues and the headless render timer so tests observe
+            // the same visual state users would see after an animation or layout pass.
             await Dispatcher.UIThread.InvokeAsync(static () => { }, DispatcherPriority.Background);
             await Dispatcher.UIThread.InvokeAsync(static () => { }, DispatcherPriority.Render);
             AvaloniaHeadlessPlatform.ForceRenderTimerTick(1);
@@ -380,6 +422,10 @@ internal static class UiTestDriver
     private static string DescribeState(MainWindow window)
     {
         var viewModel = GetViewModel(window);
+        var settingsContainer = window.FindControl<Border>("SettingsContainer");
+        var settingsWidth = settingsContainer is null
+            ? 0.0
+            : GetActualWidth(settingsContainer);
         return string.Join(
             ", ",
             [
@@ -388,6 +434,8 @@ internal static class UiTestDriver
                 $"TreeNodes={viewModel.TreeNodes.Count}",
                 $"PreviewMode={viewModel.PreviewWorkspaceMode}",
                 $"PreviewLoading={viewModel.IsPreviewLoading}",
+                $"SettingsVisible={viewModel.SettingsVisible}",
+                $"SettingsWidth={settingsWidth:F2}",
                 $"SearchVisible={viewModel.SearchVisible}",
                 $"FilterVisible={viewModel.FilterVisible}",
                 $"SearchBusy={viewModel.IsSearchInProgress}",
