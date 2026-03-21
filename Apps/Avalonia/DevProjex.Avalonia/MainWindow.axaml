@@ -656,7 +656,7 @@
                       Classes="preview-panel">
               <Grid Name="PreviewBarLayoutGrid"
                     ColumnDefinitions="*,Auto"
-                    Margin="12,6"
+                    Margin="12,5"
                     VerticalAlignment="Center">
                 <Border Grid.Column="0"
                         Name="PreviewSegmentedControl"
