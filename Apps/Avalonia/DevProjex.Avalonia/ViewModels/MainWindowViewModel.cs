@@ -1128,6 +1128,7 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
     public string MenuHelpResetData { get; private set; } = string.Empty;
     public string HelpHelpTitle { get; private set; } = string.Empty;
     public string HelpHelpBody { get; private set; } = string.Empty;
+    public string HelpHelpCopyAll { get; private set; } = string.Empty;
     public string HelpAboutTitle { get; private set; } = string.Empty;
     public string HelpAboutBody { get; private set; } = string.Empty;
     public string HelpAboutOpenLink { get; private set; } = string.Empty;
@@ -1260,6 +1261,7 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         MenuHelpResetData = _localization["Menu.Help.ResetData"];
         HelpHelpTitle = _localization["Help.Help.Title"];
         HelpHelpBody = _helpContentProvider.GetHelpBody(_localization.CurrentLanguage);
+        HelpHelpCopyAll = _localization["Help.Help.CopyAll"];
         HelpAboutTitle = _localization["Help.About.Title"];
         HelpAboutBody = _localization["Help.About.Body"];
         HelpAboutOpenLink = _localization["Help.About.OpenLink"];
@@ -1390,6 +1392,7 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         RaisePropertyChanged(nameof(MenuHelpResetData));
         RaisePropertyChanged(nameof(HelpHelpTitle));
         RaisePropertyChanged(nameof(HelpHelpBody));
+        RaisePropertyChanged(nameof(HelpHelpCopyAll));
         RaisePropertyChanged(nameof(HelpAboutTitle));
         RaisePropertyChanged(nameof(HelpAboutBody));
         RaisePropertyChanged(nameof(HelpAboutOpenLink));
