@@ -1214,10 +1214,9 @@ public partial class MainWindow : Window
         _previewTreeModeButton.Content = useShortLabels ? _viewModel.PreviewModeTreeShort : _viewModel.PreviewModeTree;
         _previewContentModeButton.Content = useShortLabels ? _viewModel.PreviewModeContentShort : _viewModel.PreviewModeContent;
         _previewTreeAndContentModeButton.Content = useShortLabels ? _viewModel.PreviewModeTreeAndContentShort : _viewModel.PreviewModeTreeAndContent;
-
-        ToolTip.SetTip(_previewTreeModeButton, _viewModel.PreviewModeTree);
-        ToolTip.SetTip(_previewContentModeButton, _viewModel.PreviewModeContent);
-        ToolTip.SetTip(_previewTreeAndContentModeButton, _viewModel.PreviewModeTreeAndContent);
+        ToolTip.SetTip(_previewTreeModeButton, null);
+        ToolTip.SetTip(_previewContentModeButton, null);
+        ToolTip.SetTip(_previewTreeAndContentModeButton, null);
     }
 
     private void UpdateToastHostLayout()
