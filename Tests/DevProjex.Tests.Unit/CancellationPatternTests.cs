@@ -143,6 +143,9 @@ public sealed class CancellationPatternTests
 
 			currentCts = new CancellationTokenSource();
 			var localCts = currentCts;
+			// Capture the token once, because the source itself can be disposed by a newer recalculation
+			// before the worker reaches the next cancellation check.
+			var localToken = localCts.Token;
 			var localVersion = Interlocked.Increment(ref version);
 			var started = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
 			var releaseGate = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -150,14 +153,14 @@ public sealed class CancellationPatternTests
 			var worker = Task.Run(async () =>
 			{
 				started.TrySetResult(true);
-				await releaseGate.Task.WaitAsync(localCts.Token);
+				await releaseGate.Task.WaitAsync(localToken);
 
-				if (!localCts.Token.IsCancellationRequested &&
+				if (!localToken.IsCancellationRequested &&
 				    localVersion == Volatile.Read(ref version))
 				{
 					updates.Add(localVersion);
 				}
-			}, localCts.Token);
+			}, localToken);
 
 			await started.Task.WaitAsync(TimeSpan.FromSeconds(2));
 			return (worker, started.Task, releaseGate, localVersion);
@@ -185,6 +188,7 @@ public sealed class CancellationPatternTests
 
 		Assert.Single(updates);
 		Assert.Contains(calc3.Version, updates);
+		currentCts?.Dispose();
 	}
 
 	[Fact]
