@@ -25,16 +25,15 @@ public sealed class GitCacheLifecycleTests : IAsyncLifetime, IDisposable
 
     public async Task InitializeAsync()
     {
-        _gitAvailable = await _gitService.IsGitAvailableAsync();
+        _gitAvailable = await SharedGitRepositories.IsGitAvailableAsync();
         if (_gitAvailable)
-            _testRepository = await GitTestRepository.CreateAsync();
+            _testRepository = await SharedGitRepositories.GetDefaultRepositoryAsync();
     }
 
     public Task DisposeAsync() => Task.CompletedTask;
 
     public void Dispose()
     {
-        _testRepository?.Dispose();
         _tempDir.Dispose();
     }
 

@@ -8,6 +8,7 @@ public partial class TopMenuBarView : UserControl
     private TopLevel? _helpDocsPopupTopLevel;
     private bool _helpDocsPopupHandlersAttached;
     private bool _helpDocsPopupBoundsHandlerAttached;
+    private bool _ownedControlHandlersAttached;
 
     public event EventHandler<RoutedEventArgs>? OpenFolderRequested;
     public event EventHandler<RoutedEventArgs>? RefreshRequested;
@@ -61,46 +62,8 @@ public partial class TopMenuBarView : UserControl
     public TopMenuBarView()
     {
         InitializeComponent();
-
-        var popover = ThemePopover;
-        if (popover is not null)
-        {
-            popover.SetLightThemeRequested += (_, e) => SetLightThemeRequested?.Invoke(this, e);
-            popover.SetDarkThemeRequested += (_, e) => SetDarkThemeRequested?.Invoke(this, e);
-            popover.SetTransparentModeRequested += (_, e) => SetTransparentModeRequested?.Invoke(this, e);
-            popover.SetMicaModeRequested += (_, e) => SetMicaModeRequested?.Invoke(this, e);
-            popover.SetAcrylicModeRequested += (_, e) => SetAcrylicModeRequested?.Invoke(this, e);
-        }
-
-        var helpPopover = HelpPopover;
-        if (helpPopover is not null)
-        {
-            helpPopover.CloseRequested += (_, e) => AboutCloseRequested?.Invoke(this, e);
-            helpPopover.OpenLinkRequested += (_, e) => AboutOpenLinkRequested?.Invoke(this, e);
-            helpPopover.CopyLinkRequested += (_, e) => AboutCopyLinkRequested?.Invoke(this, e);
-        }
-
-        var themePopup = ThemePopup;
-        if (themePopup is not null)
-            themePopup.Opened += OnThemePopupOpened;
-
-        var helpPopup = HelpPopup;
-        if (helpPopup is not null)
-        {
-            helpPopup.Opened += OnHelpPopupOpened;
-            helpPopup.Closed += OnHelpPopupClosed;
-        }
-
-        var helpDocsPopover = HelpDocsPopover;
-        if (helpDocsPopover is not null)
-            helpDocsPopover.CloseRequested += (_, e) => HelpCloseRequested?.Invoke(this, e);
-
-        var helpDocsPopup = HelpDocsPopup;
-        if (helpDocsPopup is not null)
-        {
-            helpDocsPopup.Opened += OnHelpDocsPopupOpened;
-            helpDocsPopup.Closed += OnHelpDocsPopupClosed;
-        }
+        AttachedToVisualTree += OnAttachedToVisualTree;
+        DetachedFromVisualTree += OnDetachedFromVisualTree;
     }
 
     public Menu? MainMenuControl => MainMenu;
@@ -150,7 +113,7 @@ public partial class TopMenuBarView : UserControl
 
     private void OnToggleSearch(object? sender, RoutedEventArgs e)
     {
-        if (DataContext is MainWindowViewModel { IsPreviewMode: true })
+        if (DataContext is MainWindowViewModel { IsSearchFilterAvailable: false })
             return;
 
         ToggleSearchRequested?.Invoke(sender, e);
@@ -158,7 +121,7 @@ public partial class TopMenuBarView : UserControl
 
     private void OnToggleFilter(object? sender, RoutedEventArgs e)
     {
-        if (DataContext is MainWindowViewModel { IsPreviewMode: true })
+        if (DataContext is MainWindowViewModel { IsSearchFilterAvailable: false })
             return;
 
         ToggleFilterRequested?.Invoke(sender, e);
@@ -210,6 +173,122 @@ public partial class TopMenuBarView : UserControl
     public void OnGitBranchSwitch(string branchName) => GitBranchSwitchRequested?.Invoke(this, branchName);
 
     public MenuItem? GitBranchMenuItemControl => GitBranchMenuItem;
+
+    private void OnAttachedToVisualTree(object? sender, VisualTreeAttachmentEventArgs e)
+    {
+        AttachOwnedControlHandlers();
+    }
+
+    private void AttachOwnedControlHandlers()
+    {
+        if (_ownedControlHandlersAttached)
+            return;
+
+        if (ThemePopover is not null)
+        {
+            ThemePopover.SetLightThemeRequested += OnThemePopoverSetLightThemeRequested;
+            ThemePopover.SetDarkThemeRequested += OnThemePopoverSetDarkThemeRequested;
+            ThemePopover.SetTransparentModeRequested += OnThemePopoverSetTransparentModeRequested;
+            ThemePopover.SetMicaModeRequested += OnThemePopoverSetMicaModeRequested;
+            ThemePopover.SetAcrylicModeRequested += OnThemePopoverSetAcrylicModeRequested;
+        }
+
+        if (HelpPopover is not null)
+        {
+            HelpPopover.CloseRequested += OnHelpPopoverCloseRequested;
+            HelpPopover.OpenLinkRequested += OnHelpPopoverOpenLinkRequested;
+            HelpPopover.CopyLinkRequested += OnHelpPopoverCopyLinkRequested;
+        }
+
+        if (ThemePopup is not null)
+            ThemePopup.Opened += OnThemePopupOpened;
+
+        if (HelpPopup is not null)
+        {
+            HelpPopup.Opened += OnHelpPopupOpened;
+            HelpPopup.Closed += OnHelpPopupClosed;
+        }
+
+        if (HelpDocsPopover is not null)
+            HelpDocsPopover.CloseRequested += OnHelpDocsPopoverCloseRequested;
+
+        if (HelpDocsPopup is not null)
+        {
+            HelpDocsPopup.Opened += OnHelpDocsPopupOpened;
+            HelpDocsPopup.Closed += OnHelpDocsPopupClosed;
+        }
+
+        _ownedControlHandlersAttached = true;
+    }
+
+    private void DetachOwnedControlHandlers()
+    {
+        if (!_ownedControlHandlersAttached)
+            return;
+
+        if (ThemePopover is not null)
+        {
+            ThemePopover.SetLightThemeRequested -= OnThemePopoverSetLightThemeRequested;
+            ThemePopover.SetDarkThemeRequested -= OnThemePopoverSetDarkThemeRequested;
+            ThemePopover.SetTransparentModeRequested -= OnThemePopoverSetTransparentModeRequested;
+            ThemePopover.SetMicaModeRequested -= OnThemePopoverSetMicaModeRequested;
+            ThemePopover.SetAcrylicModeRequested -= OnThemePopoverSetAcrylicModeRequested;
+        }
+
+        if (HelpPopover is not null)
+        {
+            HelpPopover.CloseRequested -= OnHelpPopoverCloseRequested;
+            HelpPopover.OpenLinkRequested -= OnHelpPopoverOpenLinkRequested;
+            HelpPopover.CopyLinkRequested -= OnHelpPopoverCopyLinkRequested;
+        }
+
+        if (ThemePopup is not null)
+            ThemePopup.Opened -= OnThemePopupOpened;
+
+        if (HelpPopup is not null)
+        {
+            HelpPopup.Opened -= OnHelpPopupOpened;
+            HelpPopup.Closed -= OnHelpPopupClosed;
+        }
+
+        if (HelpDocsPopover is not null)
+            HelpDocsPopover.CloseRequested -= OnHelpDocsPopoverCloseRequested;
+
+        if (HelpDocsPopup is not null)
+        {
+            HelpDocsPopup.Opened -= OnHelpDocsPopupOpened;
+            HelpDocsPopup.Closed -= OnHelpDocsPopupClosed;
+        }
+
+        _ownedControlHandlersAttached = false;
+    }
+
+    private void OnThemePopoverSetLightThemeRequested(object? sender, RoutedEventArgs e)
+        => SetLightThemeRequested?.Invoke(this, e);
+
+    private void OnThemePopoverSetDarkThemeRequested(object? sender, RoutedEventArgs e)
+        => SetDarkThemeRequested?.Invoke(this, e);
+
+    private void OnThemePopoverSetTransparentModeRequested(object? sender, RoutedEventArgs e)
+        => SetTransparentModeRequested?.Invoke(this, e);
+
+    private void OnThemePopoverSetMicaModeRequested(object? sender, RoutedEventArgs e)
+        => SetMicaModeRequested?.Invoke(this, e);
+
+    private void OnThemePopoverSetAcrylicModeRequested(object? sender, RoutedEventArgs e)
+        => SetAcrylicModeRequested?.Invoke(this, e);
+
+    private void OnHelpPopoverCloseRequested(object? sender, RoutedEventArgs e)
+        => AboutCloseRequested?.Invoke(this, e);
+
+    private void OnHelpPopoverOpenLinkRequested(object? sender, RoutedEventArgs e)
+        => AboutOpenLinkRequested?.Invoke(this, e);
+
+    private void OnHelpPopoverCopyLinkRequested(object? sender, RoutedEventArgs e)
+        => AboutCopyLinkRequested?.Invoke(this, e);
+
+    private void OnHelpDocsPopoverCloseRequested(object? sender, RoutedEventArgs e)
+        => HelpCloseRequested?.Invoke(this, e);
 
     private void OnThemePopupOpened(object? sender, EventArgs e)
     {
@@ -547,5 +626,12 @@ public partial class TopMenuBarView : UserControl
         {
             // Ignore: tooltip could have closed.
         }
+    }
+
+    private void OnDetachedFromVisualTree(object? sender, VisualTreeAttachmentEventArgs e)
+    {
+        DetachHelpPopupHandlers();
+        DetachHelpDocsPopupHandlers();
+        DetachOwnedControlHandlers();
     }
 }

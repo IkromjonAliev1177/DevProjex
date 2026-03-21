@@ -5,7 +5,7 @@ public sealed class NameFilterCoordinator(
     Func<bool>? hasActiveQuery = null,
     Action<bool>? onFilterStateChanged = null) : IDisposable
 {
-    private static readonly TimeSpan DebounceDelay = TimeSpan.FromMilliseconds(360);
+    private static readonly TimeSpan DebounceDelay = UiTimingProfile.Scale(TimeSpan.FromMilliseconds(360));
     private CancellationTokenSource? _debounceCts;
     private CancellationTokenSource? _filterCts;
     private readonly object _ctsLock = new();

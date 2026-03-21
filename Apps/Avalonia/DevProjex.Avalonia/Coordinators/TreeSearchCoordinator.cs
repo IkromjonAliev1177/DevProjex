@@ -22,7 +22,7 @@ public sealed class TreeSearchCoordinator(
         DispatcherPriority.Background
     ];
 
-    private static readonly TimeSpan SearchDebounceDelay = TimeSpan.FromMilliseconds(500);
+    private static readonly TimeSpan SearchDebounceDelay = UiTimingProfile.Scale(TimeSpan.FromMilliseconds(500));
     private readonly object _searchCtsLock = new();
     private CancellationTokenSource? _searchDebounceCts;
     private CancellationTokenSource? _searchCts;

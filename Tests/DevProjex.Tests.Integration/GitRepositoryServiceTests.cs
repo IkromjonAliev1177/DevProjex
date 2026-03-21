@@ -25,30 +25,25 @@ public class GitRepositoryServiceTests : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
-        _gitAvailable = await _service.IsGitAvailableAsync();
+        _gitAvailable = await SharedGitRepositories.IsGitAvailableAsync();
         _tempDir = Path.Combine(Path.GetTempPath(), "DevProjex", "Tests", "GitTests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_tempDir);
         if (_gitAvailable)
-            _testRepository = await GitTestRepository.CreateAsync();
+            _testRepository = await SharedGitRepositories.GetDefaultRepositoryAsync();
     }
 
-    public Task DisposeAsync()
+    public async Task DisposeAsync()
     {
         // Cleanup with retry for locked git files
         if (_tempDir != null && Directory.Exists(_tempDir))
-        {
-            TryDeleteDirectory(_tempDir);
-        }
-
-        _testRepository?.Dispose();
-        return Task.CompletedTask;
+            await TryDeleteDirectoryAsync(_tempDir);
     }
 
     /// <summary>
     /// Attempts to delete directory with retries for locked files.
     /// Git may keep files locked briefly after operations.
     /// </summary>
-    private static void TryDeleteDirectory(string path)
+    private static async Task TryDeleteDirectoryAsync(string path)
     {
         for (int i = 0; i < 3; i++)
         {
@@ -61,11 +56,11 @@ public class GitRepositoryServiceTests : IAsyncLifetime
             }
             catch (UnauthorizedAccessException)
             {
-                Thread.Sleep(100 * (i + 1));
+                await Task.Delay(100 * (i + 1));
             }
             catch (IOException)
             {
-                Thread.Sleep(100 * (i + 1));
+                await Task.Delay(100 * (i + 1));
             }
         }
 

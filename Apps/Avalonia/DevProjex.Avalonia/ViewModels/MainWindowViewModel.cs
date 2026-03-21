@@ -16,6 +16,13 @@ public enum PreviewContentMode
     TreeAndContent
 }
 
+public enum PreviewWorkspaceMode
+{
+    Off,
+    TreeAndPreview,
+    PreviewOnly
+}
+
 public sealed class MainWindowViewModel : ViewModelBase, IDisposable
 {
     public const string TitleVersion = "4.8";
@@ -64,7 +71,8 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
     private bool _isMicaEnabled;
     private bool _isAcrylicEnabled;
     private bool _isTransparentEnabled = true;
-    private bool _isPreviewMode;
+    private PreviewWorkspaceMode _previewWorkspaceMode;
+    private bool _isPreviewCompactModeActive;
     private bool _isPreviewLoading;
     private string _previewText = string.Empty;
     private IPreviewTextDocument? _previewDocument;
@@ -269,25 +277,50 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
             _isProjectLoaded = value;
             RaisePropertyChanged();
             RaisePropertyChanged(nameof(IsSearchFilterAvailable));
-        }
-    }
-
-    public bool IsPreviewMode
-    {
-        get => _isPreviewMode;
-        set
-        {
-            if (_isPreviewMode == value) return;
-            _isPreviewMode = value;
-            RaisePropertyChanged();
-            RaisePropertyChanged(nameof(IsSearchFilterAvailable));
             RaisePropertyChanged(nameof(AreFilterSettingsEnabled));
         }
     }
 
-    public bool IsSearchFilterAvailable => _isProjectLoaded && !_isPreviewMode;
+    public PreviewWorkspaceMode PreviewWorkspaceMode
+    {
+        get => _previewWorkspaceMode;
+        set
+        {
+            if (_previewWorkspaceMode == value) return;
+            var previousIsCompactModeEffective = IsCompactModeEffective;
+            var previousCanToggleCompactMode = CanToggleCompactMode;
+            _previewWorkspaceMode = value;
+            RaisePropertyChanged();
+            RaisePropertyChanged(nameof(IsPreviewMode));
+            RaisePropertyChanged(nameof(IsPreviewTreeVisible));
+            RaisePropertyChanged(nameof(IsPreviewOnlyMode));
+            RaisePreviewStatePropertiesChanged();
 
-    public bool AreFilterSettingsEnabled => !_isPreviewMode;
+            if (previousCanToggleCompactMode != CanToggleCompactMode)
+                RaisePropertyChanged(nameof(CanToggleCompactMode));
+
+            if (previousIsCompactModeEffective != IsCompactModeEffective)
+            {
+                RaiseCompactModePropertiesChanged();
+            }
+        }
+    }
+
+    public bool IsPreviewMode => _previewWorkspaceMode != PreviewWorkspaceMode.Off;
+
+    public bool IsPreviewTreeVisible => _previewWorkspaceMode == PreviewWorkspaceMode.TreeAndPreview;
+
+    public bool IsPreviewOnlyMode => _previewWorkspaceMode == PreviewWorkspaceMode.PreviewOnly;
+
+    public bool IsAnyPreviewVisible => IsPreviewMode;
+
+    public bool IsPreviewPaneVisible => IsPreviewMode;
+
+    public bool IsTreePaneVisible => _previewWorkspaceMode != PreviewWorkspaceMode.PreviewOnly;
+
+    public bool IsSearchFilterAvailable => _isProjectLoaded && IsTreePaneVisible;
+
+    public bool AreFilterSettingsEnabled => _isProjectLoaded;
 
     public bool SettingsVisible
     {
@@ -384,10 +417,23 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
             if (_isCompactMode == value) return;
             _isCompactMode = value;
             RaisePropertyChanged();
-            RaisePropertyChanged(nameof(TreeItemSpacing));
-            RaisePropertyChanged(nameof(TreeItemPadding));
-            RaisePropertyChanged(nameof(SettingsListSpacing));
+            RaiseCompactModePropertiesChanged();
         }
+    }
+
+    public bool IsCompactModeEffective => _isCompactMode || (IsPreviewMode && _isPreviewCompactModeActive);
+
+    public bool CanToggleCompactMode => !IsPreviewMode;
+
+    public void SetPreviewCompactModeActive(bool active)
+    {
+        if (_isPreviewCompactModeActive == active)
+            return;
+
+        var previousIsCompactModeEffective = IsCompactModeEffective;
+        _isPreviewCompactModeActive = active;
+        if (previousIsCompactModeEffective != IsCompactModeEffective)
+            RaiseCompactModePropertiesChanged();
     }
 
     public bool IsTreeAnimationEnabled
@@ -599,6 +645,27 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         RaisePropertyChanged(nameof(HasAnyEffect));
         RaisePropertyChanged(nameof(ShowTransparencySliders));
         RaisePropertyChanged(nameof(ShowBlurSlider));
+    }
+
+    private void RaisePreviewStatePropertiesChanged()
+    {
+        RaisePropertyChanged(nameof(IsAnyPreviewVisible));
+        RaisePropertyChanged(nameof(IsPreviewPaneVisible));
+        RaisePropertyChanged(nameof(IsTreePaneVisible));
+        RaisePropertyChanged(nameof(IsPreviewTreeVisible));
+        RaisePropertyChanged(nameof(IsPreviewOnlyMode));
+        RaisePropertyChanged(nameof(IsSearchFilterAvailable));
+        RaisePropertyChanged(nameof(AreFilterSettingsEnabled));
+    }
+
+    private void RaiseCompactModePropertiesChanged()
+    {
+        RaisePropertyChanged(nameof(IsCompactModeEffective));
+        RaisePropertyChanged(nameof(CanToggleCompactMode));
+        RaisePropertyChanged(nameof(TreeItemSpacing));
+        RaisePropertyChanged(nameof(TreeItemPadding));
+        RaisePropertyChanged(nameof(TreeTextMargin));
+        RaisePropertyChanged(nameof(SettingsListSpacing));
     }
 
     // Methods for toggle behavior (click on active = disable)
@@ -920,20 +987,23 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
 
     public double TreeIconSize => Math.Max(12, Math.Round(TreeFontSize * TreeIconScale, 0));
 
+    // Change "top" parameter in Thickness for vertical width
     public Thickness TreeTextMargin =>
         string.Equals(_selectedFontFamily?.Name, "Consolas", StringComparison.OrdinalIgnoreCase)
-            ? new Thickness(0, 9, 0, 0)
+            ? (IsCompactModeEffective
+                ? new Thickness(0, 3, 0, 0)
+                : new Thickness(0, 9, 0, 0))
             : new Thickness(0);
 
     // Tree row spacing is controlled in VM so compact mode is a single switch.
-    public double TreeItemSpacing => _isCompactMode ? 2 : 6;
+    public double TreeItemSpacing => IsCompactModeEffective ? 2 : 6;
 
-    // TreeViewItem padding follows the same compact flag to keep row height tight.
-    // Negative vertical padding in compact mode for tighter rows.
-    public Thickness TreeItemPadding => _isCompactMode ? new Thickness(0, -20) : new Thickness(4, 1);
+    // Compact rows should stay dense without using negative padding, because
+    // virtualized trees rely on stable item measurement for correct scroll extents.
+    public Thickness TreeItemPadding => IsCompactModeEffective ? new Thickness(0) : new Thickness(4, 1);
 
     // Settings lists use an ItemsPanel with explicit Spacing (can go negative to tighten).
-    public double SettingsListSpacing => _isCompactMode ? -5 : -3;
+    public double SettingsListSpacing => IsCompactModeEffective ? -5 : -3;
 
     public void UpdateSearchMatchSummary(int currentIndex, int totalMatches)
     {
@@ -1058,6 +1128,7 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
     public string MenuHelpResetData { get; private set; } = string.Empty;
     public string HelpHelpTitle { get; private set; } = string.Empty;
     public string HelpHelpBody { get; private set; } = string.Empty;
+    public string HelpHelpCopyAll { get; private set; } = string.Empty;
     public string HelpAboutTitle { get; private set; } = string.Empty;
     public string HelpAboutBody { get; private set; } = string.Empty;
     public string HelpAboutOpenLink { get; private set; } = string.Empty;
@@ -1090,10 +1161,14 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
     public string FilterTooltip { get; private set; } = string.Empty;
     public string CopyFormatTooltip { get; private set; } = string.Empty;
     public string PreviewTooltip { get; private set; } = string.Empty;
+    public string PreviewHideTreeTooltip { get; private set; } = string.Empty;
     public string PreviewModesLabel { get; private set; } = string.Empty;
     public string PreviewModeTree { get; private set; } = string.Empty;
     public string PreviewModeContent { get; private set; } = string.Empty;
     public string PreviewModeTreeAndContent { get; private set; } = string.Empty;
+    public string PreviewModeTreeShort { get; private set; } = string.Empty;
+    public string PreviewModeContentShort { get; private set; } = string.Empty;
+    public string PreviewModeTreeAndContentShort { get; private set; } = string.Empty;
     public string PreviewLoadingText { get; private set; } = string.Empty;
     public string PreviewNoDataText { get; private set; } = string.Empty;
     public string PreviewSelectionCopy { get; private set; } = string.Empty;
@@ -1186,6 +1261,7 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         MenuHelpResetData = _localization["Menu.Help.ResetData"];
         HelpHelpTitle = _localization["Help.Help.Title"];
         HelpHelpBody = _helpContentProvider.GetHelpBody(_localization.CurrentLanguage);
+        HelpHelpCopyAll = _localization["Help.Help.CopyAll"];
         HelpAboutTitle = _localization["Help.About.Title"];
         HelpAboutBody = _localization["Help.About.Body"];
         HelpAboutOpenLink = _localization["Help.About.OpenLink"];
@@ -1203,10 +1279,14 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         FilterTooltip = _localization["Filter.Tooltip"];
         CopyFormatTooltip = _localization["CopyFormat.Tooltip"];
         PreviewTooltip = _localization["Preview.Tooltip"];
+        PreviewHideTreeTooltip = _localization["Preview.HideTree.Tooltip"];
         PreviewModesLabel = _localization["Preview.Modes.Label"];
         PreviewModeTree = _localization["Preview.Mode.Tree"];
         PreviewModeContent = _localization["Preview.Mode.Content"];
         PreviewModeTreeAndContent = _localization["Preview.Mode.TreeAndContent"];
+        PreviewModeTreeShort = _localization["Preview.Mode.Tree.Short"];
+        PreviewModeContentShort = _localization["Preview.Mode.Content.Short"];
+        PreviewModeTreeAndContentShort = _localization["Preview.Mode.TreeAndContent.Short"];
         PreviewLoadingText = _localization["Preview.Loading"];
         PreviewNoDataText = _localization["Preview.NoData"];
         PreviewSelectionCopy = _localization["Preview.Selection.Copy"];
@@ -1312,6 +1392,7 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         RaisePropertyChanged(nameof(MenuHelpResetData));
         RaisePropertyChanged(nameof(HelpHelpTitle));
         RaisePropertyChanged(nameof(HelpHelpBody));
+        RaisePropertyChanged(nameof(HelpHelpCopyAll));
         RaisePropertyChanged(nameof(HelpAboutTitle));
         RaisePropertyChanged(nameof(HelpAboutBody));
         RaisePropertyChanged(nameof(HelpAboutOpenLink));
@@ -1328,10 +1409,14 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         RaisePropertyChanged(nameof(FilterTooltip));
         RaisePropertyChanged(nameof(CopyFormatTooltip));
         RaisePropertyChanged(nameof(PreviewTooltip));
+        RaisePropertyChanged(nameof(PreviewHideTreeTooltip));
         RaisePropertyChanged(nameof(PreviewModesLabel));
         RaisePropertyChanged(nameof(PreviewModeTree));
         RaisePropertyChanged(nameof(PreviewModeContent));
         RaisePropertyChanged(nameof(PreviewModeTreeAndContent));
+        RaisePropertyChanged(nameof(PreviewModeTreeShort));
+        RaisePropertyChanged(nameof(PreviewModeContentShort));
+        RaisePropertyChanged(nameof(PreviewModeTreeAndContentShort));
         RaisePropertyChanged(nameof(PreviewLoadingText));
         RaisePropertyChanged(nameof(PreviewNoDataText));
         RaisePropertyChanged(nameof(PreviewSelectionCopy));

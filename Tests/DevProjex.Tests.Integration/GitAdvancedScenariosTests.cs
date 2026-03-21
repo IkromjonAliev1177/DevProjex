@@ -24,14 +24,13 @@ public class GitAdvancedScenariosTests : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
-        _gitAvailable = await _gitService.IsGitAvailableAsync();
+        _gitAvailable = await SharedGitRepositories.IsGitAvailableAsync();
         if (_gitAvailable)
-            _testRepository = await GitTestRepository.CreateAsync();
+            _testRepository = await SharedGitRepositories.GetDefaultRepositoryAsync();
     }
 
     public Task DisposeAsync()
     {
-        _testRepository?.Dispose();
         _tempDir.Dispose();
         try
         {

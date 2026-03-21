@@ -16,7 +16,8 @@ public sealed class PreviewDocumentBuilder(IFileContentAnalyzer contentAnalyzer)
     private const string WhitespaceMarkerSuffix = " bytes]";
     private const int InMemoryDocumentThresholdChars = 500_000;
 
-    public IPreviewTextDocument CreateInMemory(string? text) => new InMemoryPreviewTextDocument(text);
+    public IPreviewTextDocument CreateInMemory(string? text, IReadOnlyList<PreviewDocumentSection>? sections = null)
+        => new InMemoryPreviewTextDocument(text, sections);
 
     public async Task<IPreviewTextDocument?> BuildContentDocumentAsync(
         IEnumerable<string> filePaths,
@@ -28,14 +29,16 @@ public sealed class PreviewDocumentBuilder(IFileContentAnalyzer contentAnalyzer)
             return null;
 
         using var builder = new PreviewTextStorageBuilder(InMemoryDocumentThresholdChars);
+        var sections = new List<PreviewDocumentSection>(orderedFiles.Count);
         var anyWritten = await AppendContentEntriesAsync(
             builder,
             orderedFiles,
+            sections,
             displayPathMapper,
             prependSectionSeparator: false,
             cancellationToken).ConfigureAwait(false);
 
-        return anyWritten ? builder.BuildDocument() : null;
+        return anyWritten ? builder.BuildDocument(sections) : null;
     }
 
     public async Task<IPreviewTextDocument> BuildTreeAndContentDocumentAsync(
@@ -51,10 +54,12 @@ public sealed class PreviewDocumentBuilder(IFileContentAnalyzer contentAnalyzer)
             return CreateInMemory(normalizedTreeText);
 
         using var builder = new PreviewTextStorageBuilder(InMemoryDocumentThresholdChars);
+        var sections = new List<PreviewDocumentSection>(orderedFiles.Count);
         var wroteTree = AppendMultilineText(builder, normalizedTreeText.AsSpan());
         var wroteContent = await AppendContentEntriesAsync(
             builder,
             orderedFiles,
+            sections,
             displayPathMapper,
             prependSectionSeparator: wroteTree,
             cancellationToken).ConfigureAwait(false);
@@ -62,12 +67,13 @@ public sealed class PreviewDocumentBuilder(IFileContentAnalyzer contentAnalyzer)
         if (!wroteTree && !wroteContent)
             return CreateInMemory(string.Empty);
 
-        return builder.BuildDocument();
+        return builder.BuildDocument(sections);
     }
 
     private async Task<bool> AppendContentEntriesAsync(
         PreviewTextStorageBuilder builder,
         IReadOnlyList<string> orderedFiles,
+        ICollection<PreviewDocumentSection> sections,
         Func<string, string>? displayPathMapper,
         bool prependSectionSeparator,
         CancellationToken cancellationToken)
@@ -100,18 +106,32 @@ public sealed class PreviewDocumentBuilder(IFileContentAnalyzer contentAnalyzer)
             anyWritten = true;
             trimTrailingEstimatedLine = false;
 
-            builder.AppendLine($"{MapDisplayPath(file, displayPathMapper)}:");
+            var displayPath = MapDisplayPath(file, displayPathMapper);
+            var sectionStartLine = builder.LineCount + 1;
+            builder.AppendLine($"{displayPath}:");
             builder.AppendLine(ClipboardBlankLine);
 
             if (content.IsEmpty)
             {
                 builder.AppendLine(NoContentMarker);
+                sections.Add(new PreviewDocumentSection(
+                    displayPath,
+                    sectionStartLine,
+                    builder.LineCount,
+                    sectionStartLine,
+                    sectionStartLine + 2));
                 continue;
             }
 
             if (content.IsWhitespaceOnly)
             {
                 builder.AppendLine($"{WhitespaceMarkerPrefix}{content.SizeBytes}{WhitespaceMarkerSuffix}");
+                sections.Add(new PreviewDocumentSection(
+                    displayPath,
+                    sectionStartLine,
+                    builder.LineCount,
+                    sectionStartLine,
+                    sectionStartLine + 2));
                 continue;
             }
 
@@ -121,11 +141,23 @@ public sealed class PreviewDocumentBuilder(IFileContentAnalyzer contentAnalyzer)
                 // and trim the terminal empty line only for the final entry to keep visible output stable.
                 builder.AppendLine(string.Empty);
                 trimTrailingEstimatedLine = true;
+                sections.Add(new PreviewDocumentSection(
+                    displayPath,
+                    sectionStartLine,
+                    builder.LineCount,
+                    sectionStartLine,
+                    sectionStartLine + 2));
                 continue;
             }
 
             trimTrailingEstimatedLine = false;
             AppendTrimmedContent(builder, content.Content.AsSpan());
+            sections.Add(new PreviewDocumentSection(
+                displayPath,
+                sectionStartLine,
+                builder.LineCount,
+                sectionStartLine,
+                sectionStartLine + 2));
         }
 
         if (anyWritten && trimTrailingEstimatedLine)
@@ -257,6 +289,8 @@ public sealed class PreviewDocumentBuilder(IFileContentAnalyzer contentAnalyzer)
             _stream.WriteByte((byte)'\n');
         }
 
+        public int LineCount => _lineLengths.Count;
+
         public void TrimTrailingEmptyLine()
         {
             ThrowIfDisposed();
@@ -272,7 +306,7 @@ public sealed class PreviewDocumentBuilder(IFileContentAnalyzer contentAnalyzer)
             _characterCount = Math.Max(0, _characterCount - 1);
         }
 
-        public IPreviewTextDocument BuildDocument()
+        public IPreviewTextDocument BuildDocument(IReadOnlyList<PreviewDocumentSection>? sections = null)
         {
             ThrowIfDisposed();
 
@@ -296,7 +330,7 @@ public sealed class PreviewDocumentBuilder(IFileContentAnalyzer contentAnalyzer)
 
                 DisposeStorageFile();
                 _disposed = true;
-                return new InMemoryPreviewTextDocument(text);
+                return new InMemoryPreviewTextDocument(text, sections);
             }
 
             _disposed = true;
@@ -305,7 +339,8 @@ public sealed class PreviewDocumentBuilder(IFileContentAnalyzer contentAnalyzer)
                 _lineOffsets.ToArray(),
                 fileLength,
                 _maxLineLength,
-                _characterCount);
+                _characterCount,
+                sections);
         }
 
         public void Dispose()

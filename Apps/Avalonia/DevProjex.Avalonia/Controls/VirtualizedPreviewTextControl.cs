@@ -1,4 +1,5 @@
 using Avalonia.Media.TextFormatting;
+using DevProjex.Application.Preview;
 
 namespace DevProjex.Avalonia.Controls;
 
@@ -20,6 +21,9 @@ public sealed class VirtualizedPreviewTextControl : Control
 
     public static readonly StyledProperty<double> VerticalOffsetProperty =
         AvaloniaProperty.Register<VirtualizedPreviewTextControl, double>(nameof(VerticalOffset));
+
+    public static readonly StyledProperty<double> HorizontalOffsetProperty =
+        AvaloniaProperty.Register<VirtualizedPreviewTextControl, double>(nameof(HorizontalOffset));
 
     public static readonly StyledProperty<double> ViewportHeightProperty =
         AvaloniaProperty.Register<VirtualizedPreviewTextControl, double>(nameof(ViewportHeight));
@@ -49,6 +53,24 @@ public sealed class VirtualizedPreviewTextControl : Control
 
     public static readonly StyledProperty<IBrush?> TextBrushProperty =
         AvaloniaProperty.Register<VirtualizedPreviewTextControl, IBrush?>(nameof(TextBrush));
+
+    public static readonly StyledProperty<IBrush?> SectionDividerBrushProperty =
+        AvaloniaProperty.Register<VirtualizedPreviewTextControl, IBrush?>(nameof(SectionDividerBrush));
+
+    public static readonly StyledProperty<string> StickyHeaderTextProperty =
+        AvaloniaProperty.Register<VirtualizedPreviewTextControl, string>(nameof(StickyHeaderText), string.Empty);
+
+    public static readonly StyledProperty<bool> StickyHeaderVisibleProperty =
+        AvaloniaProperty.Register<VirtualizedPreviewTextControl, bool>(nameof(StickyHeaderVisible));
+
+    public static readonly StyledProperty<bool> StickyHeaderReservedProperty =
+        AvaloniaProperty.Register<VirtualizedPreviewTextControl, bool>(nameof(StickyHeaderReserved));
+
+    public static readonly StyledProperty<IBrush?> StickyHeaderBackgroundBrushProperty =
+        AvaloniaProperty.Register<VirtualizedPreviewTextControl, IBrush?>(nameof(StickyHeaderBackgroundBrush));
+
+    public static readonly StyledProperty<IBrush?> StickyHeaderBorderBrushProperty =
+        AvaloniaProperty.Register<VirtualizedPreviewTextControl, IBrush?>(nameof(StickyHeaderBorderBrush));
 
     public static readonly StyledProperty<string> CopyMenuHeaderProperty =
         AvaloniaProperty.Register<VirtualizedPreviewTextControl, string>(nameof(CopyMenuHeader), "Copy");
@@ -92,6 +114,7 @@ public sealed class VirtualizedPreviewTextControl : Control
         AffectsRender<VirtualizedPreviewTextControl>(
             TextProperty,
             DocumentProperty,
+            HorizontalOffsetProperty,
             VerticalOffsetProperty,
             ViewportHeightProperty,
             ViewportWidthProperty,
@@ -102,6 +125,12 @@ public sealed class VirtualizedPreviewTextControl : Control
             TextFontFamilyProperty,
             TextFontSizeProperty,
             TextBrushProperty,
+            SectionDividerBrushProperty,
+            StickyHeaderTextProperty,
+            StickyHeaderVisibleProperty,
+            StickyHeaderReservedProperty,
+            StickyHeaderBackgroundBrushProperty,
+            StickyHeaderBorderBrushProperty,
             CopyMenuHeaderProperty,
             SelectAllMenuHeaderProperty,
             ClearSelectionMenuHeaderProperty);
@@ -161,6 +190,12 @@ public sealed class VirtualizedPreviewTextControl : Control
         set => SetValue(VerticalOffsetProperty, value);
     }
 
+    public double HorizontalOffset
+    {
+        get => GetValue(HorizontalOffsetProperty);
+        set => SetValue(HorizontalOffsetProperty, value);
+    }
+
     public double ViewportHeight
     {
         get => GetValue(ViewportHeightProperty);
@@ -213,6 +248,42 @@ public sealed class VirtualizedPreviewTextControl : Control
     {
         get => GetValue(TextBrushProperty);
         set => SetValue(TextBrushProperty, value);
+    }
+
+    public IBrush? SectionDividerBrush
+    {
+        get => GetValue(SectionDividerBrushProperty);
+        set => SetValue(SectionDividerBrushProperty, value);
+    }
+
+    public string StickyHeaderText
+    {
+        get => GetValue(StickyHeaderTextProperty);
+        set => SetValue(StickyHeaderTextProperty, value);
+    }
+
+    public bool StickyHeaderVisible
+    {
+        get => GetValue(StickyHeaderVisibleProperty);
+        set => SetValue(StickyHeaderVisibleProperty, value);
+    }
+
+    public bool StickyHeaderReserved
+    {
+        get => GetValue(StickyHeaderReservedProperty);
+        set => SetValue(StickyHeaderReservedProperty, value);
+    }
+
+    public IBrush? StickyHeaderBackgroundBrush
+    {
+        get => GetValue(StickyHeaderBackgroundBrushProperty);
+        set => SetValue(StickyHeaderBackgroundBrushProperty, value);
+    }
+
+    public IBrush? StickyHeaderBorderBrush
+    {
+        get => GetValue(StickyHeaderBorderBrushProperty);
+        set => SetValue(StickyHeaderBorderBrushProperty, value);
     }
 
     public string CopyMenuHeader
@@ -276,12 +347,24 @@ public sealed class VirtualizedPreviewTextControl : Control
         return TryStartSelection(pointer, documentPoint, keyModifiers);
     }
 
+    public int GetLineNumberAtVerticalOffset(double verticalOffset)
+    {
+        var typeface = ResolveTypeface();
+        var lineHeight = ResolveLineHeight(typeface);
+        if (lineHeight <= 0)
+            return 1;
+
+        var normalizedOffset = Math.Max(0, verticalOffset);
+        var lineNumber = (int)Math.Floor((normalizedOffset - TopPadding) / lineHeight) + 1;
+        return Math.Clamp(lineNumber, 1, ResolveLineCount());
+    }
+
     protected override Size MeasureOverride(Size availableSize)
     {
         var typeface = ResolveTypeface();
         var lineHeight = ResolveLineHeight(typeface);
         var width = Math.Max(CalculateRequiredWidth(typeface), Math.Ceiling(Math.Max(0, ViewportWidth)));
-        var height = Math.Ceiling(TopPadding + BottomPadding + (ResolveLineCount() * lineHeight));
+        var height = Math.Ceiling(ResolveContentTopPadding() + BottomPadding + (ResolveLineCount() * lineHeight));
 
         return new Size(Math.Max(1, width), Math.Max(1, height));
     }
@@ -301,7 +384,8 @@ public sealed class VirtualizedPreviewTextControl : Control
 
         var viewportTop = Math.Max(0, VerticalOffset);
         var viewportHeight = ViewportHeight > 0 ? ViewportHeight : Bounds.Height;
-        var firstVisibleLine = Math.Max(1, (int)Math.Floor((viewportTop - TopPadding) / lineHeight) + 1);
+        var contentTopPadding = ResolveContentTopPadding();
+        var firstVisibleLine = Math.Max(1, (int)Math.Floor((viewportTop - contentTopPadding) / lineHeight) + 1);
         var visibleLineCount = Math.Max(1, (int)Math.Ceiling(viewportHeight / lineHeight));
         var lastVisibleLine = Math.Min(lineCount, firstVisibleLine + visibleLineCount - 1);
 
@@ -314,8 +398,10 @@ public sealed class VirtualizedPreviewTextControl : Control
         if (visibleWindow.Text.Length == 0)
             return;
 
-        var origin = new Point(LeftPadding, TopPadding + (firstVisibleLine - 1) * lineHeight);
+        var origin = new Point(LeftPadding, contentTopPadding + (firstVisibleLine - 1) * lineHeight);
         var formattedText = BuildFormattedText(visibleWindow.Text, typeface);
+
+        DrawVisibleSectionDividers(context, firstVisibleLine, lastVisibleLine, lineHeight);
 
         if (TryGetVisibleSelectionRange(visibleWindow, out var selectionStart, out var selectionLength))
         {
@@ -326,6 +412,7 @@ public sealed class VirtualizedPreviewTextControl : Control
         }
 
         context.DrawText(formattedText, origin);
+        DrawStickyHeader(context, typeface);
     }
 
     protected override void OnPointerPressed(PointerPressedEventArgs e)
@@ -648,7 +735,7 @@ public sealed class VirtualizedPreviewTextControl : Control
             if (width <= 0)
                 continue;
 
-            var top = TopPadding + (lineNumber - 1) * lineHeight;
+            var top = ResolveContentTopPadding() + (lineNumber - 1) * lineHeight;
             context.FillRectangle(selectionBackground, new Rect(left, top, width, lineHeight));
         }
     }
@@ -658,13 +745,24 @@ public sealed class VirtualizedPreviewTextControl : Control
 
     private SelectionHitResult HitTestSelection(Point point)
     {
+        var stickyHeaderHeight = ResolveStickyHeaderHeight();
+        if (stickyHeaderHeight > 0)
+        {
+            var stickyHeaderTop = Math.Max(0, VerticalOffset);
+            if (point.Y >= stickyHeaderTop && point.Y < stickyHeaderTop + stickyHeaderHeight)
+            {
+                var headerLine = GetLineNumberAtVerticalOffset(stickyHeaderTop);
+                return new SelectionHitResult(new SelectionPosition(headerLine, 0), SelectionHitKind.Empty);
+            }
+        }
+
         var typeface = ResolveTypeface();
         var lineHeight = ResolveLineHeight(typeface);
         if (lineHeight <= 0)
             return new SelectionHitResult(new SelectionPosition(1, 0), SelectionHitKind.Empty);
 
         var lineCount = ResolveLineCount();
-        var relativeY = point.Y - TopPadding;
+        var relativeY = point.Y - ResolveContentTopPadding();
         if (relativeY < 0)
             return new SelectionHitResult(new SelectionPosition(1, 0), SelectionHitKind.Empty);
 
@@ -914,6 +1012,110 @@ public sealed class VirtualizedPreviewTextControl : Control
     }
 
     private int ResolveLineCount() => Document?.LineCount ?? _lineCount;
+
+    private void DrawVisibleSectionDividers(
+        DrawingContext context,
+        int firstVisibleLine,
+        int lastVisibleLine,
+        double lineHeight)
+    {
+        if (SectionDividerBrush is null || Document?.Sections is not { Count: > 0 } sections)
+            return;
+
+        var firstSectionIndex = PreviewDocumentSectionLookup.FindFirstIntersectingSectionIndex(sections, firstVisibleLine);
+        if (firstSectionIndex < 0)
+            return;
+
+        var right = Math.Max(LeftPadding + 24.0, Bounds.Width - RightPadding);
+        if (right <= LeftPadding)
+            return;
+
+        var dividerPen = new Pen(SectionDividerBrush, 1.25);
+        var dividerOffset = Math.Max(2.0, Math.Floor(lineHeight * 0.35));
+
+        for (var i = firstSectionIndex; i < sections.Count; i++)
+        {
+            var section = sections[i];
+            if (section.StartLine > lastVisibleLine)
+                break;
+
+            if (section.StartLine <= 1)
+                continue;
+
+            var y = ResolveContentTopPadding() + ((section.HeaderLine - 1) * lineHeight) - dividerOffset;
+            context.DrawLine(dividerPen, new Point(LeftPadding, y), new Point(right, y));
+        }
+    }
+
+    private void DrawStickyHeader(DrawingContext context, Typeface typeface)
+    {
+        var headerHeight = ResolveStickyHeaderHeight();
+        if (headerHeight <= 0)
+            return;
+
+        var left = Math.Max(0, HorizontalOffset);
+        var top = Math.Floor(Math.Max(0, VerticalOffset));
+        var headerWidth = ViewportWidth > 0 ? ViewportWidth : Bounds.Width;
+        var headerBounds = new Rect(left, top, headerWidth, headerHeight);
+        if (headerBounds.Width <= 0 || headerBounds.Height <= 0)
+            return;
+
+        if (StickyHeaderBackgroundBrush is not null)
+            context.FillRectangle(StickyHeaderBackgroundBrush, headerBounds);
+
+        if (StickyHeaderBorderBrush is not null)
+        {
+            var borderPen = new Pen(StickyHeaderBorderBrush, 1);
+            var borderY = top + headerHeight - 0.5;
+            context.DrawLine(borderPen, new Point(left, borderY), new Point(left + headerWidth, borderY));
+        }
+
+        var textWidth = Math.Max(0, headerWidth - LeftPadding - RightPadding);
+        if (!StickyHeaderVisible || textWidth <= 1 || string.IsNullOrWhiteSpace(StickyHeaderText))
+            return;
+
+        var headerText = TrimStickyHeaderText(StickyHeaderText, textWidth, typeface);
+        var formattedText = BuildFormattedText(headerText, typeface);
+        var textY = top + Math.Max(3.0, Math.Floor((headerHeight - formattedText.Height) / 2.0));
+        context.DrawText(formattedText, new Point(left + LeftPadding, textY));
+    }
+
+    private double ResolveStickyHeaderHeight()
+    {
+        if (!StickyHeaderReserved)
+            return 0;
+
+        return Math.Max(24.0, Math.Ceiling(TextFontSize + 12.0));
+    }
+
+    private double ResolveContentTopPadding() => TopPadding + ResolveStickyHeaderHeight();
+
+    private string TrimStickyHeaderText(string text, double availableWidth, Typeface typeface)
+    {
+        if (string.IsNullOrEmpty(text) || availableWidth <= 0)
+            return string.Empty;
+
+        if (BuildFormattedText(text, typeface).Width <= availableWidth)
+            return text;
+
+        const string ellipsis = "...";
+        if (BuildFormattedText(ellipsis, typeface).Width > availableWidth)
+            return string.Empty;
+
+        var low = 0;
+        var high = text.Length;
+        while (low < high)
+        {
+            var mid = (low + high + 1) / 2;
+            var candidate = text[..mid] + ellipsis;
+            if (BuildFormattedText(candidate, typeface).Width <= availableWidth)
+                low = mid;
+            else
+                high = mid - 1;
+        }
+
+        return low <= 0 ? ellipsis : text[..low] + ellipsis;
+    }
 
     private Typeface ResolveTypeface() =>
         new(TextFontFamily ?? FontFamily.Default, FontStyle.Normal, FontWeight.Normal);
