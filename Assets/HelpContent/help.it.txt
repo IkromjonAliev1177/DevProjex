@@ -106,7 +106,12 @@ Albero + contenuto:
 ## 6) Modalità anteprima
 Si apre con il pulsante con icona a forma di occhio nella barra superiore o con Ctrl+B.
 
-Mostra il risultato finale in sola lettura, senza copia negli appunti e senza esportazione su file.
+Mostra il risultato finale in un’area di lavoro separata accanto all’albero. Questa modalità non copia nulla negli appunti e non esporta nulla su file: serve solo per la visualizzazione.
+
+Per impostazione predefinita l’area di lavoro si apre così:
+* a sinistra — albero del progetto;
+* al centro — pannello di anteprima;
+* a destra — pannello delle impostazioni, se era aperto.
 
 Modalità disponibili:
 * Albero
@@ -118,21 +123,37 @@ Si applicano le stesse regole della copia e dell’esportazione:
 * se la selezione è vuota, viene usato il set completo dei dati;
 * vengono applicate le regole di ignoramento e i parametri di selezione correnti.
 
-Quando l’anteprima è aperta, ricerca e filtro non sono disponibili.
-Nelle opzioni è disponibile solo la modifica del font.
-Chiusura: pulsante X oppure nuovo clic sull’icona occhio.
+Inoltre:
+* i file nell’anteprima sono separati da linee orizzontali;
+* durante lo scorrimento, il percorso del file corrente resta fissato in alto;
+* lo zoom dell’albero e quello dell’anteprima possono vivere separatamente.
+
+Pulsanti:
+* X nel pannello dell’albero — nasconde l’albero e lascia solo il pannello di anteprima;
+* X nella barra superiore dell’anteprima — chiude completamente la modalità anteprima;
+* anche premere di nuovo l’icona occhio o Ctrl+B chiude la modalità anteprima.
+
+Ricerca e filtro restano disponibili finché nell’anteprima è visibile il pannello dell’albero.
+Se l’albero è nascosto, ricerca e filtro diventano temporaneamente non disponibili fino all’uscita dalla modalità solo anteprima.
 
 ## 7) Visualizza
 ### Zoom
 * Ctrl++ / Ctrl+= — aumenta
 * Ctrl+- — riduci
 * Ctrl+0 — reset
-* Ctrl + rotellina sul tree e in modalità anteprima — zoom fluido
+* Ctrl + rotellina — zoom fluido nel pannello sotto il cursore
+
+Comportamento:
+* in modalità normale viene scalato l’albero;
+* in anteprima con l’albero visibile, Aumenta, Riduci e Reset dal menu si applicano contemporaneamente all’albero e all’anteprima;
+* con Ctrl + rotellina, albero e anteprima scalano in modo indipendente in base alla posizione del cursore;
+* in modalità solo anteprima viene scalato solo il pannello di anteprima.
 
 Intervallo: 6–28, reset: 15.
 
 ### Modalità compatta
 Rende l'interfaccia più densa: spazi più piccoli nell'albero e nelle impostazioni.
+Quando l’area di lavoro di anteprima è attiva, la modalità compatta viene abilitata automaticamente.
 
 ### Animazione albero
 Attiva un'animazione di scorrimento fluido quando si passa il mouse sulle righe dell'albero.
@@ -155,7 +176,8 @@ Alla chiusura della ricerca, la query viene svuotata dopo il completamento dell�
 
 Limitazioni:
 * all’apertura della ricerca, il filtro si chiude automaticamente;
-* in modalità anteprima, la ricerca non è disponibile.
+* la ricerca è disponibile in anteprima finché il pannello dell’albero è visibile;
+* se l’albero è nascosto, la ricerca è temporaneamente non disponibile.
 
 ## 9) Filtra per nome
 Mostra solo i nodi che corrispondono al filtro e i loro genitori. Aggiornamento con debounce.
@@ -164,7 +186,8 @@ Mostra solo i nodi che corrispondono al filtro e i loro genitori. Aggiornamento 
 
 Limitazioni:
 * all’apertura del filtro, la ricerca si chiude automaticamente;
-* in modalità anteprima, il filtro non è disponibile.
+* il filtro è disponibile in anteprima finché il pannello dell’albero è visibile;
+* se l’albero è nascosto, il filtro è temporaneamente non disponibile.
 
 ## 10) Opzioni
 Liste a destra:
