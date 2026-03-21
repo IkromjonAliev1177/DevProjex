@@ -27,8 +27,8 @@ jobs:
         shell: pwsh
         run: ./Scripts/release-all.ps1 -ValidateConfigOnly
 
-  build-test:
-    name: CI (${{ matrix.name }})
+  test-suite:
+    name: CI (${{ matrix.os_name }} / ${{ matrix.suite_name }})
     needs: validate-release-config
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 45
@@ -36,18 +36,69 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: Windows
+          - os_name: Windows
             runner: windows-latest
             os_id: windows
-            run_integration: true
-          - name: Linux
+            suite_name: Unit
+            suite_id: unit
+            project_path: Tests/DevProjex.Tests.Unit/DevProjex.Tests.Unit.csproj
+            trx_name: unit.trx
+          - os_name: Windows
+            runner: windows-latest
+            os_id: windows
+            suite_name: Integration
+            suite_id: integration
+            project_path: Tests/DevProjex.Tests.Integration/DevProjex.Tests.Integration.csproj
+            trx_name: integration.trx
+          - os_name: Windows
+            runner: windows-latest
+            os_id: windows
+            suite_name: UI
+            suite_id: ui
+            project_path: Tests/DevProjex.Tests.UI/DevProjex.Tests.UI.csproj
+            trx_name: ui.trx
+          - os_name: Linux
             runner: ubuntu-latest
             os_id: linux
-            run_integration: true
-          - name: macOS
+            suite_name: Unit
+            suite_id: unit
+            project_path: Tests/DevProjex.Tests.Unit/DevProjex.Tests.Unit.csproj
+            trx_name: unit.trx
+          - os_name: Linux
+            runner: ubuntu-latest
+            os_id: linux
+            suite_name: Integration
+            suite_id: integration
+            project_path: Tests/DevProjex.Tests.Integration/DevProjex.Tests.Integration.csproj
+            trx_name: integration.trx
+          - os_name: Linux
+            runner: ubuntu-latest
+            os_id: linux
+            suite_name: UI
+            suite_id: ui
+            project_path: Tests/DevProjex.Tests.UI/DevProjex.Tests.UI.csproj
+            trx_name: ui.trx
+          - os_name: macOS
             runner: macos-latest
             os_id: macos
-            run_integration: true
+            suite_name: Unit
+            suite_id: unit
+            project_path: Tests/DevProjex.Tests.Unit/DevProjex.Tests.Unit.csproj
+            trx_name: unit.trx
+          - os_name: macOS
+            runner: macos-latest
+            os_id: macos
+            suite_name: Integration
+            suite_id: integration
+            project_path: Tests/DevProjex.Tests.Integration/DevProjex.Tests.Integration.csproj
+            trx_name: integration.trx
+          - os_name: macOS
+            runner: macos-latest
+            os_id: macos
+            suite_name: UI
+            suite_id: ui
+            project_path: Tests/DevProjex.Tests.UI/DevProjex.Tests.UI.csproj
+            trx_name: ui.trx
 
     steps:
       - uses: actions/checkout@v4
@@ -65,7 +116,7 @@ jobs:
         shell: pwsh
         run: dotnet build DevProjex.sln -c Release --no-restore
 
-      - name: Ensure Linux UI test runner
+      - name: Ensure Linux headless runner
         if: ${{ matrix.os_id == 'linux' }}
         shell: bash
         run: |
@@ -74,54 +125,32 @@ jobs:
             sudo apt-get install -y xvfb
           fi
 
-      - name: Test Unit
+      - name: Run ${{ matrix.suite_name }} Tests
         if: ${{ matrix.os_id != 'linux' }}
         shell: pwsh
         run: >
-          dotnet test Tests/DevProjex.Tests.Unit/DevProjex.Tests.Unit.csproj
+          dotnet test ${{ matrix.project_path }}
           -c Release
           --no-build
           --verbosity normal
-          --logger "trx;LogFileName=unit.trx"
-          --results-directory "TestResults/unit"
+          --logger "trx;LogFileName=${{ matrix.trx_name }}"
+          --results-directory "TestResults/${{ matrix.suite_id }}"
 
-      - name: Test Unit (Linux headless)
+      - name: Run ${{ matrix.suite_name }} Tests (Linux headless)
         if: ${{ matrix.os_id == 'linux' }}
         shell: bash
         run: >
-          xvfb-run -a dotnet test Tests/DevProjex.Tests.Unit/DevProjex.Tests.Unit.csproj
+          xvfb-run -a dotnet test ${{ matrix.project_path }}
           -c Release
           --no-build
           --verbosity normal
-          --logger "trx;LogFileName=unit.trx"
-          --results-directory "TestResults/unit"
-
-      - name: Test Integration
-        if: ${{ matrix.run_integration && matrix.os_id != 'linux' }}
-        shell: pwsh
-        run: >
-          dotnet test Tests/DevProjex.Tests.Integration/DevProjex.Tests.Integration.csproj
-          -c Release
-          --no-build
-          --verbosity normal
-          --logger "trx;LogFileName=integration.trx"
-          --results-directory "TestResults/integration"
-
-      - name: Test Integration (Linux headless)
-        if: ${{ matrix.run_integration && matrix.os_id == 'linux' }}
-        shell: bash
-        run: >
-          xvfb-run -a dotnet test Tests/DevProjex.Tests.Integration/DevProjex.Tests.Integration.csproj
-          -c Release
-          --no-build
-          --verbosity normal
-          --logger "trx;LogFileName=integration.trx"
-          --results-directory "TestResults/integration"
+          --logger "trx;LogFileName=${{ matrix.trx_name }}"
+          --results-directory "TestResults/${{ matrix.suite_id }}"
 
       - name: Upload Test Results
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
-          name: test-results-${{ matrix.os_id }}
+          name: test-results-${{ matrix.os_id }}-${{ matrix.suite_id }}
           path: TestResults/**/*.trx
           if-no-files-found: ignore
