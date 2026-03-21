@@ -3626,9 +3626,10 @@ public partial class MainWindow : Window
         {
             await Dispatcher.UIThread.InvokeAsync(static () => { }, DispatcherPriority.Render);
 
-            if (!startedFromPreviewOnly)
-                TryPreparePreviewTreePaneSnapshot();
-
+            // Keep the live tree visible during preview close. Preview compact is removed
+            // only after the animation completes, so a bitmap snapshot here only adds
+            // resampling artifacts and the "DPI zoom" effect on the expanding tree pane.
+            ResetPreviewTreePaneSnapshotVisualState();
             TryPreparePreviewPaneSnapshot();
 
             EnsurePreviewTreePaneTransitions();
