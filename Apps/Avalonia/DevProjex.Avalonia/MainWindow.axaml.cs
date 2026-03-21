@@ -2337,9 +2337,16 @@ public partial class MainWindow : Window
 
         var verticalOffset = _previewTextScrollViewer?.Offset.Y ?? _previewTextControl.VerticalOffset;
         var topLine = _previewTextControl.GetLineNumberAtVerticalOffset(verticalOffset);
+        // Keep the sticky header hidden until the viewport actually enters the first file section.
+        if (topLine < sections[0].StartLine)
+        {
+            HidePreviewStickyPath();
+            return;
+        }
+
         var currentSection = PreviewDocumentSectionLookup.FindContainingSection(sections, topLine) ??
                              PreviewDocumentSectionLookup.FindContainingOrNextSection(sections, topLine) ??
-                             sections[0];
+                             sections[^1];
 
         if (currentSection is null)
         {
