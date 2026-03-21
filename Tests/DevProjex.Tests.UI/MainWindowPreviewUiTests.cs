@@ -1,12 +1,12 @@
 namespace DevProjex.Tests.UI;
 
-public sealed class MainWindowPreviewUiTests
+[Collection(UiWorkspaceCollection.Name)]
+public sealed class MainWindowPreviewUiTests(UiWorkspaceFixture workspace)
 {
     [AvaloniaFact]
     public async Task LoadedProject_ShowsTreeAndSettingsBeforePreviewOpens()
     {
-        using var project = UiTestProject.CreateDefault();
-        var window = await UiTestDriver.CreateLoadedMainWindowAsync(project);
+        var window = await UiTestDriver.CreateLoadedMainWindowAsync(workspace.Project);
 
         try
         {
@@ -29,8 +29,7 @@ public sealed class MainWindowPreviewUiTests
     [AvaloniaFact]
     public async Task PreviewToggleButton_OpensPreviewBetweenTreeAndSettings()
     {
-        using var project = UiTestProject.CreateDefault();
-        var window = await UiTestDriver.CreateLoadedMainWindowAsync(project);
+        var window = await UiTestDriver.CreateLoadedMainWindowAsync(workspace.Project);
 
         try
         {
@@ -60,8 +59,7 @@ public sealed class MainWindowPreviewUiTests
     [AvaloniaFact]
     public async Task PreviewToggleButton_OpensPreviewNextToTreeWhenSettingsAreCollapsed()
     {
-        using var project = UiTestProject.CreateDefault();
-        var window = await UiTestDriver.CreateLoadedMainWindowAsync(project);
+        var window = await UiTestDriver.CreateLoadedMainWindowAsync(workspace.Project);
 
         try
         {
@@ -89,8 +87,7 @@ public sealed class MainWindowPreviewUiTests
     [AvaloniaFact]
     public async Task PreviewCloseButton_ClosesPreviewAndRestoresTreeWorkspace()
     {
-        using var project = UiTestProject.CreateDefault();
-        var window = await UiTestDriver.CreateLoadedMainWindowAsync(project);
+        var window = await UiTestDriver.CreateLoadedMainWindowAsync(workspace.Project);
 
         try
         {
@@ -114,8 +111,7 @@ public sealed class MainWindowPreviewUiTests
     [AvaloniaFact]
     public async Task TreeHideButton_SwitchesPreviewToPreviewOnly()
     {
-        using var project = UiTestProject.CreateDefault();
-        var window = await UiTestDriver.CreateLoadedMainWindowAsync(project);
+        var window = await UiTestDriver.CreateLoadedMainWindowAsync(workspace.Project);
 
         try
         {
@@ -139,8 +135,7 @@ public sealed class MainWindowPreviewUiTests
     [AvaloniaFact]
     public async Task FilterState_SurvivesPreviewOnlyCloseAndReopenCycle()
     {
-        using var project = UiTestProject.CreateDefault();
-        var window = await UiTestDriver.CreateLoadedMainWindowAsync(project);
+        var window = await UiTestDriver.CreateLoadedMainWindowAsync(workspace.Project);
 
         try
         {
@@ -187,8 +182,7 @@ public sealed class MainWindowPreviewUiTests
     [AvaloniaFact]
     public async Task SearchState_SurvivesPreviewOnlyCloseAndReopenCycle()
     {
-        using var project = UiTestProject.CreateDefault();
-        var window = await UiTestDriver.CreateLoadedMainWindowAsync(project);
+        var window = await UiTestDriver.CreateLoadedMainWindowAsync(workspace.Project);
 
         try
         {
@@ -235,8 +229,7 @@ public sealed class MainWindowPreviewUiTests
     [AvaloniaFact]
     public async Task StickyPath_RemainsHiddenUntilPreviewScrollReachesFirstFileSection()
     {
-        using var project = UiTestProject.CreateDefault();
-        var window = await UiTestDriver.CreateLoadedMainWindowAsync(project);
+        var window = await UiTestDriver.CreateLoadedMainWindowAsync(workspace.Project);
 
         try
         {
@@ -263,8 +256,7 @@ public sealed class MainWindowPreviewUiTests
     [AvaloniaFact]
     public async Task SpaceKey_DoesNotReinvokeLastToolbarButtonAfterPreviewButtonClick()
     {
-        using var project = UiTestProject.CreateDefault();
-        var window = await UiTestDriver.CreateLoadedMainWindowAsync(project);
+        var window = await UiTestDriver.CreateLoadedMainWindowAsync(workspace.Project);
 
         try
         {
@@ -286,8 +278,7 @@ public sealed class MainWindowPreviewUiTests
     [AvaloniaFact]
     public async Task PreviewToggleButton_WhenClickedTwice_ClosesPreviewWorkspace()
     {
-        using var project = UiTestProject.CreateDefault();
-        var window = await UiTestDriver.CreateLoadedMainWindowAsync(project);
+        var window = await UiTestDriver.CreateLoadedMainWindowAsync(workspace.Project);
 
         try
         {
@@ -308,8 +299,7 @@ public sealed class MainWindowPreviewUiTests
     [AvaloniaFact]
     public async Task PreviewModeButtons_SwitchBetweenTreeContentAndCombinedModes()
     {
-        using var project = UiTestProject.CreateDefault();
-        var window = await UiTestDriver.CreateLoadedMainWindowAsync(project);
+        var window = await UiTestDriver.CreateLoadedMainWindowAsync(workspace.Project);
 
         try
         {
@@ -333,8 +323,7 @@ public sealed class MainWindowPreviewUiTests
     [AvaloniaFact]
     public async Task PreviewOnlyCloseButton_RestoresPlainTreeWorkspaceWhenNoSuspendedTools()
     {
-        using var project = UiTestProject.CreateDefault();
-        var window = await UiTestDriver.CreateLoadedMainWindowAsync(project);
+        var window = await UiTestDriver.CreateLoadedMainWindowAsync(workspace.Project);
 
         try
         {
@@ -358,8 +347,7 @@ public sealed class MainWindowPreviewUiTests
     [AvaloniaFact]
     public async Task PreviewOpen_PreservesExistingFilterState()
     {
-        using var project = UiTestProject.CreateDefault();
-        var window = await UiTestDriver.CreateLoadedMainWindowAsync(project);
+        var window = await UiTestDriver.CreateLoadedMainWindowAsync(workspace.Project);
 
         try
         {
@@ -385,8 +373,7 @@ public sealed class MainWindowPreviewUiTests
     [AvaloniaFact]
     public async Task PreviewOpen_PreservesExistingSearchState()
     {
-        using var project = UiTestProject.CreateDefault();
-        var window = await UiTestDriver.CreateLoadedMainWindowAsync(project);
+        var window = await UiTestDriver.CreateLoadedMainWindowAsync(workspace.Project);
 
         try
         {
@@ -412,8 +399,7 @@ public sealed class MainWindowPreviewUiTests
     [AvaloniaFact]
     public async Task StickyPath_TextChangesWhenScrollingAcrossDifferentSections()
     {
-        using var project = UiTestProject.CreateDefault();
-        var window = await UiTestDriver.CreateLoadedMainWindowAsync(project);
+        var window = await UiTestDriver.CreateLoadedMainWindowAsync(workspace.Project);
 
         try
         {

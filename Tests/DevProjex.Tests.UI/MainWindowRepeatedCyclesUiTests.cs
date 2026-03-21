@@ -1,12 +1,12 @@
 namespace DevProjex.Tests.UI;
 
-public sealed class MainWindowRepeatedCyclesUiTests
+[Collection(UiWorkspaceCollection.Name)]
+public sealed class MainWindowRepeatedCyclesUiTests(UiWorkspaceFixture workspace)
 {
     [AvaloniaFact]
     public async Task PreviewWorkspace_RepeatedOpenCloseCyclesRemainStable()
     {
-        using var project = UiTestProject.CreateDefault();
-        var window = await UiTestDriver.CreateLoadedMainWindowAsync(project);
+        var window = await UiTestDriver.CreateLoadedMainWindowAsync(workspace.Project);
 
         try
         {
@@ -30,8 +30,7 @@ public sealed class MainWindowRepeatedCyclesUiTests
     [AvaloniaFact]
     public async Task PreviewTreeHide_RepeatedCyclesRemainStable()
     {
-        using var project = UiTestProject.CreateDefault();
-        var window = await UiTestDriver.CreateLoadedMainWindowAsync(project);
+        var window = await UiTestDriver.CreateLoadedMainWindowAsync(workspace.Project);
 
         try
         {
@@ -55,8 +54,7 @@ public sealed class MainWindowRepeatedCyclesUiTests
     [AvaloniaFact]
     public async Task PreviewWorkspace_RepeatedOpenCloseCyclesWithCollapsedSettingsRemainStable()
     {
-        using var project = UiTestProject.CreateDefault();
-        var window = await UiTestDriver.CreateLoadedMainWindowAsync(project);
+        var window = await UiTestDriver.CreateLoadedMainWindowAsync(workspace.Project);
 
         try
         {
@@ -85,8 +83,7 @@ public sealed class MainWindowRepeatedCyclesUiTests
     [AvaloniaFact]
     public async Task PreviewOnly_ResetZoomAffectsPreviewTargetOnly()
     {
-        using var project = UiTestProject.CreateDefault();
-        var window = await UiTestDriver.CreateLoadedMainWindowAsync(project);
+        var window = await UiTestDriver.CreateLoadedMainWindowAsync(workspace.Project);
 
         try
         {

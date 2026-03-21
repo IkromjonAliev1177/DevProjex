@@ -1,12 +1,12 @@
 namespace DevProjex.Tests.UI;
 
-public sealed class MainWindowWorkspaceInteractionUiTests
+[Collection(UiWorkspaceCollection.Name)]
+public sealed class MainWindowWorkspaceInteractionUiTests(UiWorkspaceFixture workspace)
 {
     [AvaloniaFact]
     public async Task FilterButton_RemainsEnabledButIgnoredInPreviewOnly()
     {
-        using var project = UiTestProject.CreateDefault();
-        var window = await UiTestDriver.CreateLoadedMainWindowAsync(project);
+        var window = await UiTestDriver.CreateLoadedMainWindowAsync(workspace.Project);
 
         try
         {
@@ -32,8 +32,7 @@ public sealed class MainWindowWorkspaceInteractionUiTests
     [AvaloniaFact]
     public async Task FilterButton_IgnoredInPreviewOnly_DoesNotClearSuspendedFilterState()
     {
-        using var project = UiTestProject.CreateDefault();
-        var window = await UiTestDriver.CreateLoadedMainWindowAsync(project);
+        var window = await UiTestDriver.CreateLoadedMainWindowAsync(workspace.Project);
 
         try
         {
@@ -74,8 +73,7 @@ public sealed class MainWindowWorkspaceInteractionUiTests
     [AvaloniaFact]
     public async Task TreePreviewSplitter_DragResizesTreeAndPreviewPanes()
     {
-        using var project = UiTestProject.CreateDefault();
-        var window = await UiTestDriver.CreateLoadedMainWindowAsync(project);
+        var window = await UiTestDriver.CreateLoadedMainWindowAsync(workspace.Project);
 
         try
         {
@@ -105,8 +103,7 @@ public sealed class MainWindowWorkspaceInteractionUiTests
     [AvaloniaFact]
     public async Task PreviewSettingsSplitter_DragResizesSettingsPaneWithinConfiguredBounds()
     {
-        using var project = UiTestProject.CreateDefault();
-        var window = await UiTestDriver.CreateLoadedMainWindowAsync(project);
+        var window = await UiTestDriver.CreateLoadedMainWindowAsync(workspace.Project);
 
         try
         {
@@ -138,8 +135,7 @@ public sealed class MainWindowWorkspaceInteractionUiTests
     [AvaloniaFact]
     public async Task CtrlWheelOverTree_ChangesOnlyTreeZoomInsidePreviewWorkspace()
     {
-        using var project = UiTestProject.CreateDefault();
-        var window = await UiTestDriver.CreateLoadedMainWindowAsync(project);
+        var window = await UiTestDriver.CreateLoadedMainWindowAsync(workspace.Project);
 
         try
         {
@@ -167,8 +163,7 @@ public sealed class MainWindowWorkspaceInteractionUiTests
     [AvaloniaFact]
     public async Task CtrlWheelOverPreview_ChangesOnlyPreviewZoomInsidePreviewWorkspace()
     {
-        using var project = UiTestProject.CreateDefault();
-        var window = await UiTestDriver.CreateLoadedMainWindowAsync(project);
+        var window = await UiTestDriver.CreateLoadedMainWindowAsync(workspace.Project);
 
         try
         {
@@ -196,8 +191,7 @@ public sealed class MainWindowWorkspaceInteractionUiTests
     [AvaloniaFact]
     public async Task CtrlZero_ResetsBothZoomTargetsWhenPreviewShowsTreeAndContent()
     {
-        using var project = UiTestProject.CreateDefault();
-        var window = await UiTestDriver.CreateLoadedMainWindowAsync(project);
+        var window = await UiTestDriver.CreateLoadedMainWindowAsync(workspace.Project);
 
         try
         {
@@ -231,8 +225,7 @@ public sealed class MainWindowWorkspaceInteractionUiTests
     [AvaloniaFact]
     public async Task TreePreviewSplitter_RespectsMinimumWidthsAtExtremeDrag()
     {
-        using var project = UiTestProject.CreateDefault();
-        var window = await UiTestDriver.CreateLoadedMainWindowAsync(project);
+        var window = await UiTestDriver.CreateLoadedMainWindowAsync(workspace.Project);
 
         try
         {
@@ -264,8 +257,7 @@ public sealed class MainWindowWorkspaceInteractionUiTests
     [AvaloniaFact]
     public async Task PreviewSettingsSplitter_RespectsHardBoundsAtExtremeDrag()
     {
-        using var project = UiTestProject.CreateDefault();
-        var window = await UiTestDriver.CreateLoadedMainWindowAsync(project);
+        var window = await UiTestDriver.CreateLoadedMainWindowAsync(workspace.Project);
 
         try
         {

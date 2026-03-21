@@ -1,12 +1,12 @@
 namespace DevProjex.Tests.UI;
 
-public sealed class MainWindowKeyboardAndSettingsUiTests
+[Collection(UiWorkspaceCollection.Name)]
+public sealed class MainWindowKeyboardAndSettingsUiTests(UiWorkspaceFixture workspace)
 {
     [AvaloniaFact]
     public async Task CtrlB_TogglesPreviewWorkspace()
     {
-        using var project = UiTestProject.CreateDefault();
-        var window = await UiTestDriver.CreateLoadedMainWindowAsync(project);
+        var window = await UiTestDriver.CreateLoadedMainWindowAsync(workspace.Project);
 
         try
         {
@@ -27,8 +27,7 @@ public sealed class MainWindowKeyboardAndSettingsUiTests
     [AvaloniaFact]
     public async Task CtrlP_TogglesSettingsWhilePreviewStaysVisible()
     {
-        using var project = UiTestProject.CreateDefault();
-        var window = await UiTestDriver.CreateLoadedMainWindowAsync(project);
+        var window = await UiTestDriver.CreateLoadedMainWindowAsync(workspace.Project);
 
         try
         {
@@ -56,8 +55,7 @@ public sealed class MainWindowKeyboardAndSettingsUiTests
     [AvaloniaFact]
     public async Task PreviewOpen_WhenSettingsAreHidden_DoesNotReopenSettings()
     {
-        using var project = UiTestProject.CreateDefault();
-        var window = await UiTestDriver.CreateLoadedMainWindowAsync(project);
+        var window = await UiTestDriver.CreateLoadedMainWindowAsync(workspace.Project);
 
         try
         {
@@ -82,8 +80,7 @@ public sealed class MainWindowKeyboardAndSettingsUiTests
     [AvaloniaFact]
     public async Task PreviewClose_PreservesCollapsedSettingsState()
     {
-        using var project = UiTestProject.CreateDefault();
-        var window = await UiTestDriver.CreateLoadedMainWindowAsync(project);
+        var window = await UiTestDriver.CreateLoadedMainWindowAsync(workspace.Project);
 
         try
         {
@@ -108,8 +105,7 @@ public sealed class MainWindowKeyboardAndSettingsUiTests
     [AvaloniaFact]
     public async Task PreviewOnlyClose_PreservesCollapsedSettingsState()
     {
-        using var project = UiTestProject.CreateDefault();
-        var window = await UiTestDriver.CreateLoadedMainWindowAsync(project);
+        var window = await UiTestDriver.CreateLoadedMainWindowAsync(workspace.Project);
 
         try
         {
@@ -135,8 +131,7 @@ public sealed class MainWindowKeyboardAndSettingsUiTests
     [AvaloniaFact]
     public async Task CtrlShiftN_OpensFilterHotkeyPath()
     {
-        using var project = UiTestProject.CreateDefault();
-        var window = await UiTestDriver.CreateLoadedMainWindowAsync(project);
+        var window = await UiTestDriver.CreateLoadedMainWindowAsync(workspace.Project);
 
         try
         {

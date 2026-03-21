@@ -238,7 +238,7 @@ public partial class MainWindow : Window
     private const double SettingsPanelWidth = 328.0;
     private const double SettingsPanelMinWidth = 248.0;
     private const double SettingsPanelMaxWidth = 320.0;
-    private static readonly TimeSpan SettingsPanelAnimationDuration = TimeSpan.FromMilliseconds(300);
+    private static readonly TimeSpan SettingsPanelAnimationDuration = UiTimingProfile.Scale(TimeSpan.FromMilliseconds(300));
     private const double SplitTreePaneMinWidth = SearchToolbarMinWidth;
     private const double SplitPreviewPaneMinWidth = 320.0;
     private const double TreePreviewSplitterWidth = 4.0;
@@ -262,8 +262,8 @@ public partial class MainWindow : Window
     private bool _searchBarAnimating;
     private bool _searchBarClosePending;
     private const double SearchBarHeight = 46.0;
-    private static readonly TimeSpan SearchBarAnimationDuration = TimeSpan.FromMilliseconds(250);
-    private static readonly TimeSpan SearchFilterHotkeyDebounceWindow = TimeSpan.FromMilliseconds(220);
+    private static readonly TimeSpan SearchBarAnimationDuration = UiTimingProfile.Scale(TimeSpan.FromMilliseconds(250));
+    private static readonly TimeSpan SearchFilterHotkeyDebounceWindow = UiTimingProfile.Scale(TimeSpan.FromMilliseconds(220));
     private long _lastSearchHotkeyTimestamp;
     private long _lastFilterHotkeyTimestamp;
     private int _pendingSearchHotkeyToggle;
@@ -277,7 +277,7 @@ public partial class MainWindow : Window
     private bool _filterBarAnimating;
     private bool _filterBarClosePending;
     private const double FilterBarHeight = 46.0;
-    private static readonly TimeSpan FilterBarAnimationDuration = TimeSpan.FromMilliseconds(250);
+    private static readonly TimeSpan FilterBarAnimationDuration = UiTimingProfile.Scale(TimeSpan.FromMilliseconds(250));
 
     // Tree pane animation inside preview workspace
     private bool _treePaneAnimating;
@@ -297,7 +297,7 @@ public partial class MainWindow : Window
     private Button? _previewTreeModeButton;
     private Button? _previewContentModeButton;
     private Button? _previewTreeAndContentModeButton;
-    private static readonly TimeSpan PreviewSegmentThumbAnimationDuration = TimeSpan.FromMilliseconds(220);
+    private static readonly TimeSpan PreviewSegmentThumbAnimationDuration = UiTimingProfile.Scale(TimeSpan.FromMilliseconds(220));
     private const double PanelIslandSpacing = 4.0;
     private const int PreviewWarmupFileLimit = 24;
     private const double DefaultWindowMinWidth = 850.0;
@@ -342,7 +342,7 @@ public partial class MainWindow : Window
     private int _metricsRecalcVersion;
     private int _previewSelectionMetricsVersion;
     private const double CompactStatusMetricsThresholdWidth = 1050;
-    private static readonly TimeSpan PreviewSelectionMetricsDebounceInterval = TimeSpan.FromMilliseconds(80);
+    private static readonly TimeSpan PreviewSelectionMetricsDebounceInterval = UiTimingProfile.Scale(TimeSpan.FromMilliseconds(80));
     private int _lastStatusTreeLines;
     private int _lastStatusTreeChars;
     private int _lastStatusTreeTokens;
@@ -2410,7 +2410,7 @@ public partial class MainWindow : Window
             _previewDebounceTimer = new DispatcherTimer
             {
                 // 350ms delay ensures thumb animation (250ms) completes fully before loading
-                Interval = TimeSpan.FromMilliseconds(350)
+                Interval = UiTimingProfile.Scale(TimeSpan.FromMilliseconds(350))
             };
             _previewDebounceTimer.Tick += OnPreviewDebounceTick;
         }
@@ -3670,7 +3670,7 @@ public partial class MainWindow : Window
     {
         _ = Task.Run(async () =>
         {
-            await Task.Delay(400);
+            await Task.Delay(UiTimingProfile.Scale(TimeSpan.FromMilliseconds(400)));
             ForceMemoryCleanup();
         });
     }
@@ -3752,7 +3752,7 @@ public partial class MainWindow : Window
                     return;
 
                 // Keep a tiny buffer so panel/tree transitions settle first.
-                await Task.Delay(140, cleanupCts.Token);
+                await Task.Delay(UiTimingProfile.Scale(TimeSpan.FromMilliseconds(140)), cleanupCts.Token);
                 if (cleanupVersion != Volatile.Read(ref _previewMemoryCleanupVersion))
                     return;
 
@@ -3807,7 +3807,7 @@ public partial class MainWindow : Window
         cancellationToken.ThrowIfCancellationRequested();
 
         // Small buffer helps avoid visual contention with immediate post-load updates.
-        await Task.Delay(140, cancellationToken);
+        await Task.Delay(UiTimingProfile.Scale(TimeSpan.FromMilliseconds(140)), cancellationToken);
     }
 
     private void EnsurePreviewTreePaneTransitions()
@@ -4501,13 +4501,13 @@ public partial class MainWindow : Window
     private static Task WaitForPanelAnimationAsync(TimeSpan duration)
     {
         // A tiny safety buffer ensures state flags reset after the transition settles.
-        return Task.Delay(duration + TimeSpan.FromMilliseconds(24));
+        return Task.Delay(duration + UiTimingProfile.AnimationSettleBuffer);
     }
 
     private static Task WaitForPanelAnimationAsync(TimeSpan duration, CancellationToken cancellationToken)
     {
         // A tiny safety buffer ensures state flags reset after the transition settles.
-        return Task.Delay(duration + TimeSpan.FromMilliseconds(24), cancellationToken);
+        return Task.Delay(duration + UiTimingProfile.AnimationSettleBuffer, cancellationToken);
     }
 
     private void OnSetLightTheme(object? sender, RoutedEventArgs e)

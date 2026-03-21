@@ -1,12 +1,12 @@
 namespace DevProjex.Tests.UI;
 
-public sealed class MainWindowSearchFilterUiTests
+[Collection(UiWorkspaceCollection.Name)]
+public sealed class MainWindowSearchFilterUiTests(UiWorkspaceFixture workspace)
 {
     [AvaloniaFact]
     public async Task SearchHotkey_OpensSearchAndFindsMatches()
     {
-        using var project = UiTestProject.CreateDefault();
-        var window = await UiTestDriver.CreateLoadedMainWindowAsync(project);
+        var window = await UiTestDriver.CreateLoadedMainWindowAsync(workspace.Project);
 
         try
         {
@@ -36,8 +36,7 @@ public sealed class MainWindowSearchFilterUiTests
     [AvaloniaFact]
     public async Task FilterToggleButton_OpensFilterAndFiltersTree()
     {
-        using var project = UiTestProject.CreateDefault();
-        var window = await UiTestDriver.CreateLoadedMainWindowAsync(project);
+        var window = await UiTestDriver.CreateLoadedMainWindowAsync(workspace.Project);
 
         try
         {
@@ -68,8 +67,7 @@ public sealed class MainWindowSearchFilterUiTests
     [AvaloniaFact]
     public async Task SearchAndFilter_AreMutuallyExclusiveWhenSwitchingTools()
     {
-        using var project = UiTestProject.CreateDefault();
-        var window = await UiTestDriver.CreateLoadedMainWindowAsync(project);
+        var window = await UiTestDriver.CreateLoadedMainWindowAsync(workspace.Project);
 
         try
         {
@@ -113,8 +111,7 @@ public sealed class MainWindowSearchFilterUiTests
     [AvaloniaFact]
     public async Task SearchHotkey_IsIgnoredInPreviewOnly()
     {
-        using var project = UiTestProject.CreateDefault();
-        var window = await UiTestDriver.CreateLoadedMainWindowAsync(project);
+        var window = await UiTestDriver.CreateLoadedMainWindowAsync(workspace.Project);
 
         try
         {

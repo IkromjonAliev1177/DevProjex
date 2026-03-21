@@ -3,6 +3,10 @@ namespace DevProjex.Tests.UI;
 internal static class UiTestDriver
 {
     private static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(20);
+    private static readonly bool FastTimingsEnabled =
+        string.Equals(Environment.GetEnvironmentVariable("DEVPROJEX_FAST_UI_TESTS"), "1", StringComparison.Ordinal);
+    private static readonly TimeSpan PollDelay = FastTimingsEnabled ? TimeSpan.FromMilliseconds(1) : TimeSpan.FromMilliseconds(15);
+    private static readonly TimeSpan FrameDelay = FastTimingsEnabled ? TimeSpan.FromMilliseconds(1) : TimeSpan.FromMilliseconds(6);
 
     public static async Task<MainWindow> CreateLoadedMainWindowAsync(UiTestProject project)
     {
@@ -400,7 +404,7 @@ internal static class UiTestDriver
             if (predicate())
                 return;
 
-            await Task.Delay(15);
+            await Task.Delay(PollDelay);
         }
 
         throw new XunitException($"Timed out waiting for {description}. Current state: {DescribeState(window)}");
@@ -408,14 +412,18 @@ internal static class UiTestDriver
 
     public static async Task WaitForSettledFramesAsync(int frameCount)
     {
-        for (var index = 0; index < frameCount; index++)
+        var effectiveFrameCount = FastTimingsEnabled
+            ? Math.Max(1, (int)Math.Ceiling(frameCount * 0.35))
+            : frameCount;
+
+        for (var index = 0; index < effectiveFrameCount; index++)
         {
             // Drive both dispatcher queues and the headless render timer so tests observe
             // the same visual state users would see after an animation or layout pass.
             await Dispatcher.UIThread.InvokeAsync(static () => { }, DispatcherPriority.Background);
             await Dispatcher.UIThread.InvokeAsync(static () => { }, DispatcherPriority.Render);
             AvaloniaHeadlessPlatform.ForceRenderTimerTick(1);
-            await Task.Delay(6);
+            await Task.Delay(FrameDelay);
         }
     }
 

@@ -9,5 +9,8 @@ namespace DevProjex.Tests.UI;
 public static class AvaloniaHeadlessTestApp
 {
     public static AppBuilder BuildAvaloniaApp()
-        => Program.BuildAvaloniaApp().UseHeadless(new AvaloniaHeadlessPlatformOptions());
+    {
+        Environment.SetEnvironmentVariable("DEVPROJEX_FAST_UI_TESTS", "1");
+        return Program.BuildAvaloniaApp().UseHeadless(new AvaloniaHeadlessPlatformOptions());
+    }
 }

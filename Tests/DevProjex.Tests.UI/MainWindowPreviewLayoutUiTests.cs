@@ -1,12 +1,12 @@
 namespace DevProjex.Tests.UI;
 
-public sealed class MainWindowPreviewLayoutUiTests
+[Collection(UiWorkspaceCollection.Name)]
+public sealed class MainWindowPreviewLayoutUiTests(UiWorkspaceFixture workspace)
 {
     [AvaloniaFact]
     public async Task PreviewOnlyClose_RestoresActiveFilterAfterToolbarCycle()
     {
-        using var project = UiTestProject.CreateDefault();
-        var window = await UiTestDriver.CreateLoadedMainWindowAsync(project);
+        var window = await UiTestDriver.CreateLoadedMainWindowAsync(workspace.Project);
 
         try
         {
@@ -40,8 +40,7 @@ public sealed class MainWindowPreviewLayoutUiTests
     [AvaloniaFact]
     public async Task PreviewOnlyClose_RestoresActiveSearchAfterToolbarCycle()
     {
-        using var project = UiTestProject.CreateDefault();
-        var window = await UiTestDriver.CreateLoadedMainWindowAsync(project);
+        var window = await UiTestDriver.CreateLoadedMainWindowAsync(workspace.Project);
 
         try
         {
