@@ -7,9 +7,10 @@ public sealed class InMemoryPreviewTextDocument : IPreviewTextDocument
     private readonly int _lineCount;
     private readonly int _maxLineLength;
 
-    public InMemoryPreviewTextDocument(string? text)
+    public InMemoryPreviewTextDocument(string? text, IReadOnlyList<PreviewDocumentSection>? sections = null)
     {
         _text = text ?? string.Empty;
+        Sections = sections is { Count: > 0 } ? sections.ToArray() : Array.Empty<PreviewDocumentSection>();
         (_lineCount, _maxLineLength) = BuildLineMetadata(_text, _lineStarts);
     }
 
@@ -18,6 +19,8 @@ public sealed class InMemoryPreviewTextDocument : IPreviewTextDocument
     public int MaxLineLength => _maxLineLength;
 
     public long CharacterCount => _text.Length;
+
+    public IReadOnlyList<PreviewDocumentSection> Sections { get; }
 
     public string GetLineText(int lineNumber)
     {

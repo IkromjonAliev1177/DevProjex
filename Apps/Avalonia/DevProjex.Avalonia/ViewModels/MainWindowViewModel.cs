@@ -16,6 +16,13 @@ public enum PreviewContentMode
     TreeAndContent
 }
 
+public enum PreviewWorkspaceMode
+{
+    Off,
+    TreeAndPreview,
+    PreviewOnly
+}
+
 public sealed class MainWindowViewModel : ViewModelBase, IDisposable
 {
     public const string TitleVersion = "4.8";
@@ -64,8 +71,8 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
     private bool _isMicaEnabled;
     private bool _isAcrylicEnabled;
     private bool _isTransparentEnabled = true;
-    private bool _isPreviewMode;
-    private bool _isSplitMode;
+    private PreviewWorkspaceMode _previewWorkspaceMode;
+    private bool _isPreviewCompactModeActive;
     private bool _isPreviewLoading;
     private string _previewText = string.Empty;
     private IPreviewTextDocument? _previewDocument;
@@ -270,43 +277,50 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
             _isProjectLoaded = value;
             RaisePropertyChanged();
             RaisePropertyChanged(nameof(IsSearchFilterAvailable));
+            RaisePropertyChanged(nameof(AreFilterSettingsEnabled));
         }
     }
 
-    public bool IsPreviewMode
+    public PreviewWorkspaceMode PreviewWorkspaceMode
     {
-        get => _isPreviewMode;
+        get => _previewWorkspaceMode;
         set
         {
-            if (_isPreviewMode == value) return;
-            _isPreviewMode = value;
+            if (_previewWorkspaceMode == value) return;
+            var previousIsCompactModeEffective = IsCompactModeEffective;
+            var previousCanToggleCompactMode = CanToggleCompactMode;
+            _previewWorkspaceMode = value;
             RaisePropertyChanged();
+            RaisePropertyChanged(nameof(IsPreviewMode));
+            RaisePropertyChanged(nameof(IsPreviewTreeVisible));
+            RaisePropertyChanged(nameof(IsPreviewOnlyMode));
             RaisePreviewStatePropertiesChanged();
+
+            if (previousCanToggleCompactMode != CanToggleCompactMode)
+                RaisePropertyChanged(nameof(CanToggleCompactMode));
+
+            if (previousIsCompactModeEffective != IsCompactModeEffective)
+            {
+                RaiseCompactModePropertiesChanged();
+            }
         }
     }
 
-    public bool IsSplitMode
-    {
-        get => _isSplitMode;
-        set
-        {
-            if (_isSplitMode == value) return;
-            _isSplitMode = value;
-            RaisePropertyChanged();
-            RaisePreviewStatePropertiesChanged();
-            RaiseCompactModePropertiesChanged();
-        }
-    }
+    public bool IsPreviewMode => _previewWorkspaceMode != PreviewWorkspaceMode.Off;
 
-    public bool IsAnyPreviewVisible => _isPreviewMode || _isSplitMode;
+    public bool IsPreviewTreeVisible => _previewWorkspaceMode == PreviewWorkspaceMode.TreeAndPreview;
 
-    public bool IsPreviewPaneVisible => _isPreviewMode || _isSplitMode;
+    public bool IsPreviewOnlyMode => _previewWorkspaceMode == PreviewWorkspaceMode.PreviewOnly;
 
-    public bool IsTreePaneVisible => !_isPreviewMode;
+    public bool IsAnyPreviewVisible => IsPreviewMode;
 
-    public bool IsSearchFilterAvailable => _isProjectLoaded && !_isPreviewMode;
+    public bool IsPreviewPaneVisible => IsPreviewMode;
 
-    public bool AreFilterSettingsEnabled => !_isPreviewMode;
+    public bool IsTreePaneVisible => _previewWorkspaceMode != PreviewWorkspaceMode.PreviewOnly;
+
+    public bool IsSearchFilterAvailable => _isProjectLoaded && IsTreePaneVisible;
+
+    public bool AreFilterSettingsEnabled => _isProjectLoaded;
 
     public bool SettingsVisible
     {
@@ -407,9 +421,20 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         }
     }
 
-    public bool IsCompactModeEffective => _isSplitMode || _isCompactMode;
+    public bool IsCompactModeEffective => _isCompactMode || (IsPreviewMode && _isPreviewCompactModeActive);
 
-    public bool CanToggleCompactMode => !_isSplitMode;
+    public bool CanToggleCompactMode => !IsPreviewMode;
+
+    public void SetPreviewCompactModeActive(bool active)
+    {
+        if (_isPreviewCompactModeActive == active)
+            return;
+
+        var previousIsCompactModeEffective = IsCompactModeEffective;
+        _isPreviewCompactModeActive = active;
+        if (previousIsCompactModeEffective != IsCompactModeEffective)
+            RaiseCompactModePropertiesChanged();
+    }
 
     public bool IsTreeAnimationEnabled
     {
@@ -627,6 +652,8 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         RaisePropertyChanged(nameof(IsAnyPreviewVisible));
         RaisePropertyChanged(nameof(IsPreviewPaneVisible));
         RaisePropertyChanged(nameof(IsTreePaneVisible));
+        RaisePropertyChanged(nameof(IsPreviewTreeVisible));
+        RaisePropertyChanged(nameof(IsPreviewOnlyMode));
         RaisePropertyChanged(nameof(IsSearchFilterAvailable));
         RaisePropertyChanged(nameof(AreFilterSettingsEnabled));
     }
@@ -1101,6 +1128,7 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
     public string MenuHelpResetData { get; private set; } = string.Empty;
     public string HelpHelpTitle { get; private set; } = string.Empty;
     public string HelpHelpBody { get; private set; } = string.Empty;
+    public string HelpHelpCopyAll { get; private set; } = string.Empty;
     public string HelpAboutTitle { get; private set; } = string.Empty;
     public string HelpAboutBody { get; private set; } = string.Empty;
     public string HelpAboutOpenLink { get; private set; } = string.Empty;
@@ -1132,8 +1160,8 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
     public string FilterByNamePlaceholder { get; private set; } = string.Empty;
     public string FilterTooltip { get; private set; } = string.Empty;
     public string CopyFormatTooltip { get; private set; } = string.Empty;
-    public string SplitTooltip { get; private set; } = string.Empty;
     public string PreviewTooltip { get; private set; } = string.Empty;
+    public string PreviewHideTreeTooltip { get; private set; } = string.Empty;
     public string PreviewModesLabel { get; private set; } = string.Empty;
     public string PreviewModeTree { get; private set; } = string.Empty;
     public string PreviewModeContent { get; private set; } = string.Empty;
@@ -1233,6 +1261,7 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         MenuHelpResetData = _localization["Menu.Help.ResetData"];
         HelpHelpTitle = _localization["Help.Help.Title"];
         HelpHelpBody = _helpContentProvider.GetHelpBody(_localization.CurrentLanguage);
+        HelpHelpCopyAll = _localization["Help.Help.CopyAll"];
         HelpAboutTitle = _localization["Help.About.Title"];
         HelpAboutBody = _localization["Help.About.Body"];
         HelpAboutOpenLink = _localization["Help.About.OpenLink"];
@@ -1249,8 +1278,8 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         FilterByNamePlaceholder = _localization["Filter.ByName"];
         FilterTooltip = _localization["Filter.Tooltip"];
         CopyFormatTooltip = _localization["CopyFormat.Tooltip"];
-        SplitTooltip = _localization["Split.Tooltip"];
         PreviewTooltip = _localization["Preview.Tooltip"];
+        PreviewHideTreeTooltip = _localization["Preview.HideTree.Tooltip"];
         PreviewModesLabel = _localization["Preview.Modes.Label"];
         PreviewModeTree = _localization["Preview.Mode.Tree"];
         PreviewModeContent = _localization["Preview.Mode.Content"];
@@ -1363,6 +1392,7 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         RaisePropertyChanged(nameof(MenuHelpResetData));
         RaisePropertyChanged(nameof(HelpHelpTitle));
         RaisePropertyChanged(nameof(HelpHelpBody));
+        RaisePropertyChanged(nameof(HelpHelpCopyAll));
         RaisePropertyChanged(nameof(HelpAboutTitle));
         RaisePropertyChanged(nameof(HelpAboutBody));
         RaisePropertyChanged(nameof(HelpAboutOpenLink));
@@ -1378,8 +1408,8 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         RaisePropertyChanged(nameof(FilterByNamePlaceholder));
         RaisePropertyChanged(nameof(FilterTooltip));
         RaisePropertyChanged(nameof(CopyFormatTooltip));
-        RaisePropertyChanged(nameof(SplitTooltip));
         RaisePropertyChanged(nameof(PreviewTooltip));
+        RaisePropertyChanged(nameof(PreviewHideTreeTooltip));
         RaisePropertyChanged(nameof(PreviewModesLabel));
         RaisePropertyChanged(nameof(PreviewModeTree));
         RaisePropertyChanged(nameof(PreviewModeContent));

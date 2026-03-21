@@ -23,6 +23,7 @@
   <!--  Do not remove ref to Test for correct testing-->
   <ItemGroup>
     <InternalsVisibleTo Include="DevProjex.Tests.Unit" />
+    <InternalsVisibleTo Include="DevProjex.Tests.UI" />
   </ItemGroup>
 
   <ItemGroup>

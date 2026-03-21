@@ -121,6 +121,46 @@ public sealed class PreviewDocumentBuilderTests
     }
 
     [Fact]
+    public async Task BuildContentDocumentAsync_PopulatesSectionMetadata()
+    {
+        using var temp = new TemporaryDirectory();
+        var alphaPath = temp.CreateFile("alpha.txt", string.Empty);
+        var betaPath = temp.CreateFile("beta.txt", string.Empty);
+
+        var analyzer = new StubFileContentAnalyzer(new Dictionary<string, TextFileContent?>
+        {
+            [alphaPath] = CreateTextContent("alpha\nbeta"),
+            [betaPath] = CreateTextContent("gamma")
+        });
+        var builder = new PreviewDocumentBuilder(analyzer);
+
+        using var document = await builder.BuildContentDocumentAsync(
+            [betaPath, alphaPath],
+            CancellationToken.None,
+            Path.GetFileName);
+
+        Assert.NotNull(document);
+        Assert.Collection(
+            document.Sections,
+            section =>
+            {
+                Assert.Equal("alpha.txt", section.DisplayPath);
+                Assert.Equal(1, section.StartLine);
+                Assert.Equal(4, section.EndLine);
+                Assert.Equal(1, section.HeaderLine);
+                Assert.Equal(3, section.ContentStartLine);
+            },
+            section =>
+            {
+                Assert.Equal("beta.txt", section.DisplayPath);
+                Assert.Equal(7, section.StartLine);
+                Assert.Equal(9, section.EndLine);
+                Assert.Equal(7, section.HeaderLine);
+                Assert.Equal(9, section.ContentStartLine);
+            });
+    }
+
+    [Fact]
     public async Task BuildTreeAndContentDocumentAsync_WithoutFiles_ReturnsTrimmedTreeText()
     {
         var builder = new PreviewDocumentBuilder(new StubFileContentAnalyzer());
@@ -164,6 +204,16 @@ public sealed class PreviewDocumentBuilderTests
                 BlankLine,
                 "body"),
             document.GetLineRangeText(1, document.LineCount));
+        Assert.Collection(
+            document.Sections,
+            section =>
+            {
+                Assert.Equal("mapped/note.txt", section.DisplayPath);
+                Assert.Equal(5, section.StartLine);
+                Assert.Equal(7, section.EndLine);
+                Assert.Equal(5, section.HeaderLine);
+                Assert.Equal(7, section.ContentStartLine);
+            });
     }
 
     private static TextFileContent CreateTextContent(string content)

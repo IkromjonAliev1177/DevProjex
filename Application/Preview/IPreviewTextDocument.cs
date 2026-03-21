@@ -11,6 +11,8 @@ public interface IPreviewTextDocument : IDisposable
 
     long CharacterCount { get; }
 
+    IReadOnlyList<PreviewDocumentSection> Sections { get; }
+
     string GetLineText(int lineNumber);
 
     string GetLineRangeText(int firstLine, int lastLine);

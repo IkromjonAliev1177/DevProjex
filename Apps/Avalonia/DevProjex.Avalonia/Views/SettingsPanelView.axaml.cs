@@ -19,6 +19,7 @@ public partial class SettingsPanelView : UserControl
     private double _lastReportedMinimumWidth;
     private bool _minimumWidthRefreshQueued;
     private bool _pendingForcedMinimumWidthRefresh;
+    private bool _minimumWidthSizeSubscriptionsAttached;
 
     public event EventHandler<RoutedEventArgs>? ApplySettingsRequested;
     public event EventHandler<RoutedEventArgs>? IgnoreAllChanged;
@@ -40,13 +41,6 @@ public partial class SettingsPanelView : UserControl
         _rootFoldersHeaderGrid = this.FindControl<Grid>("RootFoldersHeaderGrid");
         _rootFoldersHeaderText = this.FindControl<TextBlock>("RootFoldersHeaderText");
         _rootFoldersAllCheckBox = this.FindControl<CheckBox>("RootFoldersAllCheckBox");
-
-        SubscribeToMinimumWidthAffectingSizeChanges(_ignoreHeaderText);
-        SubscribeToMinimumWidthAffectingSizeChanges(_ignoreAllCheckBox);
-        SubscribeToMinimumWidthAffectingSizeChanges(_extensionsHeaderText);
-        SubscribeToMinimumWidthAffectingSizeChanges(_extensionsAllCheckBox);
-        SubscribeToMinimumWidthAffectingSizeChanges(_rootFoldersHeaderText);
-        SubscribeToMinimumWidthAffectingSizeChanges(_rootFoldersAllCheckBox);
 
         AttachedToVisualTree += OnAttachedToVisualTree;
         DetachedFromVisualTree += OnDetachedFromVisualTree;
@@ -71,10 +65,14 @@ public partial class SettingsPanelView : UserControl
         => CalculateRequiredMinimumWidth();
 
     private void OnAttachedToVisualTree(object? sender, VisualTreeAttachmentEventArgs e)
-        => QueueMinimumWidthRefresh(force: true);
+    {
+        AttachMinimumWidthSubscriptions();
+        QueueMinimumWidthRefresh(force: true);
+    }
 
     private void OnDetachedFromVisualTree(object? sender, VisualTreeAttachmentEventArgs e)
     {
+        DetachMinimumWidthSubscriptions();
         _minimumWidthRefreshQueued = false;
         _pendingForcedMinimumWidthRefresh = false;
     }
@@ -138,6 +136,8 @@ public partial class SettingsPanelView : UserControl
             return;
 
         _minimumWidthRefreshQueued = true;
+        // Post to Render so all header text/check box measurements are stable before we
+        // report a new minimum width to the window layout.
         Dispatcher.UIThread.Post(
             FlushPendingMinimumWidthRefresh,
             DispatcherPriority.Render);
@@ -163,12 +163,43 @@ public partial class SettingsPanelView : UserControl
         ReportMinimumWidthIfChanged(force);
     }
 
-    private void SubscribeToMinimumWidthAffectingSizeChanges(Control? control)
+    private void AttachMinimumWidthSubscriptions()
+    {
+        if (_minimumWidthSizeSubscriptionsAttached)
+            return;
+
+        ToggleMinimumWidthAffectingSizeChanges(_ignoreHeaderText, subscribe: true);
+        ToggleMinimumWidthAffectingSizeChanges(_ignoreAllCheckBox, subscribe: true);
+        ToggleMinimumWidthAffectingSizeChanges(_extensionsHeaderText, subscribe: true);
+        ToggleMinimumWidthAffectingSizeChanges(_extensionsAllCheckBox, subscribe: true);
+        ToggleMinimumWidthAffectingSizeChanges(_rootFoldersHeaderText, subscribe: true);
+        ToggleMinimumWidthAffectingSizeChanges(_rootFoldersAllCheckBox, subscribe: true);
+        _minimumWidthSizeSubscriptionsAttached = true;
+    }
+
+    private void DetachMinimumWidthSubscriptions()
+    {
+        if (!_minimumWidthSizeSubscriptionsAttached)
+            return;
+
+        ToggleMinimumWidthAffectingSizeChanges(_ignoreHeaderText, subscribe: false);
+        ToggleMinimumWidthAffectingSizeChanges(_ignoreAllCheckBox, subscribe: false);
+        ToggleMinimumWidthAffectingSizeChanges(_extensionsHeaderText, subscribe: false);
+        ToggleMinimumWidthAffectingSizeChanges(_extensionsAllCheckBox, subscribe: false);
+        ToggleMinimumWidthAffectingSizeChanges(_rootFoldersHeaderText, subscribe: false);
+        ToggleMinimumWidthAffectingSizeChanges(_rootFoldersAllCheckBox, subscribe: false);
+        _minimumWidthSizeSubscriptionsAttached = false;
+    }
+
+    private void ToggleMinimumWidthAffectingSizeChanges(Control? control, bool subscribe)
     {
         if (control is null)
             return;
 
-        control.SizeChanged += OnMinimumWidthAffectingSizeChanged;
+        if (subscribe)
+            control.SizeChanged += OnMinimumWidthAffectingSizeChanged;
+        else
+            control.SizeChanged -= OnMinimumWidthAffectingSizeChanged;
     }
 
     private void OnMinimumWidthAffectingSizeChanged(object? sender, SizeChangedEventArgs e)

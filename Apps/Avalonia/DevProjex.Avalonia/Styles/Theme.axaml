@@ -20,6 +20,7 @@
     <Color x:Key="MenuHoverColor">#E6E6E6</Color>
     <Color x:Key="MenuPressedColor">#D9D9D9</Color>
     <Color x:Key="ToastSurfaceColor">#F3F3F3</Color>
+    <Color x:Key="PreviewSectionDividerColor">#A8ACB3</Color>
 
     <!-- Drop Zone Colors - Light Theme -->
     <Color x:Key="DropZoneBorderColor">#0066CC</Color>
@@ -54,6 +55,7 @@
     <SolidColorBrush x:Key="MenuChildHoverBrush" Color="{StaticResource MenuHoverColor}"/>
     <SolidColorBrush x:Key="MenuChildPressedBrush" Color="{StaticResource MenuPressedColor}"/>
     <SolidColorBrush x:Key="ToastSurfaceBrush" Color="{StaticResource ToastSurfaceColor}" />
+    <SolidColorBrush x:Key="PreviewSectionDividerBrush" Color="{StaticResource PreviewSectionDividerColor}" />
 
     <!-- Drop Zone Brushes - Light Theme -->
     <SolidColorBrush x:Key="DropZoneBorderBrush" Color="{StaticResource DropZoneBorderColor}" />
@@ -83,6 +85,7 @@
     <Color x:Key="MenuHoverColor">#3A3D44</Color>
     <Color x:Key="MenuPressedColor">#4A4D54</Color>
     <Color x:Key="ToastSurfaceColor">#1B1D22</Color>
+    <Color x:Key="PreviewSectionDividerColor">#4A5566</Color>
 
     <!-- Drop Zone Colors - Dark Theme -->
     <Color x:Key="DropZoneBorderColor">#4DA6FF</Color>
@@ -117,6 +120,7 @@
     <SolidColorBrush x:Key="MenuChildHoverBrush" Color="{StaticResource MenuHoverColor}"/>
     <SolidColorBrush x:Key="MenuChildPressedBrush" Color="{StaticResource MenuPressedColor}"/>
     <SolidColorBrush x:Key="ToastSurfaceBrush" Color="{StaticResource ToastSurfaceColor}" />
+    <SolidColorBrush x:Key="PreviewSectionDividerBrush" Color="{StaticResource PreviewSectionDividerColor}" />
 
     <!-- Drop Zone Brushes - Dark Theme -->
     <SolidColorBrush x:Key="DropZoneBorderBrush" Color="{StaticResource DropZoneBorderColor}" />
@@ -484,6 +488,7 @@
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="CornerRadius" Value="10" />
         <Setter Property="ClipToBounds" Value="True" />
+        <Setter Property="MinHeight" Value="46" />
         <Setter Property="Margin" Value="0,2,0,0" />
         <Setter Property="Transitions">
             <Transitions>
@@ -500,6 +505,7 @@
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="CornerRadius" Value="10" />
         <Setter Property="ClipToBounds" Value="True" />
+        <Setter Property="MinHeight" Value="46" />
         <Setter Property="Margin" Value="0,2,0,0" />
         <Setter Property="Transitions">
             <Transitions>
@@ -515,6 +521,7 @@
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="CornerRadius" Value="10" />
         <Setter Property="ClipToBounds" Value="True" />
+        <Setter Property="MinHeight" Value="45" />
         <Setter Property="Margin" Value="0,2,0,0" />
         <Setter Property="Transitions">
             <Transitions>
@@ -529,6 +536,26 @@
         <Setter Property="BorderBrush" Value="{DynamicResource AppBorderBrush}" />
         <Setter Property="BorderThickness" Value="0,0,1,0" />
         <Setter Property="VerticalAlignment" Value="Stretch" />
+    </Style>
+
+    <Style Selector="Border.preview-sticky-header-cap">
+        <Setter Property="Background" Value="{DynamicResource AppPanelBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource AppBorderBrush}" />
+        <Setter Property="BorderThickness" Value="0,0,0,1" />
+        <Setter Property="VerticalAlignment" Value="Stretch" />
+    </Style>
+
+    <Style Selector="Border.preview-sticky-header">
+        <Setter Property="Background" Value="{DynamicResource AppPanelBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource AppBorderBrush}" />
+        <Setter Property="BorderThickness" Value="0,0,0,1" />
+        <Setter Property="VerticalAlignment" Value="Stretch" />
+        <Setter Property="ClipToBounds" Value="True" />
+    </Style>
+
+    <Style Selector="TextBlock.preview-sticky-header-text">
+        <Setter Property="Foreground" Value="{DynamicResource AppTextBrush}" />
+        <Setter Property="Opacity" Value="0.78" />
     </Style>
 
 
@@ -550,6 +577,7 @@
         <Setter Property="BorderThickness" Value="0" />
         <Setter Property="Padding" Value="8,4" />
         <Setter Property="Margin" Value="0" />
+        <Setter Property="Focusable" Value="False" />
         <Setter Property="VerticalAlignment" Value="Center" />
         <Setter Property="Transitions" Value="{x:Null}" />
     </Style>
@@ -564,14 +592,6 @@
 
     <Style Selector="Button.menu-icon-button:pointerover">
         <Setter Property="Background" Value="{DynamicResource AppBorderBrush}" />
-    </Style>
-
-    <Style Selector="Button.menu-icon-button.mode-active">
-        <Setter Property="Background" Value="{DynamicResource AppBorderBrush}" />
-    </Style>
-
-    <Style Selector="Button.menu-icon-button.mode-active:pointerover">
-        <Setter Property="Background" Value="{DynamicResource MenuPressedBrush}" />
     </Style>
 
     <Style Selector="Button.menu-icon-button:pressed">
@@ -989,6 +1009,7 @@
         <Setter Property="BorderThickness" Value="0" />
         <Setter Property="Foreground" Value="{DynamicResource AppMutedTextBrush}" />
         <Setter Property="Padding" Value="0,3" />
+        <Setter Property="Focusable" Value="False" />
         <Setter Property="Width" Value="48" />
         <Setter Property="MinHeight" Value="0" />
         <Setter Property="HorizontalContentAlignment" Value="Center" />
@@ -1043,6 +1064,25 @@
         <Setter Property="Foreground" Value="{DynamicResource PrimaryActionForegroundBrush}" />
     </Style>
 
+    <Style Selector="Border.preview-panel.preview-toolbar-suspended Button.segment-text-button:pointerover">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Foreground" Value="{DynamicResource AppMutedTextBrush}" />
+    </Style>
+
+    <Style Selector="Border.preview-panel.preview-toolbar-suspended Button.segment-text-button.segment-selected:pointerover">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Foreground" Value="{DynamicResource PrimaryActionForegroundBrush}" />
+    </Style>
+
+    <Style Selector="Border.preview-panel.preview-toolbar-suspended Button.segment-text-button.segment-selected:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Foreground" Value="{DynamicResource PrimaryActionForegroundBrush}" />
+    </Style>
+
+    <Style Selector="Border.preview-panel.preview-toolbar-suspended Button.preview-close-button:pointerover">
+        <Setter Property="Background" Value="{DynamicResource AppBackgroundBrush}" />
+    </Style>
+
     <!-- Segment control: disabled -->
     <Style Selector="Border.segmented-control:disabled">
         <Setter Property="Opacity" Value="0.5" />
@@ -1088,8 +1128,21 @@
         <Setter Property="Background" Value="{DynamicResource AppBorderBrush}" />
     </Style>
 
+    <Style Selector="Button.tree-island-close-button">
+        <Setter Property="Background" Value="{DynamicResource AppBackgroundBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource AppBorderBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="6" />
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+
+    <Style Selector="Button.tree-island-close-button:pointerover">
+        <Setter Property="Background" Value="{DynamicResource AppBorderBrush}" />
+    </Style>
+
     <Style Selector="Border.preview-panel.preview-toolbar-compact Grid#PreviewBarLayoutGrid">
-        <Setter Property="Margin" Value="10,4" />
+        <Setter Property="Margin" Value="10,5" />
     </Style>
 
     <Style Selector="Border.preview-panel.preview-toolbar-compact Border.preview-segmented-control">
@@ -1102,7 +1155,7 @@
     </Style>
 
     <Style Selector="Border.preview-panel.preview-toolbar-narrow Grid#PreviewBarLayoutGrid">
-        <Setter Property="Margin" Value="6,3" />
+        <Setter Property="Margin" Value="6,5" />
     </Style>
 
     <Style Selector="Border.preview-panel.preview-toolbar-narrow Border.preview-segmented-control">
@@ -1120,23 +1173,8 @@
         <Setter Property="Margin" Value="2,0,0,0" />
     </Style>
 
-    <Style Selector="Path.preview-icon, Path.split-icon">
+    <Style Selector="Path.preview-icon">
         <Setter Property="Opacity" Value="{DynamicResource PreviewIconOpacity}" />
-    </Style>
-
-    <Style Selector="TextBlock.split-icon-text">
-        <Setter Property="Opacity" Value="{DynamicResource PreviewIconOpacity}" />
-        <Setter Property="FontFamily" Value="Cascadia Mono, Consolas, monospace" />
-        <Setter Property="FontSize" Value="15" />
-        <Setter Property="FontWeight" Value="SemiBold" />
-        <Setter Property="HorizontalAlignment" Value="Center" />
-        <Setter Property="VerticalAlignment" Value="Center" />
-        <Setter Property="Width" Value="24" />
-        <Setter Property="Height" Value="20" />
-        <Setter Property="LineHeight" Value="20" />
-        <Setter Property="Margin" Value="-1,-1,1,0" />
-        <Setter Property="TextAlignment" Value="Center" />
-        <Setter Property="UseLayoutRounding" Value="True" />
     </Style>
 
 </Styles>

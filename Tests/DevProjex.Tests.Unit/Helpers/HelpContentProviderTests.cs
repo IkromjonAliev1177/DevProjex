@@ -24,4 +24,29 @@ public sealed class HelpContentProviderTests
         Assert.False(string.IsNullOrWhiteSpace(russian));
         Assert.NotEqual(english, russian);
     }
+
+    [Fact]
+    public void ToPlainText_RemovesMarkdownLikeMarkers_AndKeepsReadableStructure()
+    {
+        const string raw = """
+                           ## Title
+                           ### Subtitle
+                           * First item
+                             * Nested item with `code`
+                           1) Numbered item
+                           Text with `.txt`
+                           """;
+
+        var plain = HelpContentProvider.ToPlainText(raw);
+
+        Assert.DoesNotContain("## ", plain, StringComparison.Ordinal);
+        Assert.DoesNotContain("### ", plain, StringComparison.Ordinal);
+        Assert.DoesNotContain("`", plain, StringComparison.Ordinal);
+        Assert.Contains("Title", plain, StringComparison.Ordinal);
+        Assert.Contains("Subtitle", plain, StringComparison.Ordinal);
+        Assert.Contains("- First item", plain, StringComparison.Ordinal);
+        Assert.Contains("  - Nested item with code", plain, StringComparison.Ordinal);
+        Assert.Contains("1) Numbered item", plain, StringComparison.Ordinal);
+        Assert.Contains("Text with .txt", plain, StringComparison.Ordinal);
+    }
 }
