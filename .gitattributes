@@ -1,0 +1,8 @@
+# Store listing import CSV must stay CRLF on every checkout.
+# Partner Center validation for this repository treats line endings as part of the import contract,
+# so Linux runners must not silently rewrite the file to LF.
+Packaging/Windows/StoreListing/ImportFolder/listingData.csv text eol=crlf
+
+# Keep the sibling working CSV consistent as well, because it is often used as the editable source
+# before copying into ImportFolder.
+Packaging/Windows/StoreListing/listingData.csv text eol=crlf
