@@ -8,13 +8,17 @@
 ![WinGet](https://img.shields.io/badge/winget-available-blue)
 ![Repo size](https://img.shields.io/github/repo-size/Avazbek22/DevProjex)
 
-**Visual project context builder for humans and AI**
+**The fastest way to turn a real codebase into clean AI-ready context**
 
-DevProjex is a cross-platform desktop application for **quickly exploring folder/project structures**, selecting what matters, and preparing **clean, controlled context in ASCII or JSON** (tree, file contents, or both) for clipboard and file export.
+DevProjex is a cross-platform desktop app for turning real folders and codebases into **clean, controlled context for AI chats, reviews, and documentation**.
 
-It’s designed for real projects where CLI output is noisy, IDE tools are unavailable or limited, and you need **clarity, speed, and control**.
+Select only what matters, preview the result, and copy or export it as **tree, content, or both** in ASCII or JSON.
 
-> 🔒 Read-only by design — DevProjex never modifies your files.
+It’s built for real projects where terminal output is noisy, IDE integrations are limited, and you still need fast, controlled context for an AI chat or a human reviewer.
+
+DevProjex is not an autonomous coding agent. It gives you a manual, fully controlled way to prepare project context when agents, IDE plugins, or remote indexing cannot be used.
+
+> 🔒 Read-only & without telemetry by design — DevProjex never modifies your files.
 
 ---
 
@@ -41,6 +45,7 @@ It’s designed for real projects where CLI output is noisy, IDE tools are unava
 
 ## Feature overview ✨
 
+* **Clean, controlled project context** for AI chats, reviews, and documentation
 * **TreeView with checkbox selection**
 * **Multiple copy/export modes** (tree / content / combined)
 * **Preview mode** (tree / content / combined) before copy/export
@@ -67,13 +72,15 @@ It’s designed for real projects where CLI output is noisy, IDE tools are unava
 
 ## Typical use cases 🎯
 
+* Prepare **clean input for AI assistants** (ChatGPT, Claude, DeepSeek, Qwen, etc.)
+* Work in **policy-restricted environments** where AI agents, remote indexing, or IDE plugins are not allowed
 * Share project structure in code reviews or chats
-* Prepare **clean input for AI assistants** (ChatGPT, Copilot, etc.)
 * Extract only relevant modules from large codebases
 * Teach or explain project architecture
-* Inspect large folders without CLI scripts
+* Inspect large folders without noisy CLI scripts
 
-DevProjex is not tied to a specific language or IDE.
+
+DevProjex works with any language, repository, or project structure.
 
 ---
 
@@ -114,7 +121,7 @@ DevProjex is not tied to a specific language or IDE.
 * **Avalonia UI** (cross-platform)
 * Cleanly separated architecture (Core / Services / UI)
 * JSON-based resources (localization, icon mappings, presets)
-* 5000+ automated tests (unit + integration)
+* 6000+ automated tests (unit + integration)
 
 ---
 

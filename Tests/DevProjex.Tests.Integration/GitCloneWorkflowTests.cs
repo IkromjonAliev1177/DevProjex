@@ -5,13 +5,15 @@ namespace DevProjex.Tests.Integration;
 /// These tests simulate the complete flow that happens in MainWindow.
 /// </summary>
 [Collection("GitNetworkTests")]
-public sealed class GitCloneWorkflowTests : IDisposable
+public sealed class GitCloneWorkflowTests : IAsyncLifetime, IDisposable
 {
-    private const string TestRepoUrl = "https://github.com/octocat/Hello-World";
-
     private readonly GitRepositoryService _gitService;
     private readonly RepoCacheService _cacheService;
     private readonly TemporaryDirectory _tempDir;
+    private GitTestRepository? _testRepository;
+    private bool _gitAvailable;
+
+    private string TestRepoUrl => _testRepository!.RepositoryUrl;
 
     public GitCloneWorkflowTests()
     {
@@ -25,6 +27,15 @@ public sealed class GitCloneWorkflowTests : IDisposable
         _cacheService = new RepoCacheService(testCachePath);
         _tempDir = new TemporaryDirectory();
     }
+
+    public async Task InitializeAsync()
+    {
+        _gitAvailable = await SharedGitRepositories.IsGitAvailableAsync();
+        if (_gitAvailable)
+            _testRepository = await SharedGitRepositories.GetLargeRepositoryAsync();
+    }
+
+    public Task DisposeAsync() => Task.CompletedTask;
 
     public void Dispose()
     {
@@ -43,7 +54,7 @@ public sealed class GitCloneWorkflowTests : IDisposable
     [Fact]
     public async Task WorkflowSimulation_CloneRepository_OpenProject_Success()
     {
-        if (!await _gitService.IsGitAvailableAsync())
+        if (!_gitAvailable)
             return;
 
         // Arrange - Simulate user clicking "Clone from Git"
@@ -89,11 +100,10 @@ public sealed class GitCloneWorkflowTests : IDisposable
     [Fact]
     public async Task WorkflowSimulation_CloneFails_CacheIsCleanedUp()
     {
-        if (!await _gitService.IsGitAvailableAsync())
+        if (!_gitAvailable)
             return;
 
-        // Arrange - invalid URL
-        var invalidUrl = "https://github.com/nonexistent/repo-12345-does-not-exist";
+        var invalidUrl = new Uri(Path.Combine(_tempDir.Path, "missing-repository.git")).AbsoluteUri;
         string? currentCachedRepoPath = null;
 
         try
@@ -124,32 +134,23 @@ public sealed class GitCloneWorkflowTests : IDisposable
     }
 
     [Fact]
-    public async Task WorkflowSimulation_CloneCancelled_CacheIsCleanedUp()
+    public async Task WorkflowSimulation_CloneCancelledBeforeStart_CacheIsCleanedUp()
     {
-        if (!await _gitService.IsGitAvailableAsync())
+        if (!_gitAvailable)
             return;
 
-        // Arrange
         string? currentCachedRepoPath = null;
         using var cts = new CancellationTokenSource();
 
         try
         {
-            // Step 1: Create cache directory
             currentCachedRepoPath = _cacheService.CreateRepositoryDirectory(TestRepoUrl);
-
-            // Step 2: Start clone and cancel immediately
-            var cloneTask = _gitService.CloneAsync(TestRepoUrl, currentCachedRepoPath, null, cts.Token);
-            await Task.Delay(100); // Let clone start
             cts.Cancel();
 
-            // Assert - should throw OperationCanceledException
-            await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await cloneTask);
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+                _gitService.CloneAsync(TestRepoUrl, currentCachedRepoPath, null, cts.Token));
 
-            // Step 3: MainWindow cleans up cache on cancellation
             _cacheService.DeleteRepositoryDirectory(currentCachedRepoPath);
-
-            // Assert - cache was cleaned up
             await AssertCacheEventuallyDeletedAsync(currentCachedRepoPath);
         }
         finally
@@ -162,7 +163,7 @@ public sealed class GitCloneWorkflowTests : IDisposable
     [Fact]
     public async Task WorkflowSimulation_CloneFirstRepo_ThenCloneSecond_FirstCacheDeleted()
     {
-        if (!await _gitService.IsGitAvailableAsync())
+        if (!_gitAvailable)
             return;
 
         // Arrange
@@ -247,7 +248,7 @@ public sealed class GitCloneWorkflowTests : IDisposable
     [Fact]
     public async Task WorkflowSimulation_CloneRepo_OpenLocalFolder_CacheDeleted()
     {
-        if (!await _gitService.IsGitAvailableAsync())
+        if (!_gitAvailable)
             return;
 
         // Arrange
@@ -288,7 +289,7 @@ public sealed class GitCloneWorkflowTests : IDisposable
     [Fact]
     public async Task WorkflowSimulation_CloneRepo_SwitchBranch_FilesUpdate()
     {
-        if (!await _gitService.IsGitAvailableAsync())
+        if (!_gitAvailable)
             return;
 
         // Arrange
@@ -334,7 +335,7 @@ public sealed class GitCloneWorkflowTests : IDisposable
     [Fact]
     public async Task WorkflowSimulation_MultipleSequentialClones_EachGetsOwnCache()
     {
-        if (!await _gitService.IsGitAvailableAsync())
+        if (!_gitAvailable)
             return;
 
         // Simulate user cloning, closing, cloning again multiple times

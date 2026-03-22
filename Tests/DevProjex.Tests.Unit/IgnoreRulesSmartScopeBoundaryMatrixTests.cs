@@ -4,11 +4,11 @@ public sealed class IgnoreRulesSmartScopeBoundaryMatrixTests
 {
 	public static IEnumerable<object[]> ScopeBoundaryCases()
 	{
-		var root = Path.Combine("C:", "repo", "app");
+		var root = BuildScopeRoot();
 		var inside = Path.Combine(root, "src", "Program.cs");
 		var same = root;
-		var siblingPrefixTrap = Path.Combine("C:", "repo", "application", "file.cs");
-		var outside = Path.Combine("C:", "repo", "lib", "file.cs");
+		var siblingPrefixTrap = Path.Combine(Path.GetDirectoryName(root)!, "application", "file.cs");
+		var outside = Path.Combine(Path.GetDirectoryName(root)!, "lib", "file.cs");
 
 		yield return [inside, true];
 		yield return [same, true];
@@ -21,16 +21,19 @@ public sealed class IgnoreRulesSmartScopeBoundaryMatrixTests
 		yield return [upper, expectedCaseMatch];
 		yield return [lower, expectedCaseMatch];
 
-		// Alternate separator style is not normalized by IgnoreRules path checks.
-		var alt = inside.Replace(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-		yield return [alt, false];
+		if (Path.DirectorySeparatorChar != Path.AltDirectorySeparatorChar)
+		{
+			// Alternate separator style is not normalized by IgnoreRules path checks.
+			var alt = inside.Replace(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+			yield return [alt, false];
+		}
 	}
 
 	[Theory]
 	[MemberData(nameof(ScopeBoundaryCases))]
 	public void ShouldApplySmartIgnore_BoundaryAndCaseMatrix_IsCorrect(string candidatePath, bool expected)
 	{
-		var scopeRoot = Path.Combine("C:", "repo", "app");
+		var scopeRoot = BuildScopeRoot();
 		var rules = new IgnoreRules(
 			IgnoreHiddenFolders: false,
 			IgnoreHiddenFiles: false,
@@ -49,6 +52,7 @@ public sealed class IgnoreRulesSmartScopeBoundaryMatrixTests
 	[Fact]
 	public void ShouldApplySmartIgnore_WhenDisabled_IsAlwaysFalse()
 	{
+		var scopeRoot = BuildScopeRoot();
 		var rules = new IgnoreRules(
 			IgnoreHiddenFolders: false,
 			IgnoreHiddenFiles: false,
@@ -58,11 +62,11 @@ public sealed class IgnoreRulesSmartScopeBoundaryMatrixTests
 			SmartIgnoredFiles: new HashSet<string>())
 		{
 			UseSmartIgnore = false,
-			SmartIgnoreScopeRoots = [Path.Combine("C:", "repo", "app")]
+			SmartIgnoreScopeRoots = [scopeRoot]
 		};
 
-		Assert.False(rules.ShouldApplySmartIgnore(Path.Combine("C:", "repo", "app", "src", "a.cs")));
-		Assert.False(rules.ShouldApplySmartIgnore(Path.Combine("C:", "repo", "other", "a.cs")));
+		Assert.False(rules.ShouldApplySmartIgnore(Path.Combine(scopeRoot, "src", "a.cs")));
+		Assert.False(rules.ShouldApplySmartIgnore(Path.Combine(Path.GetDirectoryName(scopeRoot)!, "other", "a.cs")));
 	}
 
 	[Fact]
@@ -82,4 +86,7 @@ public sealed class IgnoreRulesSmartScopeBoundaryMatrixTests
 
 		Assert.True(rules.ShouldApplySmartIgnore("/any/path/file.txt"));
 	}
+
+	private static string BuildScopeRoot()
+		=> Path.Combine(Path.GetTempPath(), "DevProjexTests", "IgnoreRulesSmartScope", "app");
 }

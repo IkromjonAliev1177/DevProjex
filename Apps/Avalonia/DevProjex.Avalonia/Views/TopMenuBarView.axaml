@@ -6,7 +6,7 @@
              x:DataType="vm:MainWindowViewModel">
   <Grid Name="RootGrid" ColumnDefinitions="*,Auto,Auto,Auto" Margin="0">
     <!-- Keep menu surface spanning all columns to avoid transparency seams near the controls. -->
-    <Menu Name="MainMenu" Grid.Column="0" Grid.ColumnSpan="4" Margin="0" Padding="0,0,100,0">
+    <Menu Name="MainMenu" Grid.Column="0" Grid.ColumnSpan="4" Margin="0" Padding="0,0,110,0">
       <MenuItem Header="{Binding MenuFile}">
         <MenuItem Header="{Binding MenuFileOpen}" Click="OnOpenFolder" />
         <MenuItem Header="{Binding MenuFileRefresh}" Click="OnRefresh" IsEnabled="{Binding IsProjectLoaded}" />
@@ -30,27 +30,29 @@
         <MenuItem Header="{Binding MenuCopyTreeAndContent}" Click="OnCopyTreeAndContent" />
       </MenuItem>
       <MenuItem Header="{Binding MenuView}" IsEnabled="{Binding IsProjectLoaded}">
-        <MenuItem Header="{Binding MenuViewExpandAll}" Click="OnExpandAll" IsVisible="{Binding !IsPreviewMode}" />
-        <MenuItem Header="{Binding MenuViewCollapseAll}" Click="OnCollapseAll" IsVisible="{Binding !IsPreviewMode}" />
+        <MenuItem Header="{Binding MenuViewExpandAll}" Click="OnExpandAll" IsVisible="{Binding IsTreePaneVisible}" />
+        <MenuItem Header="{Binding MenuViewCollapseAll}" Click="OnCollapseAll" IsVisible="{Binding IsTreePaneVisible}" />
         <MenuItem Header="{Binding MenuViewZoomIn}" Click="OnZoomIn" />
         <MenuItem Header="{Binding MenuViewZoomOut}" Click="OnZoomOut" />
         <MenuItem Header="{Binding MenuViewZoomReset}" Click="OnZoomReset" />
-        <Separator IsVisible="{Binding !IsPreviewMode}" />
-        <MenuItem Click="OnToggleCompactMode" IsVisible="{Binding !IsPreviewMode}">
+        <Separator IsVisible="{Binding IsTreePaneVisible}" />
+        <MenuItem Click="OnToggleCompactMode"
+                  IsVisible="{Binding IsTreePaneVisible}"
+                  IsEnabled="{Binding CanToggleCompactMode}">
           <MenuItem.Header>
             <CheckBox Content="{Binding MenuViewCompactMode}"
-                      IsChecked="{Binding IsCompactMode}"
+                      IsChecked="{Binding IsCompactModeEffective}"
                       IsHitTestVisible="False"/>
           </MenuItem.Header>
         </MenuItem>
-        <MenuItem Click="OnToggleTreeAnimation" IsVisible="{Binding !IsPreviewMode}">
+        <MenuItem Click="OnToggleTreeAnimation" IsVisible="{Binding IsTreePaneVisible}">
           <MenuItem.Header>
             <CheckBox Content="{Binding MenuViewTreeAnimation}"
                       IsChecked="{Binding IsTreeAnimationEnabled}"
                       IsHitTestVisible="False"/>
           </MenuItem.Header>
         </MenuItem>
-        <MenuItem Click="OnToggleAdvancedCounts" IsVisible="{Binding !IsPreviewMode}">
+        <MenuItem Click="OnToggleAdvancedCounts" IsVisible="{Binding IsTreePaneVisible}">
           <MenuItem.Header>
             <CheckBox Content="{Binding MenuViewAdditionalCounts}"
                       IsChecked="{Binding IsAdvancedIgnoreCountsEnabled}"
@@ -120,7 +122,8 @@
     </Border>
 
     <Button Grid.Column="2"
-            Classes="menu-icon-button"
+            Name="PreviewToggleButton"
+            Classes="menu-icon-button toolbar-mode-icon-button"
             Click="OnTogglePreview"
             IsEnabled="{Binding IsProjectLoaded}"
             IsVisible="{Binding IsProjectLoaded}"
@@ -142,6 +145,7 @@
     </Button>
 
     <Button Grid.Column="3"
+            Name="FilterToggleButton"
             Classes="menu-icon-button"
             Click="OnToggleFilter"
             IsEnabled="{Binding IsProjectLoaded}"

@@ -41,6 +41,18 @@ public sealed class VirtualizedLineNumbersControl : Control
     public static readonly StyledProperty<IBrush?> NumberBrushProperty =
         AvaloniaProperty.Register<VirtualizedLineNumbersControl, IBrush?>(nameof(NumberBrush));
 
+    public static readonly StyledProperty<bool> StickyHeaderVisibleProperty =
+        AvaloniaProperty.Register<VirtualizedLineNumbersControl, bool>(nameof(StickyHeaderVisible));
+
+    public static readonly StyledProperty<bool> StickyHeaderReservedProperty =
+        AvaloniaProperty.Register<VirtualizedLineNumbersControl, bool>(nameof(StickyHeaderReserved));
+
+    public static readonly StyledProperty<IBrush?> StickyHeaderBackgroundBrushProperty =
+        AvaloniaProperty.Register<VirtualizedLineNumbersControl, IBrush?>(nameof(StickyHeaderBackgroundBrush));
+
+    public static readonly StyledProperty<IBrush?> StickyHeaderBorderBrushProperty =
+        AvaloniaProperty.Register<VirtualizedLineNumbersControl, IBrush?>(nameof(StickyHeaderBorderBrush));
+
     static VirtualizedLineNumbersControl()
     {
         AffectsRender<VirtualizedLineNumbersControl>(
@@ -54,7 +66,11 @@ public sealed class VirtualizedLineNumbersControl : Control
             ViewportHeightProperty,
             NumberFontFamilyProperty,
             NumberFontSizeProperty,
-            NumberBrushProperty);
+            NumberBrushProperty,
+            StickyHeaderVisibleProperty,
+            StickyHeaderReservedProperty,
+            StickyHeaderBackgroundBrushProperty,
+            StickyHeaderBorderBrushProperty);
 
         AffectsMeasure<VirtualizedLineNumbersControl>(
             LineCountProperty,
@@ -118,6 +134,30 @@ public sealed class VirtualizedLineNumbersControl : Control
         set => SetValue(NumberBrushProperty, value);
     }
 
+    public bool StickyHeaderVisible
+    {
+        get => GetValue(StickyHeaderVisibleProperty);
+        set => SetValue(StickyHeaderVisibleProperty, value);
+    }
+
+    public bool StickyHeaderReserved
+    {
+        get => GetValue(StickyHeaderReservedProperty);
+        set => SetValue(StickyHeaderReservedProperty, value);
+    }
+
+    public IBrush? StickyHeaderBackgroundBrush
+    {
+        get => GetValue(StickyHeaderBackgroundBrushProperty);
+        set => SetValue(StickyHeaderBackgroundBrushProperty, value);
+    }
+
+    public IBrush? StickyHeaderBorderBrush
+    {
+        get => GetValue(StickyHeaderBorderBrushProperty);
+        set => SetValue(StickyHeaderBorderBrushProperty, value);
+    }
+
     public double ExtentHeight
     {
         get => GetValue(ExtentHeightProperty);
@@ -153,7 +193,7 @@ public sealed class VirtualizedLineNumbersControl : Control
 
         var viewportTop = Math.Max(0, VerticalOffset);
         var viewportHeight = ViewportHeight > 0 ? ViewportHeight : Bounds.Height;
-        var contentTop = TopPadding;
+        var contentTop = ResolveContentTopPadding();
 
         var firstVisibleLine = Math.Max(1, (int)Math.Floor((viewportTop - contentTop) / lineHeight) + 1);
         var visibleLineCount = Math.Max(1, (int)Math.Ceiling(viewportHeight / lineHeight));
@@ -179,6 +219,7 @@ public sealed class VirtualizedLineNumbersControl : Control
         var text = BuildFormattedText(builder.ToString(), typeface);
         var originY = contentTop + (firstVisibleLine - 1) * lineHeight - viewportTop;
         context.DrawText(text, new Point(LeftPadding, originY));
+        DrawStickyHeaderMask(context);
     }
 
     private double CalculateRequiredWidth()
@@ -208,7 +249,7 @@ public sealed class VirtualizedLineNumbersControl : Control
         // on very large previews.
         if (ExtentHeight > 0 && totalLines > 0)
         {
-            var verticalPadding = Math.Max(0, TopPadding) + Math.Max(0, BottomPadding);
+            var verticalPadding = Math.Max(0, ResolveContentTopPadding()) + Math.Max(0, BottomPadding);
             var textHeight = ExtentHeight - verticalPadding;
             if (textHeight > 0)
             {
@@ -221,4 +262,35 @@ public sealed class VirtualizedLineNumbersControl : Control
         var sample = BuildFormattedText("8", typeface);
         return Math.Max(1.0, sample.Height);
     }
+
+    private void DrawStickyHeaderMask(DrawingContext context)
+    {
+        var headerHeight = ResolveStickyHeaderHeight();
+        if (headerHeight <= 0)
+            return;
+
+        var headerBounds = new Rect(0, 0, Bounds.Width, headerHeight);
+        if (headerBounds.Width <= 0 || headerBounds.Height <= 0)
+            return;
+
+        if (StickyHeaderBackgroundBrush is not null)
+            context.FillRectangle(StickyHeaderBackgroundBrush, headerBounds);
+
+        if (StickyHeaderBorderBrush is not null)
+        {
+            var borderPen = new Pen(StickyHeaderBorderBrush, 1);
+            var borderY = headerHeight - 0.5;
+            context.DrawLine(borderPen, new Point(0, borderY), new Point(Bounds.Width, borderY));
+        }
+    }
+
+    private double ResolveStickyHeaderHeight()
+    {
+        if (!StickyHeaderReserved)
+            return 0;
+
+        return Math.Max(24.0, Math.Ceiling(NumberFontSize + 12.0));
+    }
+
+    private double ResolveContentTopPadding() => TopPadding + ResolveStickyHeaderHeight();
 }

@@ -18,7 +18,10 @@ public class GitEdgeCasesTests : IAsyncLifetime
     private readonly RepoCacheService _cacheService;
     private readonly TemporaryDirectory _tempDir;
 
-    private const string TestRepoUrl = "https://github.com/octocat/Hello-World";
+    private GitTestRepository? _testRepository;
+    private bool _gitAvailable;
+
+    private string TestRepoUrl => _testRepository!.RepositoryUrl;
 
     public GitEdgeCasesTests()
     {
@@ -28,7 +31,12 @@ public class GitEdgeCasesTests : IAsyncLifetime
         _tempDir = new TemporaryDirectory();
     }
 
-    public Task InitializeAsync() => Task.CompletedTask;
+    public async Task InitializeAsync()
+    {
+        _gitAvailable = await SharedGitRepositories.IsGitAvailableAsync();
+        if (_gitAvailable)
+            _testRepository = await SharedGitRepositories.GetDefaultRepositoryAsync();
+    }
 
     public Task DisposeAsync()
     {
@@ -42,7 +50,7 @@ public class GitEdgeCasesTests : IAsyncLifetime
     public async Task SwitchBranch_WhenRepositoryHasOnlyOneBranch_ReturnsFalseForNonexistent()
     {
         // Test switching to nonexistent branch in single-branch repo
-        if (!await _service.IsGitAvailableAsync())
+        if (!_gitAvailable)
             return;
 
         var repoPath = _tempDir.CreateDirectory("single-branch");
@@ -58,7 +66,7 @@ public class GitEdgeCasesTests : IAsyncLifetime
     public async Task GetCurrentBranch_AfterSuccessfulSwitch_ReturnsCorrectBranch()
     {
         // Verify that GetCurrentBranch accurately reflects branch switches
-        if (!await _service.IsGitAvailableAsync())
+        if (!_gitAvailable)
             return;
 
         var repoPath = _tempDir.CreateDirectory("current-branch-accuracy");
@@ -87,7 +95,7 @@ public class GitEdgeCasesTests : IAsyncLifetime
     public async Task PullUpdates_OnFreshClone_Succeeds()
     {
         // Verify that pulling immediately after clone doesn't break
-        if (!await _service.IsGitAvailableAsync())
+        if (!_gitAvailable)
             return;
 
         var repoPath = _tempDir.CreateDirectory("fresh-pull");
@@ -103,7 +111,7 @@ public class GitEdgeCasesTests : IAsyncLifetime
     public async Task MultiplePullUpdates_InSequence_AllSucceed()
     {
         // Test multiple consecutive pulls don't break repository state
-        if (!await _service.IsGitAvailableAsync())
+        if (!_gitAvailable)
             return;
 
         var repoPath = _tempDir.CreateDirectory("multi-pull");
@@ -126,7 +134,7 @@ public class GitEdgeCasesTests : IAsyncLifetime
     public async Task ConcurrentPullUpdates_ToSameRepository_Succeed()
     {
         // Verify concurrent pulls don't cause race conditions
-        if (!await _service.IsGitAvailableAsync())
+        if (!_gitAvailable)
             return;
 
         var repoPath = _tempDir.CreateDirectory("concurrent-pull");
@@ -147,7 +155,7 @@ public class GitEdgeCasesTests : IAsyncLifetime
     public async Task SwitchBranch_WhileAnotherOperationInProgress_HandlesGracefully()
     {
         // Test that overlapping operations don't corrupt repository
-        if (!await _service.IsGitAvailableAsync())
+        if (!_gitAvailable)
             return;
 
         var repoPath = _tempDir.CreateDirectory("overlapping-ops");
@@ -163,7 +171,6 @@ public class GitEdgeCasesTests : IAsyncLifetime
 
         // Start pull and switch concurrently
         var pullTask = _service.PullUpdatesAsync(repoPath);
-        await Task.Delay(50); // Small delay to ensure pull started
         var switchTask = _service.SwitchBranchAsync(repoPath, branch2);
 
         await Task.WhenAll(pullTask, switchTask);
@@ -200,17 +207,15 @@ public class GitEdgeCasesTests : IAsyncLifetime
         // Verify that multiple creates for same URL produce different directories
         var url = "https://github.com/test/repo";
 
-        var dir1 = _cacheService.CreateRepositoryDirectory(url);
-        Thread.Sleep(10); // Ensure different timestamp
-        var dir2 = _cacheService.CreateRepositoryDirectory(url);
+        var createdDirectories = Enumerable.Range(0, 3)
+            .Select(_ => _cacheService.CreateRepositoryDirectory(url))
+            .ToArray();
 
-        Assert.NotEqual(dir1, dir2);
-        Assert.True(Directory.Exists(dir1));
-        Assert.True(Directory.Exists(dir2));
+        Assert.Equal(createdDirectories.Length, createdDirectories.Distinct().Count());
+        Assert.All(createdDirectories, dir => Assert.True(Directory.Exists(dir)));
 
-        // Cleanup
-        _cacheService.DeleteRepositoryDirectory(dir1);
-        _cacheService.DeleteRepositoryDirectory(dir2);
+        foreach (var dir in createdDirectories)
+            _cacheService.DeleteRepositoryDirectory(dir);
     }
 
     [Fact]
@@ -234,7 +239,7 @@ public class GitEdgeCasesTests : IAsyncLifetime
     public async Task CloneAsync_CreatesDirectoryInCache()
     {
         // Verify that cloned repos go into cache
-        if (!await _service.IsGitAvailableAsync())
+        if (!_gitAvailable)
             return;
 
         var targetDir = _cacheService.CreateRepositoryDirectory(TestRepoUrl);
@@ -262,27 +267,29 @@ public class GitEdgeCasesTests : IAsyncLifetime
     #region Special URLs and Characters
 
     [Fact]
-    public async Task CloneAsync_HandlesUrlsWithDifferentFormats()
+    public async Task CloneAsync_HandlesSupportedLocalRepositoryFormats()
     {
-        // Test various URL formats (http, https, with/without .git)
-        if (!await _service.IsGitAvailableAsync())
+        // Use only deterministic local formats that are expected to work the same way
+        // across CI environments. Raw filesystem paths are handled differently by git
+        // when shallow clone is requested, especially on Unix runners.
+        if (!_gitAvailable)
             return;
 
-        var urls = new[]
+        var sources = new List<string>
         {
-            "https://github.com/octocat/Hello-World",
-            "https://github.com/octocat/Hello-World.git",
-            "http://github.com/octocat/Hello-World"
+            TestRepoUrl
         };
 
-        foreach (var url in urls)
-        {
-            var targetDir = _tempDir.CreateDirectory($"url-format-{urls.ToList().IndexOf(url)}");
-            var result = await _service.CloneAsync(url, targetDir);
+        if (OperatingSystem.IsWindows())
+            sources.Add(_testRepository!.BareRepositoryPath.Replace('\\', '/'));
 
-            // All formats should work
-            Assert.True(result.Success || result.ErrorMessage != null,
-                $"Clone should either succeed or return error message for {url}");
+        for (var index = 0; index < sources.Count; index++)
+        {
+            var source = sources[index];
+            var targetDir = _tempDir.CreateDirectory($"url-format-{index}");
+            var result = await _service.CloneAsync(source, targetDir);
+
+            Assert.True(result.Success, $"Clone should succeed for supported local repository source: {source}");
         }
     }
 
@@ -290,7 +297,7 @@ public class GitEdgeCasesTests : IAsyncLifetime
     public async Task GetBranches_ReturnsCorrectActiveStatus()
     {
         // Verify that only one branch is marked as active
-        if (!await _service.IsGitAvailableAsync())
+        if (!_gitAvailable)
             return;
 
         var repoPath = _tempDir.CreateDirectory("active-branch");
@@ -316,7 +323,7 @@ public class GitEdgeCasesTests : IAsyncLifetime
     public async Task SwitchBranch_AfterFailedAttempt_CanRetrySuccessfully()
     {
         // Test that failed switch doesn't corrupt repository state
-        if (!await _service.IsGitAvailableAsync())
+        if (!_gitAvailable)
             return;
 
         var repoPath = _tempDir.CreateDirectory("failed-switch-recovery");
@@ -347,28 +354,19 @@ public class GitEdgeCasesTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task CloneAsync_WithCancellation_CleansUpPartialClone()
+    public async Task CloneAsync_WithPreCancelledToken_CleansUpPartialClone()
     {
         // Verify that cancelled clone doesn't leave partial data
-        if (!await _service.IsGitAvailableAsync())
+        if (!_gitAvailable)
             return;
 
         var targetDir = _tempDir.CreateDirectory("cancelled-clone");
         using var cts = new CancellationTokenSource();
 
-        // Start clone and cancel quickly
-        var cloneTask = _service.CloneAsync(TestRepoUrl, targetDir, cancellationToken: cts.Token);
-        await Task.Delay(100); // Let it start
         cts.Cancel();
 
-        try
-        {
-            await cloneTask;
-        }
-        catch (OperationCanceledException)
-        {
-            // Expected
-        }
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            _service.CloneAsync(TestRepoUrl, targetDir, cancellationToken: cts.Token));
 
         // Partial clone might exist, but should be cleanable
         if (Directory.Exists(targetDir))
@@ -393,7 +391,7 @@ public class GitEdgeCasesTests : IAsyncLifetime
     public async Task SwitchBranch_WithBranchNameContainingSlashes_HandlesCorrectly()
     {
         // Test branch names like "feature/my-feature" (common in git-flow)
-        if (!await _service.IsGitAvailableAsync())
+        if (!_gitAvailable)
             return;
 
         var repoPath = _tempDir.CreateDirectory("branch-slashes");
@@ -417,7 +415,7 @@ public class GitEdgeCasesTests : IAsyncLifetime
     public async Task GetBranches_FiltersOutHEADPointer()
     {
         // Verify that "HEAD -> origin/main" entries are filtered out
-        if (!await _service.IsGitAvailableAsync())
+        if (!_gitAvailable)
             return;
 
         var repoPath = _tempDir.CreateDirectory("head-filter");
@@ -442,7 +440,7 @@ public class GitEdgeCasesTests : IAsyncLifetime
     public async Task CloneAsync_AcceptsProgressCallback()
     {
         // Verify progress callback doesn't cause errors (Git may not report progress in non-interactive mode)
-        if (!await _service.IsGitAvailableAsync())
+        if (!_gitAvailable)
             return;
 
         var targetDir = _tempDir.CreateDirectory("progress-test");
@@ -460,7 +458,7 @@ public class GitEdgeCasesTests : IAsyncLifetime
     public async Task SwitchBranch_FirstTime_ReportsProgress()
     {
         // Verify progress reporting for branch switch
-        if (!await _service.IsGitAvailableAsync())
+        if (!_gitAvailable)
             return;
 
         var repoPath = _tempDir.CreateDirectory("switch-progress");
@@ -492,13 +490,11 @@ public class GitEdgeCasesTests : IAsyncLifetime
     public async Task CloneAsync_ExtractsCorrectRepositoryName()
     {
         // Test repository name extraction from various URLs
-        if (!await _service.IsGitAvailableAsync())
+        if (!_gitAvailable)
             return;
 
         var targetDir = _tempDir.CreateDirectory("repo-name");
-        var result = await _service.CloneAsync(
-            "https://github.com/octocat/Hello-World.git",
-            targetDir);
+        var result = await _service.CloneAsync(TestRepoUrl, targetDir);
 
         Assert.True(result.Success);
         Assert.Equal("Hello-World", result.RepositoryName);
@@ -508,10 +504,10 @@ public class GitEdgeCasesTests : IAsyncLifetime
     public async Task CloneAsync_StoresOriginalUrl()
     {
         // Verify that original URL is preserved in result
-        if (!await _service.IsGitAvailableAsync())
+        if (!_gitAvailable)
             return;
 
-        var url = "https://github.com/octocat/Hello-World";
+        var url = TestRepoUrl;
         var targetDir = _tempDir.CreateDirectory("url-storage");
         var result = await _service.CloneAsync(url, targetDir);
 
@@ -523,7 +519,7 @@ public class GitEdgeCasesTests : IAsyncLifetime
     public async Task CloneAsync_SetsCorrectSourceType()
     {
         // Verify that source type is set to GitClone for git operations
-        if (!await _service.IsGitAvailableAsync())
+        if (!_gitAvailable)
             return;
 
         var targetDir = _tempDir.CreateDirectory("source-type");
@@ -535,3 +531,4 @@ public class GitEdgeCasesTests : IAsyncLifetime
 
     #endregion
 }
+

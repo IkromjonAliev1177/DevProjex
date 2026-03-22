@@ -69,7 +69,7 @@ public partial class HelpPopoverView : UserControl
             return;
 
         var lines = rawText.Replace("\r\n", "\n").Split('\n');
-        bool pendingSpacer = false;
+        var pendingSpacer = false;
 
         foreach (var line in lines)
         {
@@ -97,21 +97,27 @@ public partial class HelpPopoverView : UserControl
 
     private bool TryAddHeading(StackPanel bodyPanel, string line)
     {
-        if (!line.StartsWith("## ", StringComparison.Ordinal)) return false;
+        if (!line.StartsWith("## ", StringComparison.Ordinal))
+            return false;
+
         bodyPanel.Children.Add(CreateHeading(line[3..], 16));
         return true;
     }
 
     private bool TryAddSubheading(StackPanel bodyPanel, string line)
     {
-        if (!line.StartsWith("### ", StringComparison.Ordinal)) return false;
+        if (!line.StartsWith("### ", StringComparison.Ordinal))
+            return false;
+
         bodyPanel.Children.Add(CreateHeading(line[4..], 14));
         return true;
     }
 
     private bool TryAddBullet(StackPanel bodyPanel, string line)
     {
-        if (line.Length < 2) return false;
+        if (line.Length < 2)
+            return false;
+
         if (!(line.StartsWith("- ", StringComparison.Ordinal) || line.StartsWith("* ", StringComparison.Ordinal)))
             return false;
 
@@ -122,8 +128,12 @@ public partial class HelpPopoverView : UserControl
     private bool TryAddNumbered(StackPanel bodyPanel, string line)
     {
         var dotIndex = line.IndexOf(')');
-        if (dotIndex <= 0 || dotIndex > 4) return false;
-        if (!char.IsDigit(line[0])) return false;
+        if (dotIndex <= 0 || dotIndex > 4)
+            return false;
+
+        if (!char.IsDigit(line[0]))
+            return false;
+
         if (dotIndex + 1 < line.Length && line[dotIndex + 1] == ' ')
         {
             bodyPanel.Children.Add(CreateBullet(line));
@@ -189,4 +199,24 @@ public partial class HelpPopoverView : UserControl
     private StackPanel? GetBodyPanel() => this.FindControl<StackPanel>("BodyPanel");
 
     private void OnClose(object? sender, RoutedEventArgs e) => CloseRequested?.Invoke(this, e);
+
+    private async void OnCopyAll(object? sender, RoutedEventArgs e)
+    {
+        if (string.IsNullOrWhiteSpace(_boundViewModel?.HelpHelpBody))
+            return;
+
+        try
+        {
+            var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
+            if (clipboard is null)
+                return;
+
+            await clipboard.SetTextAsync(HelpContentProvider.ToPlainText(_boundViewModel.HelpHelpBody));
+        }
+        catch (Exception ex)
+        {
+            // Copy support must never break the help popup on platforms with limited clipboard providers.
+            Debug.WriteLine($"Failed to copy help text: {ex}");
+        }
+    }
 }

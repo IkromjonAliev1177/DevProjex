@@ -14,6 +14,7 @@ public sealed class IgnoreOptionsServiceComprehensiveMatrixTests
 				["Settings.Ignore.DotFolders"] = "Dot folders",
 				["Settings.Ignore.DotFiles"] = "Dot files",
 				["Settings.Ignore.EmptyFolders"] = "Empty folders",
+				["Settings.Ignore.EmptyFiles"] = "Empty files",
 				["Settings.Ignore.ExtensionlessFiles"] = "Files without extension"
 			}
 		};
@@ -27,6 +28,7 @@ public sealed class IgnoreOptionsServiceComprehensiveMatrixTests
 		foreach (var includeDotFolders in new[] { false, true })
 		foreach (var includeDotFiles in new[] { false, true })
 		foreach (var includeEmptyFolders in new[] { false, true })
+		foreach (var includeEmptyFiles in new[] { false, true })
 		foreach (var includeExtensionless in new[] { false, true })
 		foreach (var showAdvancedCounts in new[] { false, true })
 		{
@@ -39,6 +41,7 @@ public sealed class IgnoreOptionsServiceComprehensiveMatrixTests
 				includeDotFolders,
 				includeDotFiles,
 				includeEmptyFolders,
+				includeEmptyFiles,
 				includeExtensionless,
 				showAdvancedCounts
 			];
@@ -55,6 +58,7 @@ public sealed class IgnoreOptionsServiceComprehensiveMatrixTests
 		bool includeDotFolders,
 		bool includeDotFiles,
 		bool includeEmptyFolders,
+		bool includeEmptyFiles,
 		bool includeExtensionless,
 		bool showAdvancedCounts)
 	{
@@ -72,6 +76,8 @@ public sealed class IgnoreOptionsServiceComprehensiveMatrixTests
 			DotFilesCount: 5,
 			IncludeEmptyFolders: includeEmptyFolders,
 			EmptyFoldersCount: 6,
+			IncludeEmptyFiles: includeEmptyFiles,
+			EmptyFilesCount: 8,
 			IncludeExtensionlessFiles: includeExtensionless,
 			ExtensionlessFilesCount: 7,
 			ShowAdvancedCounts: showAdvancedCounts);
@@ -84,6 +90,7 @@ public sealed class IgnoreOptionsServiceComprehensiveMatrixTests
 			includeSmart,
 			includeGit,
 			includeEmptyFolders,
+			includeEmptyFiles,
 			includeHiddenFolders,
 			includeHiddenFiles,
 			includeDotFolders,
@@ -97,6 +104,7 @@ public sealed class IgnoreOptionsServiceComprehensiveMatrixTests
 		AssertCountLabel(options, IgnoreOptionId.DotFolders, "Dot folders", 4, showAdvancedCounts, includeDotFolders);
 		AssertCountLabel(options, IgnoreOptionId.DotFiles, "Dot files", 5, showAdvancedCounts, includeDotFiles);
 		AssertCountLabel(options, IgnoreOptionId.EmptyFolders, "Empty folders", 6, showAdvancedCounts, includeEmptyFolders);
+		AssertCountLabel(options, IgnoreOptionId.EmptyFiles, "Empty files", 8, showAdvancedCounts, includeEmptyFiles);
 		AssertCountLabel(options, IgnoreOptionId.ExtensionlessFiles, "Files without extension", 7, showAdvancedCounts, includeExtensionless);
 
 		if (includeExtensionless)
@@ -112,6 +120,7 @@ public sealed class IgnoreOptionsServiceComprehensiveMatrixTests
 			IgnoreOptionId.DotFolders,
 			IgnoreOptionId.DotFiles,
 			IgnoreOptionId.EmptyFolders,
+			IgnoreOptionId.EmptyFiles,
 			IgnoreOptionId.ExtensionlessFiles
 		};
 
@@ -142,6 +151,7 @@ public sealed class IgnoreOptionsServiceComprehensiveMatrixTests
 			IgnoreOptionId.DotFolders => "Dot folders",
 			IgnoreOptionId.DotFiles => "Dot files",
 			IgnoreOptionId.EmptyFolders => "Empty folders",
+			IgnoreOptionId.EmptyFiles => "Empty files",
 			IgnoreOptionId.ExtensionlessFiles => "Files without extension",
 			_ => throw new ArgumentOutOfRangeException(nameof(optionId), optionId, "Unsupported option id")
 		};
@@ -157,16 +167,18 @@ public sealed class IgnoreOptionsServiceComprehensiveMatrixTests
 		bool includeSmart,
 		bool includeGit,
 		bool includeEmptyFolders,
+		bool includeEmptyFiles,
 		bool includeHiddenFolders,
 		bool includeHiddenFiles,
 		bool includeDotFolders,
 		bool includeDotFiles,
 		bool includeExtensionless)
 	{
-		var ordered = new List<IgnoreOptionId>(8);
+		var ordered = new List<IgnoreOptionId>(9);
 		if (includeSmart) ordered.Add(IgnoreOptionId.SmartIgnore);
 		if (includeGit) ordered.Add(IgnoreOptionId.UseGitIgnore);
 		if (includeEmptyFolders) ordered.Add(IgnoreOptionId.EmptyFolders);
+		if (includeEmptyFiles) ordered.Add(IgnoreOptionId.EmptyFiles);
 		if (includeHiddenFolders) ordered.Add(IgnoreOptionId.HiddenFolders);
 		if (includeHiddenFiles) ordered.Add(IgnoreOptionId.HiddenFiles);
 		if (includeDotFolders) ordered.Add(IgnoreOptionId.DotFolders);
@@ -213,6 +225,7 @@ public sealed class IgnoreOptionsServiceComprehensiveMatrixTests
 				IncludeDotFolders: false,
 				IncludeDotFiles: false,
 				IncludeEmptyFolders: false,
+				IncludeEmptyFiles: false,
 				IncludeExtensionlessFiles: false,
 				ShowAdvancedCounts: showAdvanced),
 			IgnoreOptionId.HiddenFiles => new IgnoreOptionsAvailability(
@@ -224,6 +237,7 @@ public sealed class IgnoreOptionsServiceComprehensiveMatrixTests
 				IncludeDotFolders: false,
 				IncludeDotFiles: false,
 				IncludeEmptyFolders: false,
+				IncludeEmptyFiles: false,
 				IncludeExtensionlessFiles: false,
 				ShowAdvancedCounts: showAdvanced),
 			IgnoreOptionId.DotFolders => new IgnoreOptionsAvailability(
@@ -235,6 +249,7 @@ public sealed class IgnoreOptionsServiceComprehensiveMatrixTests
 				DotFoldersCount: count,
 				IncludeDotFiles: false,
 				IncludeEmptyFolders: false,
+				IncludeEmptyFiles: false,
 				IncludeExtensionlessFiles: false,
 				ShowAdvancedCounts: showAdvanced),
 			IgnoreOptionId.DotFiles => new IgnoreOptionsAvailability(
@@ -246,6 +261,7 @@ public sealed class IgnoreOptionsServiceComprehensiveMatrixTests
 				IncludeDotFiles: true,
 				DotFilesCount: count,
 				IncludeEmptyFolders: false,
+				IncludeEmptyFiles: false,
 				IncludeExtensionlessFiles: false,
 				ShowAdvancedCounts: showAdvanced),
 			IgnoreOptionId.EmptyFolders => new IgnoreOptionsAvailability(
@@ -257,7 +273,20 @@ public sealed class IgnoreOptionsServiceComprehensiveMatrixTests
 				IncludeDotFiles: false,
 				IncludeEmptyFolders: true,
 				EmptyFoldersCount: count,
+				IncludeEmptyFiles: false,
 				IncludeExtensionlessFiles: false,
+				ShowAdvancedCounts: showAdvanced),
+			IgnoreOptionId.EmptyFiles => new IgnoreOptionsAvailability(
+				IncludeGitIgnore: false,
+				IncludeSmartIgnore: false,
+				IncludeHiddenFolders: false,
+				IncludeHiddenFiles: false,
+				IncludeDotFolders: false,
+				IncludeDotFiles: false,
+				IncludeEmptyFolders: false,
+				IncludeExtensionlessFiles: false,
+				IncludeEmptyFiles: true,
+				EmptyFilesCount: count,
 				ShowAdvancedCounts: showAdvanced),
 			IgnoreOptionId.ExtensionlessFiles => new IgnoreOptionsAvailability(
 				IncludeGitIgnore: false,
@@ -267,6 +296,7 @@ public sealed class IgnoreOptionsServiceComprehensiveMatrixTests
 				IncludeDotFolders: false,
 				IncludeDotFiles: false,
 				IncludeEmptyFolders: false,
+				IncludeEmptyFiles: false,
 				IncludeExtensionlessFiles: true,
 				ExtensionlessFilesCount: count,
 				ShowAdvancedCounts: showAdvanced),

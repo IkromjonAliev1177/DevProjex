@@ -103,9 +103,12 @@ public sealed class ProjectProfileStoreAdditionalTests
 					SelectedIgnoreOptions: []));
 
 			Assert.True(store.TryLoadProfile(Path.Combine(tempRoot, "RepoA"), out var loaded));
-			Assert.Equal(2, loaded.SelectedRootFolders.Count);
+			var expectedRootFolders = new HashSet<string>(PathComparer.Default) { "src", "SRC", "tests" };
+			Assert.Equal(expectedRootFolders.Count, loaded.SelectedRootFolders.Count);
 			Assert.Contains("src", loaded.SelectedRootFolders);
 			Assert.Contains("tests", loaded.SelectedRootFolders);
+			if (!OperatingSystem.IsWindows())
+				Assert.Contains("SRC", loaded.SelectedRootFolders);
 		}
 		finally
 		{
@@ -158,6 +161,32 @@ public sealed class ProjectProfileStoreAdditionalTests
 					]));
 
 			Assert.True(store.TryLoadProfile(Path.Combine(tempRoot, "RepoA"), out var loaded));
+			Assert.Equal(2, loaded.SelectedIgnoreOptions.Count);
+		}
+		finally
+		{
+			Directory.Delete(tempRoot, recursive: true);
+		}
+	}
+
+	[Fact]
+	public void SaveProfile_RoundTripsEmptyFilesIgnoreOption()
+	{
+		var tempRoot = CreateTempDirectory();
+		try
+		{
+			var store = CreateStore(tempRoot);
+			var projectPath = Path.Combine(tempRoot, "RepoEmptyFiles");
+			store.SaveProfile(
+				projectPath,
+				new ProjectSelectionProfile(
+					SelectedRootFolders: ["src"],
+					SelectedExtensions: [".cs"],
+					SelectedIgnoreOptions: [IgnoreOptionId.EmptyFiles, IgnoreOptionId.DotFiles]));
+
+			Assert.True(store.TryLoadProfile(projectPath, out var loaded));
+			Assert.Contains(IgnoreOptionId.EmptyFiles, loaded.SelectedIgnoreOptions);
+			Assert.Contains(IgnoreOptionId.DotFiles, loaded.SelectedIgnoreOptions);
 			Assert.Equal(2, loaded.SelectedIgnoreOptions.Count);
 		}
 		finally

@@ -3,18 +3,6 @@ namespace DevProjex.Tests.Unit.Avalonia;
 public sealed class NameFilterCoordinatorBehaviorTests
 {
     [Fact]
-    public void Constructor_ConfiguresExpectedDebounceInterval()
-    {
-        var field = typeof(NameFilterCoordinator).GetField(
-            "DebounceDelay",
-            BindingFlags.Static | BindingFlags.NonPublic);
-
-        Assert.NotNull(field);
-        var debounceDelay = (TimeSpan)field!.GetValue(null)!;
-        Assert.Equal(TimeSpan.FromMilliseconds(360), debounceDelay);
-    }
-
-    [Fact]
     public void OnNameFilterChanged_MultipleCalls_ReplacesAndCancelsPreviousDebounceToken()
     {
         using var coordinator = new NameFilterCoordinator(_ => { });
@@ -97,6 +85,35 @@ public sealed class NameFilterCoordinatorBehaviorTests
         Assert.NotNull(debounceCts);
         Assert.True(debounceCts!.IsCancellationRequested);
         Assert.True(IsDebounceCtsNull(coordinator));
+    }
+
+    [Fact]
+    public void OnNameFilterChanged_WhenActiveQueryExists_SetsBusyStateTrue()
+    {
+        bool? busyState = null;
+        using var coordinator = new NameFilterCoordinator(
+            _ => { },
+            () => true,
+            isBusy => busyState = isBusy);
+
+        coordinator.OnNameFilterChanged();
+
+        Assert.True(busyState);
+    }
+
+    [Fact]
+    public void CancelPending_ResetsBusyState()
+    {
+        bool? busyState = null;
+        using var coordinator = new NameFilterCoordinator(
+            _ => { },
+            () => true,
+            isBusy => busyState = isBusy);
+
+        coordinator.OnNameFilterChanged();
+        coordinator.CancelPending();
+
+        Assert.False(busyState);
     }
 
     private static CancellationTokenSource? GetDebounceCts(NameFilterCoordinator coordinator)

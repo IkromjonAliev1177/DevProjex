@@ -172,7 +172,7 @@ public sealed class ProjectProfileStore(Func<string>? appDataPathProvider = null
 
 		profile.SelectedRootFolders = profile.SelectedRootFolders
 			.Where(static item => !string.IsNullOrWhiteSpace(item))
-			.Distinct(StringComparer.OrdinalIgnoreCase)
+			.Distinct(PathComparer.Default)
 			.ToList();
 		profile.SelectedExtensions = profile.SelectedExtensions
 			.Where(static item => !string.IsNullOrWhiteSpace(item))
@@ -194,7 +194,7 @@ public sealed class ProjectProfileStore(Func<string>? appDataPathProvider = null
 		{
 			SelectedRootFolders = profile.SelectedRootFolders
 				.Where(static item => !string.IsNullOrWhiteSpace(item))
-				.Distinct(StringComparer.OrdinalIgnoreCase)
+				.Distinct(PathComparer.Default)
 				.ToList(),
 			SelectedExtensions = profile.SelectedExtensions
 				.Where(static item => !string.IsNullOrWhiteSpace(item))
@@ -209,7 +209,7 @@ public sealed class ProjectProfileStore(Func<string>? appDataPathProvider = null
 
 	private static ProjectSelectionProfile ToProfile(PersistedProjectProfile profile)
 	{
-		var rootFolders = new HashSet<string>(profile.SelectedRootFolders, StringComparer.OrdinalIgnoreCase);
+		var rootFolders = new HashSet<string>(profile.SelectedRootFolders, PathComparer.Default);
 		var extensions = new HashSet<string>(profile.SelectedExtensions, StringComparer.OrdinalIgnoreCase);
 		var ignoreOptions = new HashSet<IgnoreOptionId>(profile.SelectedIgnoreOptions);
 
@@ -242,26 +242,13 @@ public sealed class ProjectProfileStore(Func<string>? appDataPathProvider = null
 
 		try
 		{
-			var full = Path.GetFullPath(input);
-			normalizedPath = TrimTrailingSeparators(full);
+			normalizedPath = PathUtility.Normalize(input);
 			return !string.IsNullOrWhiteSpace(normalizedPath);
 		}
 		catch
 		{
 			return false;
 		}
-	}
-
-	private static string TrimTrailingSeparators(string path)
-	{
-		var root = Path.GetPathRoot(path);
-		if (string.IsNullOrEmpty(root))
-			return path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-
-		if (PathComparer.Default.Equals(path, root))
-			return path;
-
-		return path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
 	}
 
 	private sealed class ProjectProfileDb

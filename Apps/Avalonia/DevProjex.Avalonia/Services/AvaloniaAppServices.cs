@@ -16,6 +16,7 @@ public sealed record AvaloniaAppServices(
     TreeExportService TreeExportService,
     SelectedContentExportService ContentExportService,
     TreeAndContentExportService TreeAndContentExportService,
+    PreviewDocumentBuilder PreviewDocumentBuilder,
     RepositoryWebPathPresentationService RepositoryWebPathPresentationService,
     TextFileExportService TextFileExportService,
     IToastService ToastService,

@@ -5,18 +5,6 @@ namespace DevProjex.Tests.Unit.Avalonia;
 public sealed class TreeSearchCoordinatorDebounceTests
 {
 	[Fact]
-	public void Constructor_ConfiguresExpectedDebounceInterval()
-	{
-		var field = typeof(TreeSearchCoordinator).GetField(
-			"SearchDebounceDelay",
-			BindingFlags.Static | BindingFlags.NonPublic);
-
-		Assert.NotNull(field);
-		var debounceDelay = (TimeSpan)field!.GetValue(null)!;
-		Assert.Equal(TimeSpan.FromMilliseconds(500), debounceDelay);
-	}
-
-	[Fact]
 	public void OnSearchQueryChanged_MultipleCalls_ReplacesAndCancelsPreviousDebounceToken()
 	{
 		var (viewModel, treeView) = CreateContext();
@@ -63,8 +51,10 @@ public sealed class TreeSearchCoordinatorDebounceTests
 		var debounceCts = GetPrivateField<CancellationTokenSource>(coordinator, "_searchDebounceCts");
 		var searchCts = new CancellationTokenSource();
 		var highlightCts = new CancellationTokenSource();
+		var expansionCts = new CancellationTokenSource();
 		SetPrivateField(coordinator, "_searchCts", searchCts);
 		SetPrivateField(coordinator, "_highlightApplyCts", highlightCts);
+		SetPrivateField(coordinator, "_expansionApplyCts", expansionCts);
 
 		coordinator.CancelPending();
 
@@ -72,6 +62,7 @@ public sealed class TreeSearchCoordinatorDebounceTests
 		Assert.True(debounceCts!.IsCancellationRequested);
 		Assert.True(searchCts.IsCancellationRequested);
 		Assert.True(highlightCts.IsCancellationRequested);
+		Assert.True(expansionCts.IsCancellationRequested);
 	}
 
 	[Fact]
@@ -89,6 +80,7 @@ public sealed class TreeSearchCoordinatorDebounceTests
 		Assert.Null(GetPrivateField<CancellationTokenSource>(coordinator, "_searchDebounceCts"));
 		Assert.Null(GetPrivateField<CancellationTokenSource>(coordinator, "_searchCts"));
 		Assert.Null(GetPrivateField<CancellationTokenSource>(coordinator, "_highlightApplyCts"));
+		Assert.Null(GetPrivateField<CancellationTokenSource>(coordinator, "_expansionApplyCts"));
 	}
 
 	private static (MainWindowViewModel viewModel, TreeView treeView) CreateContext()

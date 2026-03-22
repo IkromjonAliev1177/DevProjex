@@ -31,6 +31,7 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
+. (Join-Path $PSScriptRoot "release-helpers.ps1")
 
 function Write-Step([string]$message) {
     Write-Host ""
@@ -253,8 +254,9 @@ $testedLine
 Ensure-Command -name "winget"
 Ensure-Command -name "wingetcreate"
 
+$defaultReleaseVersionInfo = Get-DefaultReleaseVersionInfo -repoRoot (Get-DevProjexRepoRoot -startPath $PSScriptRoot)
 $resolvedVersionInput = if ([string]::IsNullOrWhiteSpace($Version)) {
-    Read-Required -prompt "Version (example: 4.6 / 4.6.1 / 4.6.1.0)" -defaultValue "4.6"
+    Read-Required -prompt "Version (example: 4.6 / 4.6.1 / 4.6.1.0)" -defaultValue ([string]$defaultReleaseVersionInfo.DisplayVersion)
 }
 else {
     $Version

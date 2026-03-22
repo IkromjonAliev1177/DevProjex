@@ -15,9 +15,10 @@ public class GitPerformanceTests : IAsyncLifetime
     private readonly GitRepositoryService _service;
     private readonly RepoCacheService _cacheService;
     private readonly TemporaryDirectory _tempDir;
+    private GitTestRepository? _testRepository;
+    private bool _gitAvailable;
 
-    // Small test repository for performance tests
-    private const string SmallRepoUrl = "https://github.com/octocat/Hello-World";
+    private string SmallRepoUrl => _testRepository!.RepositoryUrl;
 
     public GitPerformanceTests()
     {
@@ -27,11 +28,15 @@ public class GitPerformanceTests : IAsyncLifetime
         _tempDir = new TemporaryDirectory();
     }
 
-    public Task InitializeAsync() => Task.CompletedTask;
+    public async Task InitializeAsync()
+    {
+        _gitAvailable = await SharedGitRepositories.IsGitAvailableAsync();
+        if (_gitAvailable)
+            _testRepository = await SharedGitRepositories.GetDefaultRepositoryAsync();
+    }
 
     public Task DisposeAsync()
     {
-
         _tempDir.Dispose();
         return Task.CompletedTask;
     }
@@ -40,7 +45,7 @@ public class GitPerformanceTests : IAsyncLifetime
     public async Task ShallowClone_UsesSigificantlyLessDiskSpace()
     {
         // Test that shallow clone uses much less disk space than full clone
-        if (!await _service.IsGitAvailableAsync())
+        if (!_gitAvailable)
         {
             // Skip if git not available
             return;
@@ -64,40 +69,36 @@ public class GitPerformanceTests : IAsyncLifetime
     public async Task BranchSwitch_FastPath_CompletesQuickly()
     {
         // Test that revisiting a branch uses fast path (~50ms)
-        if (!await _service.IsGitAvailableAsync())
+        if (!_gitAvailable)
             return;
 
         var repoPath = _tempDir.CreateDirectory("fast-path-test");
         var cloneResult = await _service.CloneAsync(SmallRepoUrl, repoPath);
         Assert.True(cloneResult.Success);
 
-        var defaultBranch = cloneResult.DefaultBranch ?? "main";
-
-        // Switch to another branch (first time - reliable path)
-        var otherBranch = defaultBranch == "main" ? "master" : "main";
         var branches = await _service.GetBranchesAsync(repoPath);
+        if (branches.Count < 2)
+            return;
 
-        if (branches.Count > 1)
-        {
-            await _service.SwitchBranchAsync(repoPath, otherBranch);
+        var defaultBranch = cloneResult.DefaultBranch ?? branches.First(b => b.IsActive).Name;
+        var otherBranch = branches.First(b => !b.IsActive).Name;
 
-            // Switch back to default branch (second time - should use fast path)
-            var sw = Stopwatch.StartNew();
-            var success = await _service.SwitchBranchAsync(repoPath, defaultBranch);
-            sw.Stop();
+        await _service.SwitchBranchAsync(repoPath, otherBranch);
 
-            Assert.True(success);
-            // Fast path should complete in < 500ms (usually ~50ms, but allow margin)
-            Assert.True(sw.ElapsedMilliseconds < 500,
-                $"Fast path should complete quickly, took {sw.ElapsedMilliseconds}ms");
-        }
+        var sw = Stopwatch.StartNew();
+        var success = await _service.SwitchBranchAsync(repoPath, defaultBranch);
+        sw.Stop();
+
+        Assert.True(success);
+        Assert.True(sw.ElapsedMilliseconds < 500,
+            $"Fast path should complete quickly, took {sw.ElapsedMilliseconds}ms");
     }
 
     [Fact]
     public async Task BranchSwitch_WithDepthOptimization_CompletesSuccessfully()
     {
         // Verify that using --depth 1 for branch fetch doesn't break functionality
-        if (!await _service.IsGitAvailableAsync())
+        if (!_gitAvailable)
             return;
 
         var repoPath = _tempDir.CreateDirectory("depth-optimization");
@@ -142,7 +143,7 @@ public class GitPerformanceTests : IAsyncLifetime
     public async Task GetBranches_UsingLsRemote_CompletesWithinReasonableTime()
     {
         // Verify that ls-remote approach is faster than fetch approach
-        if (!await _service.IsGitAvailableAsync())
+        if (!_gitAvailable)
             return;
 
         var repoPath = _tempDir.CreateDirectory("ls-remote-perf");
@@ -166,7 +167,7 @@ public class GitPerformanceTests : IAsyncLifetime
     public async Task PullUpdates_WithDepthOptimization_WorksCorrectly()
     {
         // Verify that pull with --depth 1 doesn't break anything
-        if (!await _service.IsGitAvailableAsync())
+        if (!_gitAvailable)
             return;
 
         var repoPath = _tempDir.CreateDirectory("pull-depth");
@@ -189,7 +190,7 @@ public class GitPerformanceTests : IAsyncLifetime
     public async Task MultipleOperations_DoNotDegradePerformance()
     {
         // Verify that multiple git operations don't slow down over time
-        if (!await _service.IsGitAvailableAsync())
+        if (!_gitAvailable)
             return;
 
         var repoPath = _tempDir.CreateDirectory("multi-ops");
@@ -236,7 +237,7 @@ public class GitPerformanceTests : IAsyncLifetime
     public async Task ConcurrentGetBranches_DoesNotCauseErrors()
     {
         // Verify that concurrent GetBranches calls don't interfere
-        if (!await _service.IsGitAvailableAsync())
+        if (!_gitAvailable)
             return;
 
         var repoPath = _tempDir.CreateDirectory("concurrent-branches");

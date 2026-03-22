@@ -1,0 +1,325 @@
+using System.Runtime.CompilerServices;
+using DevProjex.Application.Preview;
+using DevProjex.Kernel;
+
+namespace DevProjex.Avalonia.Services;
+
+internal readonly record struct PreviewCacheKeyData(
+    string? ProjectPath,
+    int TreeIdentity,
+    PreviewContentMode Mode,
+    TreeTextFormat TreeFormat,
+    int SelectedCount,
+    int SelectedHash);
+
+internal readonly record struct StatusMetricLabels(
+    string LinesPrefix,
+    string CharsPrefix,
+    string TokensPrefix);
+
+internal static class PreviewWarmupPolicy
+{
+    internal const int PreviewWarmupFileThreshold = 140;
+
+    public static bool ShouldBuildPreviewWarmup(
+        PreviewContentMode mode,
+        bool hasSelection,
+        IReadOnlySet<string> selectedPaths,
+        TreeNodeDescriptor? treeRoot)
+    {
+        if (mode == PreviewContentMode.Tree)
+            return false;
+
+        if (hasSelection)
+            return CountSelectedFilesUpToLimit(selectedPaths, PreviewWarmupFileThreshold) >= PreviewWarmupFileThreshold;
+
+        return CountTreeFilesUpToLimit(treeRoot, PreviewWarmupFileThreshold) >= PreviewWarmupFileThreshold;
+    }
+
+    public static int CountSelectedFilesUpToLimit(IReadOnlySet<string> selectedPaths, int maxCount)
+    {
+        if (maxCount <= 0)
+            return 0;
+
+        var count = 0;
+        foreach (var path in selectedPaths)
+        {
+            if (!File.Exists(path))
+                continue;
+
+            count++;
+            if (count >= maxCount)
+                break;
+        }
+
+        return count;
+    }
+
+    public static int CountTreeFilesUpToLimit(TreeNodeDescriptor? treeRoot, int maxCount)
+    {
+        if (treeRoot is null || maxCount <= 0)
+            return 0;
+
+        var count = 0;
+        var stack = new Stack<TreeNodeDescriptor>();
+        stack.Push(treeRoot);
+
+        while (stack.Count > 0 && count < maxCount)
+        {
+            var node = stack.Pop();
+            if (!node.IsDirectory)
+            {
+                count++;
+                continue;
+            }
+
+            for (var index = node.Children.Count - 1; index >= 0; index--)
+                stack.Push(node.Children[index]);
+        }
+
+        return count;
+    }
+
+    public static List<string> CollectInitialPreviewFiles(
+        IReadOnlySet<string> selectedPaths,
+        bool hasSelection,
+        TreeNodeDescriptor? treeRoot,
+        int maxFileCount)
+    {
+        if (maxFileCount <= 0)
+            return [];
+
+        var uniqueFiles = new HashSet<string>(PathComparer.Default);
+        if (hasSelection)
+        {
+            foreach (var path in selectedPaths)
+            {
+                if (!File.Exists(path))
+                    continue;
+
+                uniqueFiles.Add(path);
+            }
+        }
+        else if (treeRoot is not null)
+        {
+            CollectInitialPreviewFilesFromTree(treeRoot, uniqueFiles, maxFileCount);
+        }
+
+        if (uniqueFiles.Count == 0)
+            return [];
+
+        var files = new List<string>(uniqueFiles);
+        files.Sort(PathComparer.Default);
+        if (files.Count > maxFileCount)
+            files.RemoveRange(maxFileCount, files.Count - maxFileCount);
+
+        return files;
+    }
+
+    private static void CollectInitialPreviewFilesFromTree(
+        TreeNodeDescriptor node,
+        HashSet<string> uniqueFiles,
+        int maxFileCount)
+    {
+        if (uniqueFiles.Count >= maxFileCount)
+            return;
+
+        if (!node.IsDirectory)
+        {
+            if (File.Exists(node.FullPath))
+                uniqueFiles.Add(node.FullPath);
+            return;
+        }
+
+        foreach (var child in node.Children)
+        {
+            CollectInitialPreviewFilesFromTree(child, uniqueFiles, maxFileCount);
+            if (uniqueFiles.Count >= maxFileCount)
+                break;
+        }
+    }
+}
+
+internal static class PreviewFileCollectionPolicy
+{
+    private const long HeavyTextThreshold = 1_500_000;
+    private const int HeavyLineThreshold = 35_000;
+
+    public static int CountPreviewLines(string text)
+    {
+        var lineCount = 1;
+        foreach (var ch in text)
+        {
+            if (ch == '\n')
+                lineCount++;
+        }
+
+        return lineCount;
+    }
+
+    public static bool ShouldForcePreviewMemoryCleanup(long textLength, int lineCount) =>
+        textLength >= HeavyTextThreshold || lineCount >= HeavyLineThreshold;
+
+    public static List<string> CollectOrderedPreviewFiles(
+        IReadOnlySet<string> selectedPaths,
+        bool hasSelection,
+        TreeNodeDescriptor? treeRoot)
+    {
+        var uniqueFiles = new HashSet<string>(PathComparer.Default);
+
+        if (hasSelection)
+        {
+            foreach (var path in selectedPaths)
+            {
+                if (File.Exists(path))
+                    uniqueFiles.Add(path);
+            }
+        }
+        else if (treeRoot is not null)
+        {
+            foreach (var path in EnumerateFilePaths(treeRoot))
+                uniqueFiles.Add(path);
+        }
+
+        var files = new List<string>(uniqueFiles.Count);
+        files.AddRange(uniqueFiles);
+        files.Sort(PathComparer.Default);
+        return files;
+    }
+
+    public static PreviewCacheKeyData BuildPreviewCacheKey(
+        string? projectPath,
+        TreeNodeDescriptor? treeRoot,
+        PreviewContentMode mode,
+        TreeTextFormat treeFormat,
+        IReadOnlySet<string> selectedPaths)
+    {
+        return new PreviewCacheKeyData(
+            ProjectPath: projectPath,
+            TreeIdentity: treeRoot is null ? 0 : RuntimeHelpers.GetHashCode(treeRoot),
+            Mode: mode,
+            TreeFormat: treeFormat,
+            SelectedCount: selectedPaths.Count,
+            SelectedHash: BuildPathSetHash(selectedPaths));
+    }
+
+    public static int BuildPathSetHash(IReadOnlySet<string> selectedPaths)
+    {
+        if (selectedPaths.Count == 0)
+            return 0;
+
+        var ordered = new List<string>(selectedPaths.Count);
+        ordered.AddRange(selectedPaths);
+        ordered.Sort(PathComparer.Default);
+
+        var hash = new HashCode();
+        foreach (var path in ordered)
+            hash.Add(path, PathComparer.Default);
+
+        return hash.ToHashCode();
+    }
+
+    public static List<string> BuildOrderedSelectedFilePaths(
+        IReadOnlySet<string> selectedPaths,
+        bool ensureExists = true)
+    {
+        var uniquePaths = new HashSet<string>(PathComparer.Default);
+        foreach (var path in selectedPaths)
+        {
+            if (ensureExists && !File.Exists(path))
+                continue;
+
+            uniquePaths.Add(path);
+        }
+
+        var orderedPaths = new List<string>(uniquePaths.Count);
+        orderedPaths.AddRange(uniquePaths);
+        orderedPaths.Sort(PathComparer.Default);
+        return orderedPaths;
+    }
+
+    public static IEnumerable<string> EnumerateFilePaths(TreeNodeDescriptor node)
+    {
+        if (!node.IsDirectory)
+        {
+            yield return node.FullPath;
+            yield break;
+        }
+
+        foreach (var child in node.Children)
+        {
+            foreach (var path in EnumerateFilePaths(child))
+                yield return path;
+        }
+    }
+}
+
+internal static class PreviewSelectionMetricsPolicy
+{
+    public static bool TryGetCachedMetrics(
+        bool hasStatusMetricsSnapshot,
+        PreviewContentMode selectedMode,
+        IPreviewTextDocument document,
+        PreviewSelectionRange selectionRange,
+        ExportOutputMetrics treeMetrics,
+        ExportOutputMetrics contentMetrics,
+        out ExportOutputMetrics metrics)
+    {
+        metrics = ExportOutputMetrics.Empty;
+
+        if (!hasStatusMetricsSnapshot || !IsFullDocumentSelection(document, selectionRange))
+            return false;
+
+        metrics = selectedMode switch
+        {
+            PreviewContentMode.Tree => treeMetrics,
+            PreviewContentMode.Content => contentMetrics,
+            PreviewContentMode.TreeAndContent => AddMetrics(treeMetrics, contentMetrics),
+            _ => ExportOutputMetrics.Empty
+        };
+
+        return metrics != ExportOutputMetrics.Empty;
+    }
+
+    public static bool IsFullDocumentSelection(IPreviewTextDocument document, PreviewSelectionRange selectionRange)
+    {
+        var normalizedSelection = selectionRange.Normalize();
+        if (normalizedSelection.StartLine != 1 || normalizedSelection.StartColumn != 0)
+            return false;
+
+        var lastLine = Math.Max(1, document.LineCount);
+        var lastLineLength = document.GetLineText(lastLine).Length;
+        return normalizedSelection.EndLine == lastLine &&
+               normalizedSelection.EndColumn == lastLineLength;
+    }
+
+    public static ExportOutputMetrics AddMetrics(ExportOutputMetrics left, ExportOutputMetrics right) =>
+        new(left.Lines + right.Lines, left.Chars + right.Chars, left.Tokens + right.Tokens);
+
+    public static string FormatStatusMetricsText(
+        ExportOutputMetrics metrics,
+        StatusMetricLabels labels,
+        bool useCompactMode)
+    {
+        if (useCompactMode)
+            return $"[{labels.LinesPrefix} {FormatNumber(metrics.Lines)}]";
+
+        return $"[{labels.LinesPrefix} {FormatNumber(metrics.Lines)} | {labels.CharsPrefix} {FormatNumber(metrics.Chars)} | {labels.TokensPrefix} {FormatNumber(metrics.Tokens)}]";
+    }
+
+    private static string FormatNumber(int value)
+    {
+        return value switch
+        {
+            >= 1_000_000 => $"{value / 1_000_000.0:F1}M",
+            >= 10_000 => $"{value / 1_000.0:F1}K",
+            _ => value.ToString("N0")
+        };
+    }
+}
+
+internal static class MetricsCalculationPolicy
+{
+    public static bool ShouldProceedWithMetricsCalculation(bool hasAnyCheckedNodes, bool hasCompleteMetricsBaseline) =>
+        hasAnyCheckedNodes || hasCompleteMetricsBaseline;
+}

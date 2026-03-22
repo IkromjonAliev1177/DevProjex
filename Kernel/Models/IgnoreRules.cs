@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
 
 namespace DevProjex.Kernel.Models;
@@ -18,13 +19,15 @@ public sealed record IgnoreRules(
 		: StringComparer.OrdinalIgnoreCase;
 	private const int ScopedMatcherChainCacheLimit = 2048;
 	private const int SmartScopeApplicabilityCacheLimit = 2048;
-	private readonly object _cacheSync = new();
-	private Dictionary<string, ScopedGitIgnoreMatcher[]>? _scopedMatcherChainCache;
-	private Dictionary<string, bool>? _smartScopeApplicabilityCache;
+	private readonly ConcurrentDictionary<string, ScopedGitIgnoreMatcher[]> _scopedMatcherChainCache =
+		new(PathStringComparer);
+	private readonly ConcurrentDictionary<string, bool> _smartScopeApplicabilityCache =
+		new(PathStringComparer);
 
 	public bool UseGitIgnore { get; init; }
 	public bool UseSmartIgnore { get; init; }
 	public bool IgnoreEmptyFolders { get; init; }
+	public bool IgnoreEmptyFiles { get; init; }
 	public bool IgnoreExtensionlessFiles { get; init; }
 
 	public GitIgnoreMatcher GitIgnoreMatcher { get; init; } = GitIgnoreMatcher.Empty;
@@ -149,28 +152,24 @@ public sealed record IgnoreRules(
 				probePath = parentDirectory;
 		}
 
-		lock (_cacheSync)
+		if (_smartScopeApplicabilityCache.TryGetValue(probePath, out var cached))
+			return cached;
+
+		var applies = false;
+		foreach (var scopeRoot in SmartIgnoreScopeRoots)
 		{
-			_smartScopeApplicabilityCache ??= new Dictionary<string, bool>(PathStringComparer);
-			if (_smartScopeApplicabilityCache.TryGetValue(probePath, out var cached))
-				return cached;
+			if (!IsPathInsideScope(probePath, scopeRoot))
+				continue;
 
-			var applies = false;
-			foreach (var scopeRoot in SmartIgnoreScopeRoots)
-			{
-				if (!IsPathInsideScope(probePath, scopeRoot))
-					continue;
-
-				applies = true;
-				break;
-			}
-
-			_smartScopeApplicabilityCache[probePath] = applies;
-			if (_smartScopeApplicabilityCache.Count > SmartScopeApplicabilityCacheLimit)
-				_smartScopeApplicabilityCache.Clear();
-
-			return applies;
+			applies = true;
+			break;
 		}
+
+		_smartScopeApplicabilityCache[probePath] = applies;
+		if (_smartScopeApplicabilityCache.Count > SmartScopeApplicabilityCacheLimit)
+			_smartScopeApplicabilityCache.Clear();
+
+		return applies;
 	}
 
 	private ScopedGitIgnoreMatcher[] GetApplicableGitIgnoreMatchers(string fullPath, bool isDirectory)
@@ -188,28 +187,24 @@ public sealed record IgnoreRules(
 			cacheKeyPath = parentDirectory;
 		}
 
-		lock (_cacheSync)
+		if (_scopedMatcherChainCache.TryGetValue(cacheKeyPath, out var cached))
+			return cached;
+
+		var matched = new List<ScopedGitIgnoreMatcher>();
+		foreach (var scoped in ScopedGitIgnoreMatchers)
 		{
-			_scopedMatcherChainCache ??= new Dictionary<string, ScopedGitIgnoreMatcher[]>(PathStringComparer);
-			if (_scopedMatcherChainCache.TryGetValue(cacheKeyPath, out var cached))
-				return cached;
-
-			var matched = new List<ScopedGitIgnoreMatcher>();
-			foreach (var scoped in ScopedGitIgnoreMatchers)
-			{
-				if (IsPathInsideScope(cacheKeyPath, scoped.ScopeRootPath))
-					matched.Add(scoped);
-			}
-
-			ScopedGitIgnoreMatcher[] resolved = matched.Count == 0
-				? Array.Empty<ScopedGitIgnoreMatcher>()
-				: [.. matched];
-			_scopedMatcherChainCache[cacheKeyPath] = resolved;
-			if (_scopedMatcherChainCache.Count > ScopedMatcherChainCacheLimit)
-				_scopedMatcherChainCache.Clear();
-
-			return resolved;
+			if (IsPathInsideScope(cacheKeyPath, scoped.ScopeRootPath))
+				matched.Add(scoped);
 		}
+
+		ScopedGitIgnoreMatcher[] resolved = matched.Count == 0
+			? Array.Empty<ScopedGitIgnoreMatcher>()
+			: [.. matched];
+		_scopedMatcherChainCache[cacheKeyPath] = resolved;
+		if (_scopedMatcherChainCache.Count > ScopedMatcherChainCacheLimit)
+			_scopedMatcherChainCache.Clear();
+
+		return resolved;
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]

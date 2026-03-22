@@ -70,15 +70,9 @@ public sealed class IgnoreRulesServiceCacheAndLimitsTests
 		var withinTtl = service.GetIgnoreOptionsAvailability(temp.Path, ["proj-no-git"]);
 		Assert.False(withinTtl.IncludeGitIgnore);
 
-		var deadlineUtc = DateTime.UtcNow.AddSeconds(8);
-		IgnoreOptionsAvailability afterTtl = withinTtl;
-		while (DateTime.UtcNow < deadlineUtc)
-		{
-			Thread.Sleep(250);
-			afterTtl = service.GetIgnoreOptionsAvailability(temp.Path, ["proj-no-git"]);
-			if (afterTtl.IncludeGitIgnore)
-				break;
-		}
+		ExpireScopeCacheEntry(temp.Path, ["proj-no-git"]);
+
+		var afterTtl = service.GetIgnoreOptionsAvailability(temp.Path, ["proj-no-git"]);
 
 		Assert.True(afterTtl.IncludeGitIgnore);
 	}
@@ -183,5 +177,58 @@ public sealed class IgnoreRulesServiceCacheAndLimitsTests
 				new HashSet<string>(folders, StringComparer.OrdinalIgnoreCase),
 				new HashSet<string>(StringComparer.OrdinalIgnoreCase));
 		}
+	}
+
+	private static void ExpireScopeCacheEntry(string rootPath, IReadOnlyCollection<string> selectedRootFolders)
+	{
+		var buildScopeCacheKey = typeof(IgnoreRulesService).GetMethod(
+			"BuildScopeCacheKey",
+			BindingFlags.Static | BindingFlags.NonPublic);
+		Assert.NotNull(buildScopeCacheKey);
+
+		var cacheKey = (string?)buildScopeCacheKey.Invoke(
+			null,
+			[
+				Path.GetFullPath(rootPath),
+				selectedRootFolders
+			]);
+		Assert.False(string.IsNullOrWhiteSpace(cacheKey));
+
+		var scopeCacheField = typeof(IgnoreRulesService).GetField(
+			"ScopeCache",
+			BindingFlags.Static | BindingFlags.NonPublic);
+		Assert.NotNull(scopeCacheField);
+
+		var scopeCache = scopeCacheField.GetValue(null);
+		Assert.NotNull(scopeCache);
+
+		var dictionaryType = scopeCache.GetType();
+		var tryGetValueMethod = dictionaryType.GetMethod("TryGetValue");
+		Assert.NotNull(tryGetValueMethod);
+
+		var arguments = new object?[] { cacheKey, null };
+		var found = (bool)tryGetValueMethod.Invoke(scopeCache, arguments)!;
+		Assert.True(found);
+
+		var existingEntry = arguments[1];
+		Assert.NotNull(existingEntry);
+
+		var entryType = existingEntry.GetType();
+		var contextProperty = entryType.GetProperty("Context");
+		Assert.NotNull(contextProperty);
+		var context = contextProperty.GetValue(existingEntry);
+		Assert.NotNull(context);
+
+		var constructor = entryType.GetConstructor([typeof(DateTime), context.GetType()]);
+		Assert.NotNull(constructor);
+
+		var expiredEntry = constructor.Invoke([
+			DateTime.UtcNow.AddSeconds(-30),
+			context
+		]);
+
+		var indexer = dictionaryType.GetProperty("Item");
+		Assert.NotNull(indexer);
+		indexer.SetValue(scopeCache, expiredEntry, [cacheKey]);
 	}
 }

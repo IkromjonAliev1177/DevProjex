@@ -1,6 +1,3 @@
-# This workflow will build a .NET project
-# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-net
-
 name: .NET CI
 
 on:
@@ -8,11 +5,104 @@ on:
     branches: [ "master" ]
   pull_request:
     branches: [ "master" ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+concurrency:
+  group: dotnet-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  build-test:
-    runs-on: windows-latest
-    timeout-minutes: 30
+  validate-release-config:
+    name: Validate Release Config
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate release metadata
+        shell: pwsh
+        run: ./Scripts/release-all.ps1 -ValidateConfigOnly
+
+  test-suite:
+    name: CI (${{ matrix.os_name }} / ${{ matrix.suite_name }})
+    needs: validate-release-config
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os_name: Windows
+            runner: windows-latest
+            os_id: windows
+            suite_name: Unit
+            suite_id: unit
+            project_path: Tests/DevProjex.Tests.Unit/DevProjex.Tests.Unit.csproj
+            trx_name: unit.trx
+          - os_name: Windows
+            runner: windows-latest
+            os_id: windows
+            suite_name: Integration
+            suite_id: integration
+            project_path: Tests/DevProjex.Tests.Integration/DevProjex.Tests.Integration.csproj
+            trx_name: integration.trx
+          - os_name: Windows
+            runner: windows-latest
+            os_id: windows
+            suite_name: UI
+            suite_id: ui
+            project_path: Tests/DevProjex.Tests.UI/DevProjex.Tests.UI.csproj
+            trx_name: ui.trx
+          - os_name: Linux
+            runner: ubuntu-latest
+            os_id: linux
+            suite_name: Unit
+            suite_id: unit
+            project_path: Tests/DevProjex.Tests.Unit/DevProjex.Tests.Unit.csproj
+            trx_name: unit.trx
+          - os_name: Linux
+            runner: ubuntu-latest
+            os_id: linux
+            suite_name: Integration
+            suite_id: integration
+            project_path: Tests/DevProjex.Tests.Integration/DevProjex.Tests.Integration.csproj
+            trx_name: integration.trx
+          - os_name: Linux
+            runner: ubuntu-latest
+            os_id: linux
+            suite_name: UI
+            suite_id: ui
+            project_path: Tests/DevProjex.Tests.UI/DevProjex.Tests.UI.csproj
+            trx_name: ui.trx
+          - os_name: macOS
+            runner: macos-latest
+            os_id: macos
+            suite_name: Unit
+            suite_id: unit
+            project_path: Tests/DevProjex.Tests.Unit/DevProjex.Tests.Unit.csproj
+            trx_name: unit.trx
+          - os_name: macOS
+            runner: macos-latest
+            os_id: macos
+            suite_name: Integration
+            suite_id: integration
+            project_path: Tests/DevProjex.Tests.Integration/DevProjex.Tests.Integration.csproj
+            trx_name: integration.trx
+          - os_name: macOS
+            runner: macos-latest
+            os_id: macos
+            suite_name: UI
+            suite_id: ui
+            project_path: Tests/DevProjex.Tests.UI/DevProjex.Tests.UI.csproj
+            trx_name: ui.trx
 
     steps:
       - uses: actions/checkout@v4
@@ -20,16 +110,59 @@ jobs:
       - name: Setup .NET 10
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 10.0.103
+          dotnet-version: 10.0.104
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', 'Directory.Build.props') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-
 
       - name: Restore
+        shell: pwsh
         run: dotnet restore DevProjex.sln
 
       - name: Build
+        shell: pwsh
         run: dotnet build DevProjex.sln -c Release --no-restore
 
-      - name: Test Unit
-        run: dotnet test Tests/DevProjex.Tests.Unit/DevProjex.Tests.Unit.csproj -c Release --no-build --verbosity normal
+      - name: Ensure Linux headless runner
+        if: ${{ matrix.os_id == 'linux' }}
+        shell: bash
+        run: |
+          if ! command -v xvfb-run >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y xvfb
+          fi
 
-      - name: Test Integration
-        run: dotnet test Tests/DevProjex.Tests.Integration/DevProjex.Tests.Integration.csproj -c Release --no-build --verbosity normal
+      - name: Run ${{ matrix.suite_name }} Tests
+        if: ${{ matrix.os_id != 'linux' }}
+        shell: pwsh
+        run: >
+          dotnet test ${{ matrix.project_path }}
+          -c Release
+          --no-build
+          --verbosity normal
+          --logger "trx;LogFileName=${{ matrix.trx_name }}"
+          --results-directory "TestResults/${{ matrix.suite_id }}"
+
+      - name: Run ${{ matrix.suite_name }} Tests (Linux headless)
+        if: ${{ matrix.os_id == 'linux' }}
+        shell: bash
+        run: >
+          xvfb-run -a dotnet test ${{ matrix.project_path }}
+          -c Release
+          --no-build
+          --verbosity normal
+          --logger "trx;LogFileName=${{ matrix.trx_name }}"
+          --results-directory "TestResults/${{ matrix.suite_id }}"
+
+      - name: Upload Test Results
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ matrix.os_id }}-${{ matrix.suite_id }}
+          path: TestResults/**/*.trx
+          if-no-files-found: ignore

@@ -93,19 +93,23 @@ public sealed class ScanOptionsUseCaseRobustnessTests
     [Fact]
     public void Execute_SortsCaseInsensitive_ForMixedCaseInput()
     {
+        var returnedRootFolders = new[] { "zeta", "Alpha", "beta", "Gamma" };
         var scanner = new StubFileSystemScanner
         {
             GetExtensionsHandler = (_, _) => new ScanResult<HashSet<string>>(
                 new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".z", ".A", ".m", ".B" }, false, false),
             GetRootFolderNamesHandler = (_, _) => new ScanResult<List<string>>(
-                ["zeta", "Alpha", "beta", "Gamma"], false, false)
+                [..returnedRootFolders], false, false)
         };
 
         var useCase = new ScanOptionsUseCase(scanner);
         var result = useCase.Execute(new ScanOptionsRequest("/root", CreateRules()));
 
+        var expectedRootFolders = returnedRootFolders.ToList();
+        expectedRootFolders.Sort(PathComparer.Default);
+
         Assert.Equal([".A", ".B", ".m", ".z"], result.Extensions);
-        Assert.Equal(["Alpha", "beta", "Gamma", "zeta"], result.RootFolders);
+        Assert.Equal(expectedRootFolders, result.RootFolders);
     }
 
     private static void AssertContainsInnerError(Exception ex, string expectedMessagePart)

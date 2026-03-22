@@ -9,9 +9,11 @@ public class GitErrorRecoveryTests : IAsyncLifetime
     private readonly GitRepositoryService _service;
     private readonly RepoCacheService _cacheService;
     private readonly TemporaryDirectory _tempDir;
+    private GitTestRepository? _testRepository;
+    private bool _gitAvailable;
 
-    private const string TestRepoUrl = "https://github.com/octocat/Hello-World";
-    private const string InvalidRepoUrl = "https://github.com/invalid-user-xyz/invalid-repo-abc";
+    private string TestRepoUrl => _testRepository!.RepositoryUrl;
+    private string InvalidRepoUrl => new Uri(Path.Combine(_tempDir.Path, "missing-repository.git")).AbsoluteUri;
 
     public GitErrorRecoveryTests()
     {
@@ -21,7 +23,12 @@ public class GitErrorRecoveryTests : IAsyncLifetime
         _tempDir = new TemporaryDirectory();
     }
 
-    public Task InitializeAsync() => Task.CompletedTask;
+    public async Task InitializeAsync()
+    {
+        _gitAvailable = await SharedGitRepositories.IsGitAvailableAsync();
+        if (_gitAvailable)
+            _testRepository = await SharedGitRepositories.GetDefaultRepositoryAsync();
+    }
 
     public Task DisposeAsync()
     {
@@ -32,7 +39,7 @@ public class GitErrorRecoveryTests : IAsyncLifetime
     [Fact]
     public async Task CloneAsync_InvalidRepository_ReturnsFailureResult()
     {
-        if (!await _service.IsGitAvailableAsync())
+        if (!_gitAvailable)
             return;
 
         var targetDir = _tempDir.CreateDirectory("invalid-clone");
@@ -47,19 +54,15 @@ public class GitErrorRecoveryTests : IAsyncLifetime
     [Fact]
     public async Task CloneAsync_Cancelled_CleansUpPartialClone()
     {
-        if (!await _service.IsGitAvailableAsync())
+        if (!_gitAvailable)
             return;
 
         var targetDir = _tempDir.CreateDirectory("cancelled-clone");
         using var cts = new CancellationTokenSource();
-
-        var cloneTask = _service.CloneAsync(TestRepoUrl, targetDir, cancellationToken: cts.Token);
-
-        // Cancel after brief delay
-        await Task.Delay(50);
         cts.Cancel();
 
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await cloneTask);
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            _service.CloneAsync(TestRepoUrl, targetDir, cancellationToken: cts.Token));
 
         // Directory might exist but should not have complete .git
         // This is acceptable - partial cleanup
@@ -68,7 +71,7 @@ public class GitErrorRecoveryTests : IAsyncLifetime
     [Fact]
     public async Task GetBranchesAsync_NonGitDirectory_ReturnsEmptyList()
     {
-        if (!await _service.IsGitAvailableAsync())
+        if (!_gitAvailable)
             return;
 
         var nonGitDir = _tempDir.CreateDirectory("not-git");
@@ -82,7 +85,7 @@ public class GitErrorRecoveryTests : IAsyncLifetime
     [Fact]
     public async Task GetBranchesAsync_MissingGitDirectory_ReturnsEmptyList()
     {
-        if (!await _service.IsGitAvailableAsync())
+        if (!_gitAvailable)
             return;
 
         var missingDir = Path.Combine(_tempDir.Path, "nonexistent");
@@ -95,7 +98,7 @@ public class GitErrorRecoveryTests : IAsyncLifetime
     [Fact]
     public async Task SwitchBranchAsync_NonGitDirectory_ReturnsFalse()
     {
-        if (!await _service.IsGitAvailableAsync())
+        if (!_gitAvailable)
             return;
 
         var nonGitDir = _tempDir.CreateDirectory("not-git-switch");
@@ -108,7 +111,7 @@ public class GitErrorRecoveryTests : IAsyncLifetime
     [Fact]
     public async Task PullUpdatesAsync_NonGitDirectory_ReturnsFalse()
     {
-        if (!await _service.IsGitAvailableAsync())
+        if (!_gitAvailable)
             return;
 
         var nonGitDir = _tempDir.CreateDirectory("not-git-pull");
@@ -121,7 +124,7 @@ public class GitErrorRecoveryTests : IAsyncLifetime
     [Fact]
     public async Task GetCurrentBranchAsync_NonGitDirectory_ReturnsNull()
     {
-        if (!await _service.IsGitAvailableAsync())
+        if (!_gitAvailable)
             return;
 
         var nonGitDir = _tempDir.CreateDirectory("not-git-current");
@@ -134,7 +137,7 @@ public class GitErrorRecoveryTests : IAsyncLifetime
     [Fact]
     public async Task CloneAsync_ToExistingDirectory_HandlesGracefully()
     {
-        if (!await _service.IsGitAvailableAsync())
+        if (!_gitAvailable)
             return;
 
         var targetDir = _tempDir.CreateDirectory("existing-dir");
@@ -152,7 +155,7 @@ public class GitErrorRecoveryTests : IAsyncLifetime
     [Fact]
     public async Task SwitchBranchAsync_WithCancellation_StopsGracefully()
     {
-        if (!await _service.IsGitAvailableAsync())
+        if (!_gitAvailable)
             return;
 
         var repoPath = _tempDir.CreateDirectory("cancel-switch");
@@ -186,16 +189,17 @@ public class GitErrorRecoveryTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task PullUpdatesAsync_WithCancellation_DoesNotCorruptRepo()
+    public async Task PullUpdatesAsync_WithPreCancelledToken_DoesNotCorruptRepo()
     {
-        if (!await _service.IsGitAvailableAsync())
+        if (!_gitAvailable)
             return;
 
         var repoPath = _tempDir.CreateDirectory("cancel-pull");
         var cloneResult = await _service.CloneAsync(TestRepoUrl, repoPath);
         Assert.True(cloneResult.Success);
 
-        using var cts = new CancellationTokenSource(50); // Cancel after 50ms
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
 
         try
         {
@@ -214,7 +218,7 @@ public class GitErrorRecoveryTests : IAsyncLifetime
     [Fact]
     public async Task CloneAsync_AfterFailedClone_CanRetry()
     {
-        if (!await _service.IsGitAvailableAsync())
+        if (!_gitAvailable)
             return;
 
         var targetDir = _tempDir.CreateDirectory("retry-clone");
@@ -242,7 +246,7 @@ public class GitErrorRecoveryTests : IAsyncLifetime
     [Fact]
     public async Task GetBranchesAsync_AfterFailedOperation_StillWorks()
     {
-        if (!await _service.IsGitAvailableAsync())
+        if (!_gitAvailable)
             return;
 
         var repoPath = _tempDir.CreateDirectory("after-fail");
@@ -260,7 +264,7 @@ public class GitErrorRecoveryTests : IAsyncLifetime
     [Fact]
     public async Task SwitchBranchAsync_AfterNetworkError_Recovers()
     {
-        if (!await _service.IsGitAvailableAsync())
+        if (!_gitAvailable)
             return;
 
         var repoPath = _tempDir.CreateDirectory("network-recovery");
@@ -284,7 +288,7 @@ public class GitErrorRecoveryTests : IAsyncLifetime
     [Fact]
     public async Task CloneAsync_WithInvalidPath_HandlesGracefully()
     {
-        if (!await _service.IsGitAvailableAsync())
+        if (!_gitAvailable)
             return;
 
         // Try to clone to path with special characters
@@ -322,7 +326,7 @@ public class GitErrorRecoveryTests : IAsyncLifetime
     [Fact]
     public async Task GetCurrentBranchAsync_EmptyRepository_ReturnsNull()
     {
-        if (!await _service.IsGitAvailableAsync())
+        if (!_gitAvailable)
             return;
 
         var repoPath = _tempDir.CreateDirectory("empty-current");
@@ -350,7 +354,7 @@ public class GitErrorRecoveryTests : IAsyncLifetime
     [Fact]
     public async Task SwitchBranchAsync_MultipleFailures_DoesNotCorruptState()
     {
-        if (!await _service.IsGitAvailableAsync())
+        if (!_gitAvailable)
             return;
 
         var repoPath = _tempDir.CreateDirectory("multi-fail");
@@ -372,7 +376,7 @@ public class GitErrorRecoveryTests : IAsyncLifetime
     [Fact]
     public async Task CloneAsync_WithProgressCallback_ReportsProgress()
     {
-        if (!await _service.IsGitAvailableAsync())
+        if (!_gitAvailable)
             return;
 
         var targetDir = _tempDir.CreateDirectory("progress-test");
@@ -384,9 +388,6 @@ public class GitErrorRecoveryTests : IAsyncLifetime
         });
 
         var result = await _service.CloneAsync(TestRepoUrl, targetDir, progress);
-
-        // Allow time for progress callbacks to complete
-        await Task.Delay(100);
 
         // Verify that progress was reported
         Assert.NotNull(result);

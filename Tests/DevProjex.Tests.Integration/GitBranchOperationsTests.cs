@@ -9,8 +9,10 @@ public class GitBranchOperationsTests : IAsyncLifetime
     private readonly GitRepositoryService _service;
     private readonly RepoCacheService _cacheService;
     private readonly TemporaryDirectory _tempDir;
+    private GitTestRepository? _testRepository;
+    private bool _gitAvailable;
 
-    private const string TestRepoUrl = "https://github.com/octocat/Hello-World";
+    private string TestRepoUrl => _testRepository!.RepositoryUrl;
 
     public GitBranchOperationsTests()
     {
@@ -20,7 +22,12 @@ public class GitBranchOperationsTests : IAsyncLifetime
         _tempDir = new TemporaryDirectory();
     }
 
-    public Task InitializeAsync() => Task.CompletedTask;
+    public async Task InitializeAsync()
+    {
+        _gitAvailable = await SharedGitRepositories.IsGitAvailableAsync();
+        if (_gitAvailable)
+            _testRepository = await SharedGitRepositories.GetDefaultRepositoryAsync();
+    }
 
     public Task DisposeAsync()
     {
@@ -31,7 +38,7 @@ public class GitBranchOperationsTests : IAsyncLifetime
     [Fact]
     public async Task GetBranchesAsync_ReturnsAllRemoteBranches()
     {
-        if (!await _service.IsGitAvailableAsync())
+        if (!_gitAvailable)
             return;
 
         var repoPath = _tempDir.CreateDirectory("branches-list");
@@ -48,7 +55,7 @@ public class GitBranchOperationsTests : IAsyncLifetime
     [Fact]
     public async Task GetBranchesAsync_MarkesCurrentBranchAsActive()
     {
-        if (!await _service.IsGitAvailableAsync())
+        if (!_gitAvailable)
             return;
 
         var repoPath = _tempDir.CreateDirectory("active-branch");
@@ -65,7 +72,7 @@ public class GitBranchOperationsTests : IAsyncLifetime
     [Fact]
     public async Task GetCurrentBranchAsync_ReturnsActiveBranch()
     {
-        if (!await _service.IsGitAvailableAsync())
+        if (!_gitAvailable)
             return;
 
         var repoPath = _tempDir.CreateDirectory("current-branch");
@@ -84,7 +91,7 @@ public class GitBranchOperationsTests : IAsyncLifetime
     [Fact]
     public async Task SwitchBranchAsync_UpdatesCurrentBranch()
     {
-        if (!await _service.IsGitAvailableAsync())
+        if (!_gitAvailable)
             return;
 
         var repoPath = _tempDir.CreateDirectory("switch-updates");
@@ -115,7 +122,7 @@ public class GitBranchOperationsTests : IAsyncLifetime
     [Fact]
     public async Task SwitchBranchAsync_UpdatesIsActiveFlag()
     {
-        if (!await _service.IsGitAvailableAsync())
+        if (!_gitAvailable)
             return;
 
         var repoPath = _tempDir.CreateDirectory("switch-flag");
@@ -139,7 +146,7 @@ public class GitBranchOperationsTests : IAsyncLifetime
     [Fact]
     public async Task SwitchBranchAsync_ToNonexistentBranch_ReturnsFalse()
     {
-        if (!await _service.IsGitAvailableAsync())
+        if (!_gitAvailable)
             return;
 
         var repoPath = _tempDir.CreateDirectory("switch-invalid");
@@ -154,7 +161,7 @@ public class GitBranchOperationsTests : IAsyncLifetime
     [Fact]
     public async Task SwitchBranchAsync_ToSameBranch_Succeeds()
     {
-        if (!await _service.IsGitAvailableAsync())
+        if (!_gitAvailable)
             return;
 
         var repoPath = _tempDir.CreateDirectory("switch-same");
@@ -170,7 +177,7 @@ public class GitBranchOperationsTests : IAsyncLifetime
     [Fact]
     public async Task GetBranchesAsync_AfterMultipleSwitches_StaysConsistent()
     {
-        if (!await _service.IsGitAvailableAsync())
+        if (!_gitAvailable)
             return;
 
         var repoPath = _tempDir.CreateDirectory("multi-switch");
@@ -201,7 +208,7 @@ public class GitBranchOperationsTests : IAsyncLifetime
     [Fact]
     public async Task SwitchBranchAsync_PreservesWorkingDirectory()
     {
-        if (!await _service.IsGitAvailableAsync())
+        if (!_gitAvailable)
             return;
 
         var repoPath = _tempDir.CreateDirectory("preserve-wd");
@@ -231,7 +238,7 @@ public class GitBranchOperationsTests : IAsyncLifetime
     [Fact]
     public async Task GetBranchesAsync_EmptyRepository_ReturnsEmptyList()
     {
-        if (!await _service.IsGitAvailableAsync())
+        if (!_gitAvailable)
             return;
 
         var repoPath = _tempDir.CreateDirectory("empty-repo");
@@ -259,7 +266,7 @@ public class GitBranchOperationsTests : IAsyncLifetime
     [Fact]
     public async Task SwitchBranchAsync_WithProgress_ReportsProgress()
     {
-        if (!await _service.IsGitAvailableAsync())
+        if (!_gitAvailable)
             return;
 
         var repoPath = _tempDir.CreateDirectory("switch-progress");
@@ -283,7 +290,7 @@ public class GitBranchOperationsTests : IAsyncLifetime
     [Fact]
     public async Task GetBranchesAsync_CaseInsensitive_FindsBranches()
     {
-        if (!await _service.IsGitAvailableAsync())
+        if (!_gitAvailable)
             return;
 
         var repoPath = _tempDir.CreateDirectory("case-test");
@@ -299,7 +306,7 @@ public class GitBranchOperationsTests : IAsyncLifetime
     [Fact]
     public async Task SwitchBranchAsync_AfterPull_WorksCorrectly()
     {
-        if (!await _service.IsGitAvailableAsync())
+        if (!_gitAvailable)
             return;
 
         var repoPath = _tempDir.CreateDirectory("switch-after-pull");
@@ -322,7 +329,7 @@ public class GitBranchOperationsTests : IAsyncLifetime
     [Fact]
     public async Task GetBranchesAsync_DoesNotModifyRepository()
     {
-        if (!await _service.IsGitAvailableAsync())
+        if (!_gitAvailable)
             return;
 
         var repoPath = _tempDir.CreateDirectory("readonly-branches");

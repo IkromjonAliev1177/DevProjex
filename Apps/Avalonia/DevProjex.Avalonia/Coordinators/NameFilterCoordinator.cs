@@ -1,18 +1,15 @@
 namespace DevProjex.Avalonia.Coordinators;
 
-public sealed class NameFilterCoordinator : IDisposable
+public sealed class NameFilterCoordinator(
+    Action<CancellationToken> applyFilterRealtime,
+    Func<bool>? hasActiveQuery = null,
+    Action<bool>? onFilterStateChanged = null) : IDisposable
 {
-    private readonly Action<CancellationToken> _applyFilterRealtime;
-    private static readonly TimeSpan DebounceDelay = TimeSpan.FromMilliseconds(360);
+    private static readonly TimeSpan DebounceDelay = UiTimingProfile.Scale(TimeSpan.FromMilliseconds(360));
     private CancellationTokenSource? _debounceCts;
     private CancellationTokenSource? _filterCts;
     private readonly object _ctsLock = new();
     private int _debounceVersion;
-
-    public NameFilterCoordinator(Action<CancellationToken> applyFilterRealtime)
-    {
-        _applyFilterRealtime = applyFilterRealtime;
-    }
 
     private async Task RunDebounceAsync(int version, CancellationToken token)
     {
@@ -41,12 +38,14 @@ public sealed class NameFilterCoordinator : IDisposable
         await Dispatcher.UIThread.InvokeAsync(() =>
         {
             if (!applyToken.IsCancellationRequested)
-                _applyFilterRealtime(applyToken);
+                applyFilterRealtime(applyToken);
         }, DispatcherPriority.Background);
     }
 
     public void OnNameFilterChanged()
     {
+        onFilterStateChanged?.Invoke(hasActiveQuery?.Invoke() == true);
+
         CancellationToken token;
         int version;
 
@@ -72,6 +71,8 @@ public sealed class NameFilterCoordinator : IDisposable
             _debounceCts?.Cancel();
             _filterCts?.Cancel();
         }
+
+        onFilterStateChanged?.Invoke(false);
     }
 
     public void Dispose()
@@ -85,5 +86,7 @@ public sealed class NameFilterCoordinator : IDisposable
             _filterCts?.Dispose();
             _filterCts = null;
         }
+
+        onFilterStateChanged?.Invoke(false);
     }
 }

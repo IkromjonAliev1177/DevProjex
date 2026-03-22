@@ -93,9 +93,9 @@ cat > "DevProjex.app/Contents/Info.plist" << 'EOF'
     <key>CFBundleIdentifier</key>
     <string>com.devprojex.app</string>
     <key>CFBundleVersion</key>
-    <string>4.6.0</string>
+    <string>YOUR_RELEASE_VERSION</string>
     <key>CFBundleShortVersionString</key>
-    <string>4.6.0</string>
+    <string>YOUR_RELEASE_VERSION</string>
     <key>CFBundleExecutable</key>
     <string>DevProjex</string>
     <key>CFBundleIconFile</key>

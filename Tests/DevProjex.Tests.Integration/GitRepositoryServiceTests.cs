@@ -18,34 +18,32 @@ public class GitRepositoryServiceTests : IAsyncLifetime
     private readonly GitRepositoryService _service = new();
     private string? _tempDir;
     private bool _gitAvailable;
+    private GitTestRepository? _testRepository;
 
-    // Test repository - small public repo for testing
-    // Using octocat/Hello-World - small and stable repo
-    private const string TestRepoUrl = "https://github.com/octocat/Hello-World.git";
-    private const string TestRepoName = "Hello-World";
+    private string TestRepoUrl => _testRepository!.RepositoryUrl;
+    private string TestRepoName => _testRepository!.RepositoryName;
 
     public async Task InitializeAsync()
     {
-        _gitAvailable = await _service.IsGitAvailableAsync();
+        _gitAvailable = await SharedGitRepositories.IsGitAvailableAsync();
         _tempDir = Path.Combine(Path.GetTempPath(), "DevProjex", "Tests", "GitTests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_tempDir);
+        if (_gitAvailable)
+            _testRepository = await SharedGitRepositories.GetDefaultRepositoryAsync();
     }
 
-    public Task DisposeAsync()
+    public async Task DisposeAsync()
     {
         // Cleanup with retry for locked git files
         if (_tempDir != null && Directory.Exists(_tempDir))
-        {
-            TryDeleteDirectory(_tempDir);
-        }
-        return Task.CompletedTask;
+            await TryDeleteDirectoryAsync(_tempDir);
     }
 
     /// <summary>
     /// Attempts to delete directory with retries for locked files.
     /// Git may keep files locked briefly after operations.
     /// </summary>
-    private static void TryDeleteDirectory(string path)
+    private static async Task TryDeleteDirectoryAsync(string path)
     {
         for (int i = 0; i < 3; i++)
         {
@@ -58,11 +56,11 @@ public class GitRepositoryServiceTests : IAsyncLifetime
             }
             catch (UnauthorizedAccessException)
             {
-                Thread.Sleep(100 * (i + 1));
+                await Task.Delay(100 * (i + 1));
             }
             catch (IOException)
             {
-                Thread.Sleep(100 * (i + 1));
+                await Task.Delay(100 * (i + 1));
             }
         }
 
@@ -139,10 +137,12 @@ public class GitRepositoryServiceTests : IAsyncLifetime
         SkipIfNoGit();
 
         var targetDir = Path.Combine(_tempDir!, "non-git-url-test");
+        var nonRepositoryPath = Path.Combine(_tempDir!, "not-a-repository");
+        Directory.CreateDirectory(nonRepositoryPath);
+        File.WriteAllText(Path.Combine(nonRepositoryPath, "README.txt"), "not a git repository");
 
-        // Use a stable, reachable non-git URL to avoid region-specific routing blocks/timeouts.
         var result = await _service.CloneAsync(
-            "https://www.google.com",
+            new Uri(nonRepositoryPath).AbsoluteUri,
             targetDir);
 
         Assert.False(result.Success);
@@ -150,15 +150,15 @@ public class GitRepositoryServiceTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task CloneAsync_ReturnsError_ForInvalidDomain()
+    public async Task CloneAsync_ReturnsError_ForMissingRemote()
     {
         SkipIfNoGit();
 
         var targetDir = Path.Combine(_tempDir!, "invalid-domain-test");
+        var missingRemote = new Uri(Path.Combine(_tempDir!, "missing-repository.git")).AbsoluteUri;
 
-        // Try to clone from a URL that doesn't exist
         var result = await _service.CloneAsync(
-            "https://this-domain-absolutely-does-not-exist-xyz123.com/user/repo.git",
+            missingRemote,
             targetDir);
 
         Assert.False(result.Success);
@@ -220,9 +220,10 @@ public class GitRepositoryServiceTests : IAsyncLifetime
         SkipIfNoGit();
 
         var targetDir = Path.Combine(_tempDir!, "invalid-url-test");
+        var missingRemote = new Uri(Path.Combine(_tempDir!, "missing-repository-2.git")).AbsoluteUri;
 
         var result = await _service.CloneAsync(
-            "https://github.com/nonexistent-user-xyz123/nonexistent-repo-abc456.git",
+            missingRemote,
             targetDir);
 
         Assert.False(result.Success);

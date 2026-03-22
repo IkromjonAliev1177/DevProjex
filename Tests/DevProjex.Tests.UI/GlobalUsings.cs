@@ -1,0 +1,16 @@
+global using System.Diagnostics;
+global using System.Text;
+global using Avalonia;
+global using Avalonia.Controls;
+global using Avalonia.Headless;
+global using Avalonia.Headless.XUnit;
+global using Avalonia.Input;
+global using Avalonia.Threading;
+global using DevProjex.Avalonia;
+global using DevProjex.Avalonia.Services;
+global using DevProjex.Avalonia.ViewModels;
+global using DevProjex.Avalonia.Views;
+global using DevProjex.Kernel;
+global using DevProjex.Kernel.Models;
+global using Xunit;
+global using Xunit.Sdk;

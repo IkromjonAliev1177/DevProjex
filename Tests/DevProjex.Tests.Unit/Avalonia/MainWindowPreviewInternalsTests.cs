@@ -1,3 +1,5 @@
+using DevProjex.Avalonia.Services;
+
 namespace DevProjex.Tests.Unit.Avalonia;
 
 public sealed class MainWindowPreviewInternalsTests
@@ -10,9 +12,7 @@ public sealed class MainWindowPreviewInternalsTests
     [InlineData("\n\n\n", 4)]
     public void CountPreviewLines_ReturnsExpectedValue(string text, int expected)
     {
-        var method = GetPrivateStaticMethod("CountPreviewLines");
-
-        var result = (int)method.Invoke(null, [text])!;
+        var result = PreviewFileCollectionPolicy.CountPreviewLines(text);
 
         Assert.Equal(expected, result);
     }
@@ -20,10 +20,9 @@ public sealed class MainWindowPreviewInternalsTests
     [Fact]
     public void CountPreviewLines_LargeInput_RemainsStable()
     {
-        var method = GetPrivateStaticMethod("CountPreviewLines");
         var text = string.Join('\n', Enumerable.Range(1, 200_000));
 
-        var result = (int)method.Invoke(null, [text])!;
+        var result = PreviewFileCollectionPolicy.CountPreviewLines(text);
 
         Assert.Equal(200_000, result);
     }
@@ -36,9 +35,7 @@ public sealed class MainWindowPreviewInternalsTests
     [InlineData(2_000_000, 100_000, true)]
     public void ShouldForcePreviewMemoryCleanup_UsesThresholdPolicy(int textLength, int lineCount, bool expected)
     {
-        var method = GetPrivateStaticMethod("ShouldForcePreviewMemoryCleanup");
-
-        var result = (bool)method.Invoke(null, [textLength, lineCount])!;
+        var result = PreviewFileCollectionPolicy.ShouldForcePreviewMemoryCleanup(textLength, lineCount);
 
         Assert.Equal(expected, result);
     }
@@ -46,9 +43,7 @@ public sealed class MainWindowPreviewInternalsTests
     [Fact]
     public void BuildPathSetHash_EmptySet_IsZero()
     {
-        var method = GetPrivateStaticMethod("BuildPathSetHash");
-
-        var result = (int)method.Invoke(null, [new HashSet<string>(PathComparer.Default)])!;
+        var result = PreviewFileCollectionPolicy.BuildPathSetHash(new HashSet<string>(PathComparer.Default));
 
         Assert.Equal(0, result);
     }
@@ -56,68 +51,74 @@ public sealed class MainWindowPreviewInternalsTests
     [Fact]
     public void BuildPathSetHash_IsOrderIndependent()
     {
-        var method = GetPrivateStaticMethod("BuildPathSetHash");
-
         var setA = new HashSet<string>(PathComparer.Default) { "/a/b.cs", "/c/d.cs", "/e/f.cs" };
         var setB = new HashSet<string>(PathComparer.Default) { "/e/f.cs", "/a/b.cs", "/c/d.cs" };
 
-        var hashA = (int)method.Invoke(null, [setA])!;
-        var hashB = (int)method.Invoke(null, [setB])!;
+        var hashA = PreviewFileCollectionPolicy.BuildPathSetHash(setA);
+        var hashB = PreviewFileCollectionPolicy.BuildPathSetHash(setB);
 
         Assert.Equal(hashA, hashB);
     }
 
     [Fact]
+    public void BuildOrderedSelectedFilePaths_CaseVariantPaths_FollowPlatformSemantics()
+    {
+        var selected = new HashSet<string>(StringComparer.Ordinal)
+        {
+            CreatePath("root", "B.cs"),
+            CreatePath("root", "a.cs"),
+            CreatePath("root", "A.cs")
+        };
+
+        var result = PreviewFileCollectionPolicy.BuildOrderedSelectedFilePaths(selected, ensureExists: false);
+
+        var expected = new HashSet<string>(PathComparer.Default)
+        {
+            CreatePath("root", "B.cs"),
+            CreatePath("root", "a.cs"),
+            CreatePath("root", "A.cs")
+        }
+        .OrderBy(path => path, PathComparer.Default)
+        .ToList();
+
+        Assert.Equal(expected, result);
+    }
+
+    [Fact]
     public void BuildPreviewCacheKey_SameArguments_ProduceEqualKey()
     {
-        var method = GetPrivateStaticMethod("BuildPreviewCacheKey");
         var root = CreateTree("root");
         var selected = new HashSet<string>(PathComparer.Default) { "/root/a.cs" };
 
-        var keyA = method.Invoke(null, ["/root", root, PreviewContentMode.Content, TreeTextFormat.Json, selected]);
-        var keyB = method.Invoke(null, ["/root", root, PreviewContentMode.Content, TreeTextFormat.Json, selected]);
+        var keyA = PreviewFileCollectionPolicy.BuildPreviewCacheKey("/root", root, PreviewContentMode.Content, TreeTextFormat.Json, selected);
+        var keyB = PreviewFileCollectionPolicy.BuildPreviewCacheKey("/root", root, PreviewContentMode.Content, TreeTextFormat.Json, selected);
 
-        Assert.NotNull(keyA);
-        Assert.NotNull(keyB);
-        Assert.True(keyA!.Equals(keyB));
+        Assert.Equal(keyA, keyB);
     }
 
     [Fact]
     public void BuildPreviewCacheKey_DifferentMode_ProduceDifferentKey()
     {
-        var method = GetPrivateStaticMethod("BuildPreviewCacheKey");
         var root = CreateTree("root");
         var selected = new HashSet<string>(PathComparer.Default) { "/root/a.cs" };
 
-        var keyA = method.Invoke(null, ["/root", root, PreviewContentMode.Tree, TreeTextFormat.Ascii, selected]);
-        var keyB = method.Invoke(null, ["/root", root, PreviewContentMode.TreeAndContent, TreeTextFormat.Ascii, selected]);
+        var keyA = PreviewFileCollectionPolicy.BuildPreviewCacheKey("/root", root, PreviewContentMode.Tree, TreeTextFormat.Ascii, selected);
+        var keyB = PreviewFileCollectionPolicy.BuildPreviewCacheKey("/root", root, PreviewContentMode.TreeAndContent, TreeTextFormat.Ascii, selected);
 
-        Assert.NotNull(keyA);
-        Assert.NotNull(keyB);
-        Assert.False(keyA!.Equals(keyB));
+        Assert.NotEqual(keyA, keyB);
     }
 
     [Fact]
     public void BuildPreviewCacheKey_DifferentTreeInstance_ProduceDifferentKey()
     {
-        var method = GetPrivateStaticMethod("BuildPreviewCacheKey");
         var selected = new HashSet<string>(PathComparer.Default) { "/root/a.cs" };
         var rootA = CreateTree("root");
         var rootB = CreateTree("root");
 
-        var keyA = method.Invoke(null, ["/root", rootA, PreviewContentMode.Tree, TreeTextFormat.Json, selected]);
-        var keyB = method.Invoke(null, ["/root", rootB, PreviewContentMode.Tree, TreeTextFormat.Json, selected]);
+        var keyA = PreviewFileCollectionPolicy.BuildPreviewCacheKey("/root", rootA, PreviewContentMode.Tree, TreeTextFormat.Json, selected);
+        var keyB = PreviewFileCollectionPolicy.BuildPreviewCacheKey("/root", rootB, PreviewContentMode.Tree, TreeTextFormat.Json, selected);
 
-        Assert.NotNull(keyA);
-        Assert.NotNull(keyB);
-        Assert.False(keyA!.Equals(keyB));
-    }
-
-    private static MethodInfo GetPrivateStaticMethod(string name)
-    {
-        var method = typeof(MainWindow).GetMethod(name, BindingFlags.NonPublic | BindingFlags.Static);
-        Assert.NotNull(method);
-        return method!;
+        Assert.NotEqual(keyA, keyB);
     }
 
     private static TreeNodeDescriptor CreateTree(string rootName)
@@ -138,5 +139,12 @@ public sealed class MainWindowPreviewInternalsTests
                     IconKey: "csharp",
                     Children: [])
             ]);
+    }
+
+    private static string CreatePath(params string[] segments)
+    {
+        return OperatingSystem.IsWindows()
+            ? Path.Combine(["C:\\", ..segments])
+            : Path.Combine(["/", ..segments]);
     }
 }

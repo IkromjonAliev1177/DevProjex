@@ -1,3 +1,5 @@
+using DevProjex.Avalonia.Services;
+
 namespace DevProjex.Tests.Unit.Avalonia;
 
 public sealed class MainWindowMetricsPolicyTests
@@ -12,13 +14,10 @@ public sealed class MainWindowMetricsPolicyTests
         bool hasCompleteMetricsBaseline,
         bool expected)
     {
-        var method = typeof(MainWindow).GetMethod(
-            "ShouldProceedWithMetricsCalculation",
-            BindingFlags.NonPublic | BindingFlags.Static);
+        var result = MetricsCalculationPolicy.ShouldProceedWithMetricsCalculation(
+            hasAnyCheckedNodes,
+            hasCompleteMetricsBaseline);
 
-        Assert.NotNull(method);
-
-        var result = (bool)method!.Invoke(null, [hasAnyCheckedNodes, hasCompleteMetricsBaseline])!;
         Assert.Equal(expected, result);
     }
 }

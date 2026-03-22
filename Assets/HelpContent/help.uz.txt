@@ -106,7 +106,12 @@ Daraxt + mazmun:
 ## 6) Preview rejimi
 Yuqori paneldagi ko‘zcha ikonali tugma yoki Ctrl+B orqali ochiladi.
 
-Yakuniy natijani faqat o‘qish rejimida ko‘rsatadi: clipboardga nusxalamasdan va faylga eksport qilmasdan.
+Yakuniy natijani daraxt yonidagi alohida ishchi hududda ko‘rsatadi. Bu rejim o‘zi hech narsani clipboardga nusxalamaydi va faylga eksport qilmaydi — u faqat ko‘rish uchun xizmat qiladi.
+
+Standart holatda ishchi hudud quyidagicha ochiladi:
+* chapda — loyiha daraxti;
+* markazda — preview oroli;
+* o‘ngda — agar ochiq bo‘lsa, sozlamalar paneli.
 
 Mavjud rejimlar:
 * Daraxt
@@ -118,21 +123,37 @@ Nusxalash va eksportdagi qoidalar shu yerda ham qo‘llanadi:
 * tanlov bo‘sh bo‘lsa, to‘liq ma’lumotlar to‘plami ishlatiladi;
 * joriy ignore qoidalari va tanlov parametrlari qo‘llanadi.
 
-Preview ochiq bo‘lsa, qidiruv va filtr mavjud emas.
-Sozlamalarda faqat shriftni o‘zgartirish mumkin.
-Yopish: X tugmasi yoki ko‘zcha ikonani qayta bosish.
+Qo‘shimcha:
+* preview ichida fayllar gorizontal chiziqlar bilan ajratiladi;
+* skroll paytida joriy fayl yo‘li tepada mahkamlanadi;
+* daraxt va preview masshtabi alohida yashashi mumkin.
+
+Tugmalar:
+* daraxt orolidagi X — daraxtni yashiradi va faqat preview orolini qoldiradi;
+* preview’ning yuqori orolidagi X — preview rejimini to‘liq yopadi;
+* ko‘zcha ikonani yana bir marta bosish yoki Ctrl+B ham preview rejimini yopadi.
+
+Qidiruv va filtr preview ichida daraxt oroli ko‘rinib turgan paytda ishlaydi.
+Agar daraxt yashirilsa, qidiruv va filtr preview-only rejimidan chiqquncha vaqtincha ishlamaydi.
 
 ## 7) Ko‘rinish
 ### Masshtab
 * Ctrl++ / Ctrl+= — kattalashtirish
 * Ctrl+- — kichraytirish
 * Ctrl+0 — tiklash
-* Ctrl + g‘ildirak daraxtda va prevyu rejimida — silliq zoom
+* Ctrl + g‘ildirak — kursor turgan orolda silliq zoom
+
+Xulq-atvor:
+* oddiy rejimda daraxt masshtablanadi;
+* daraxt ko‘rinib turgan preview rejimida menyudagi kattalashtirish, kichraytirish va tiklash daraxt va preview’ga bir vaqtda qo‘llanadi;
+* Ctrl + g‘ildirak bilan daraxt va preview kursor joylashuviga qarab mustaqil masshtablanadi;
+* preview-only rejimida faqat preview oroli masshtablanadi.
 
 Oraliq: 6–28, tiklash — 15.
 
 ### Ixcham rejim
 Interfeysni zichroq qiladi: daraxt va sozlamalarda oraliqlar kichikroq.
+Preview workspace faol bo‘lganda ixcham rejim avtomatik ravishda yoqiladi.
 
 ### Daraxt animatsiyasi
 Daraxt qatorlarini kursorga tutganda silliq siljish animatsiyasini yoqadi.
@@ -155,7 +176,8 @@ Qidiruv paneli yopilganda, yopilish animatsiyasi tugagach so‘rov tozalanadi.
 
 Cheklovlar:
 * qidiruv ochilganda, filtr avtomatik yopiladi;
-* preview rejimida qidiruv mavjud emas.
+* qidiruv preview ichida daraxt oroli ko‘rinib turgan paytda mavjud;
+* daraxt yashirilsa, qidiruv vaqtincha mavjud emas.
 
 ## 9) Nom bo‘yicha filtr
 Filtr satriga mos tugunlar va ularning ota‑onalarini ko‘rsatadi. Yangilanish kechikish bilan.
@@ -164,7 +186,8 @@ Filtr satriga mos tugunlar va ularning ota‑onalarini ko‘rsatadi. Yangilanish
 
 Cheklovlar:
 * filtr ochilganda, qidiruv avtomatik yopiladi;
-* preview rejimida filtr mavjud emas.
+* filtr preview ichida daraxt oroli ko‘rinib turgan paytda mavjud;
+* daraxt yashirilsa, filtr vaqtincha mavjud emas.
 
 ## 10) Sozlamalar
 O‘ng tomonda ro‘yxatlar:
@@ -202,6 +225,7 @@ Variantlar tartibi:
 * Smart ignore (mavjud bo‘lsa)
 * .gitignore dan foydalanish (kamida bitta `.gitignore` topilsa)
 * Bo‘sh papkalar
+* Bo‘sh fayllar
 * Yashirin papkalar
 * Yashirin fayllar
 * Boshida nuqtali papkalar
@@ -238,6 +262,7 @@ Variantlar:
 * Boshida nuqtali papkalar
 * Boshida nuqtali fayllar
 * Bo‘sh papkalar
+* Bo‘sh fayllar
 * Kengaytmasiz fayllar
 
 Band yoqilganda mos elementlar daraxtdan va nusxalash/eksport natijalaridan yashiriladi.
@@ -269,10 +294,13 @@ Faqat asosiy ko‘rinish qoidalari qoladi.
 ### 11.6 Bo‘sh papkalar
 Mantiqan bo‘sh papkalarni daraxtdan va nusxalash/eksport natijalaridan yashiradi.
 
-### 11.7 Kengaytmasiz fayllar
+### 11.7 Bo‘sh fayllar
+Hajmi 0 bayt bo‘lgan bo‘sh fayllarni daraxtdan va nusxalash/eksport natijalaridan yashiradi.
+
+### 11.8 Kengaytmasiz fayllar
 Kengaytmasi yo‘q fayllarni (masalan: `Dockerfile`, `Makefile`, `README`) daraxtdan va nusxalash/eksport natijalaridan yashiradi.
 
-### 11.8 «E’tiborsiz qoldirish» blokidagi hisoblagichlar
+### 11.9 «E’tiborsiz qoldirish» blokidagi hisoblagichlar
 «Ko‘rinish → Qo‘shimcha hisoblagichlar» yoqilganda, mavjud bandlar yonida son `(N)` formatida ko‘rsatiladi.
 ## 12) Daraxt va metrikalar qanday hisoblanadi
 Natija quyidagilarga bog‘liq:

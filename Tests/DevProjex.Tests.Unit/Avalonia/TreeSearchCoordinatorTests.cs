@@ -10,6 +10,7 @@ public sealed class TreeSearchCoordinatorTests
 		var (viewModel, treeView) = CreateContext();
 		var root = CreateTree();
 		viewModel.TreeNodes.Add(root);
+		viewModel.SearchVisible = true;
 
 		root.IsExpanded = true;
 		root.Children[1].IsExpanded = true;
@@ -22,6 +23,8 @@ public sealed class TreeSearchCoordinatorTests
 		Assert.False(coordinator.HasMatches);
 		Assert.False(root.Children[1].IsExpanded);
 		Assert.False(root.Children[1].Children[0].IsExpanded);
+		Assert.Equal("(0 / 0)", viewModel.SearchMatchSummaryText);
+		Assert.False(viewModel.SearchMatchSummaryVisible);
 	}
 
 	[Fact]
@@ -54,6 +57,7 @@ public sealed class TreeSearchCoordinatorTests
 		var (viewModel, treeView) = CreateContext();
 		var root = CreateTree();
 		viewModel.TreeNodes.Add(root);
+		viewModel.SearchVisible = true;
 
 		using var coordinator = new TreeSearchCoordinator(viewModel, treeView);
 		viewModel.SearchQuery = "delta";
@@ -67,6 +71,8 @@ public sealed class TreeSearchCoordinatorTests
 		Assert.Same(delta, treeView.SelectedItem);
 		Assert.True(delta.IsSelected);
 		Assert.True(delta.IsCurrentSearchMatch);
+		Assert.Equal("(1 / 1)", viewModel.SearchMatchSummaryText);
+		Assert.True(viewModel.SearchMatchSummaryVisible);
 	}
 
 	[Fact]
@@ -84,15 +90,91 @@ public sealed class TreeSearchCoordinatorTests
 		var delta = root.Children[1].Children[0];
 
 		Assert.Same(beta, treeView.SelectedItem);
+		Assert.Equal("(1 / 2)", viewModel.SearchMatchSummaryText);
 
 		coordinator.Navigate(1);
 		Assert.Same(delta, treeView.SelectedItem);
+		Assert.Equal("(2 / 2)", viewModel.SearchMatchSummaryText);
 
 		coordinator.Navigate(1);
 		Assert.Same(beta, treeView.SelectedItem);
+		Assert.Equal("(1 / 2)", viewModel.SearchMatchSummaryText);
 
 		coordinator.Navigate(-1);
 		Assert.Same(delta, treeView.SelectedItem);
+		Assert.Equal("(2 / 2)", viewModel.SearchMatchSummaryText);
+	}
+
+	[Fact]
+	public void TryNavigateForCurrentQuery_FreshForwardQuery_SelectsFirstMatchThenAdvances()
+	{
+		var (viewModel, treeView) = CreateContext();
+		var root = CreateTree();
+		viewModel.TreeNodes.Add(root);
+		viewModel.SearchVisible = true;
+
+		using var coordinator = new TreeSearchCoordinator(viewModel, treeView);
+		viewModel.SearchQuery = "ta";
+		viewModel.SetSearchInProgress(true);
+
+		Assert.True(coordinator.TryNavigateForCurrentQuery(1));
+		Assert.Same(root.Children[1], treeView.SelectedItem);
+		Assert.Equal("(1 / 2)", viewModel.SearchMatchSummaryText);
+
+		Assert.True(coordinator.TryNavigateForCurrentQuery(1));
+		Assert.Same(root.Children[1].Children[0], treeView.SelectedItem);
+		Assert.Equal("(2 / 2)", viewModel.SearchMatchSummaryText);
+	}
+
+	[Fact]
+	public void TryNavigateForCurrentQuery_WhenQueryChanges_RefreshesMatchesWithoutSkippingFirstResult()
+	{
+		var (viewModel, treeView) = CreateContext();
+		var root = CreateTree();
+		viewModel.TreeNodes.Add(root);
+		viewModel.SearchVisible = true;
+
+		using var coordinator = new TreeSearchCoordinator(viewModel, treeView);
+		viewModel.SearchQuery = "delta";
+		coordinator.UpdateSearchMatches();
+
+		viewModel.SearchQuery = "ta";
+
+		Assert.True(coordinator.TryNavigateForCurrentQuery(1));
+		Assert.Same(root.Children[1], treeView.SelectedItem);
+		Assert.Equal("(1 / 2)", viewModel.SearchMatchSummaryText);
+	}
+
+	[Fact]
+	public void TryNavigateForCurrentQuery_FreshBackwardQuery_WrapsToLastMatch()
+	{
+		var (viewModel, treeView) = CreateContext();
+		var root = CreateTree();
+		viewModel.TreeNodes.Add(root);
+		viewModel.SearchVisible = true;
+
+		using var coordinator = new TreeSearchCoordinator(viewModel, treeView);
+		viewModel.SearchQuery = "ta";
+
+		Assert.True(coordinator.TryNavigateForCurrentQuery(-1));
+		Assert.Same(root.Children[1].Children[0], treeView.SelectedItem);
+		Assert.Equal("(2 / 2)", viewModel.SearchMatchSummaryText);
+	}
+
+	[Fact]
+	public void TryNavigateForCurrentQuery_WhenNoMatches_ReturnsFalse()
+	{
+		var (viewModel, treeView) = CreateContext();
+		var root = CreateTree();
+		viewModel.TreeNodes.Add(root);
+		viewModel.SearchVisible = true;
+
+		using var coordinator = new TreeSearchCoordinator(viewModel, treeView);
+		viewModel.SearchQuery = "___no_match___";
+
+		Assert.False(coordinator.TryNavigateForCurrentQuery(1));
+		Assert.False(coordinator.HasMatches);
+		Assert.Equal("(0 / 0)", viewModel.SearchMatchSummaryText);
 	}
 
 	[Fact]
@@ -115,6 +197,25 @@ public sealed class TreeSearchCoordinatorTests
 		Assert.False(coordinator.HasMatches);
 		Assert.False(delta.IsCurrentSearchMatch);
 		Assert.False(delta.HasHighlightedDisplay);
+		Assert.Equal("(0 / 0)", viewModel.SearchMatchSummaryText);
+	}
+
+	[Fact]
+	public void UpdateSearchMatches_WhenQueryHasNoMatches_ResetsSearchSummary()
+	{
+		var (viewModel, treeView) = CreateContext();
+		var root = CreateTree();
+		viewModel.TreeNodes.Add(root);
+		viewModel.SearchVisible = true;
+
+		using var coordinator = new TreeSearchCoordinator(viewModel, treeView);
+		viewModel.SearchQuery = "___no_match___";
+
+		coordinator.UpdateSearchMatches();
+
+		Assert.False(coordinator.HasMatches);
+		Assert.Equal("(0 / 0)", viewModel.SearchMatchSummaryText);
+		Assert.False(viewModel.SearchMatchSummaryVisible);
 	}
 
 	private static (MainWindowViewModel viewModel, TreeView treeView) CreateContext()

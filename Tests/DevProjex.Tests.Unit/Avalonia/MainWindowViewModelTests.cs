@@ -57,6 +57,24 @@ public sealed class MainWindowViewModelTests
     }
 
     [Fact]
+    public void IsProjectLoaded_RaisesAreFilterSettingsEnabledPropertyChanged()
+    {
+        var viewModel = CreateViewModel();
+        var raised = false;
+
+        viewModel.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(MainWindowViewModel.AreFilterSettingsEnabled))
+                raised = true;
+        };
+
+        viewModel.IsProjectLoaded = true;
+
+        Assert.True(raised);
+        Assert.True(viewModel.AreFilterSettingsEnabled);
+    }
+
+    [Fact]
     public void IsProjectLoaded_CanToggleFalse()
     {
         var viewModel = CreateViewModel();
@@ -110,6 +128,54 @@ public sealed class MainWindowViewModelTests
     }
 
     [Fact]
+    public void SearchMatchSummaryVisible_FollowsSearchVisible()
+    {
+        var viewModel = CreateViewModel();
+
+        Assert.False(viewModel.SearchMatchSummaryVisible);
+
+        viewModel.SearchVisible = true;
+        viewModel.SearchQuery = "delta";
+        viewModel.UpdateSearchMatchSummary(1, 1);
+
+        Assert.True(viewModel.SearchMatchSummaryVisible);
+    }
+
+    [Fact]
+    public void SearchMatchSummaryVisible_IsFalse_WhenQueryIsEmpty()
+    {
+        var viewModel = CreateViewModel();
+        viewModel.SearchVisible = true;
+        viewModel.SearchQuery = string.Empty;
+        viewModel.UpdateSearchMatchSummary(1, 1);
+
+        Assert.False(viewModel.SearchMatchSummaryVisible);
+    }
+
+    [Fact]
+    public void SearchMatchSummaryVisible_IsFalse_WhenNoMatchesExist()
+    {
+        var viewModel = CreateViewModel();
+        viewModel.SearchVisible = true;
+        viewModel.SearchQuery = "delta";
+        viewModel.UpdateSearchMatchSummary(0, 0);
+
+        Assert.False(viewModel.SearchMatchSummaryVisible);
+    }
+
+    [Fact]
+    public void SearchMatchSummaryVisible_IsFalse_WhileSearchIsInProgress()
+    {
+        var viewModel = CreateViewModel();
+        viewModel.SearchVisible = true;
+        viewModel.SearchQuery = "delta";
+        viewModel.UpdateSearchMatchSummary(1, 2);
+        viewModel.SetSearchInProgress(true);
+
+        Assert.False(viewModel.SearchMatchSummaryVisible);
+    }
+
+    [Fact]
     public void SearchQuery_Changes()
     {
         var viewModel = CreateViewModel();
@@ -131,6 +197,53 @@ public sealed class MainWindowViewModelTests
     }
 
     [Fact]
+    public void UpdateSearchMatchSummary_FormatsCurrentAndTotal()
+    {
+        var viewModel = CreateViewModel();
+
+        viewModel.UpdateSearchMatchSummary(2, 5);
+
+        Assert.Equal(2, viewModel.SearchCurrentMatchIndex);
+        Assert.Equal(5, viewModel.SearchTotalMatches);
+        Assert.Equal("(2 / 5)", viewModel.SearchMatchSummaryText);
+    }
+
+    [Fact]
+    public void UpdateSearchMatchSummary_WhenTotalIsZero_ResetsCurrentToZero()
+    {
+        var viewModel = CreateViewModel();
+        viewModel.UpdateSearchMatchSummary(3, 3);
+
+        viewModel.UpdateSearchMatchSummary(5, 0);
+
+        Assert.Equal(0, viewModel.SearchCurrentMatchIndex);
+        Assert.Equal(0, viewModel.SearchTotalMatches);
+        Assert.Equal("(0 / 0)", viewModel.SearchMatchSummaryText);
+    }
+
+    [Fact]
+    public void UpdateSearchMatchSummary_ClampsCurrentIndexWithinRange()
+    {
+        var viewModel = CreateViewModel();
+
+        viewModel.UpdateSearchMatchSummary(99, 4);
+
+        Assert.Equal(4, viewModel.SearchCurrentMatchIndex);
+        Assert.Equal(4, viewModel.SearchTotalMatches);
+        Assert.Equal("(4 / 4)", viewModel.SearchMatchSummaryText);
+    }
+
+    [Fact]
+    public void SetSearchInProgress_UpdatesFlag()
+    {
+        var viewModel = CreateViewModel();
+
+        viewModel.SetSearchInProgress(true);
+
+        Assert.True(viewModel.IsSearchInProgress);
+    }
+
+    [Fact]
     public void NameFilter_Changes()
     {
         var viewModel = CreateViewModel();
@@ -149,6 +262,63 @@ public sealed class MainWindowViewModelTests
         viewModel.NameFilter = string.Empty;
 
         Assert.Equal(string.Empty, viewModel.NameFilter);
+    }
+
+    [Fact]
+    public void FilterMatchSummaryVisible_FollowsFilterStateAndResults()
+    {
+        var viewModel = CreateViewModel();
+        viewModel.FilterVisible = true;
+        viewModel.NameFilter = "app";
+        viewModel.UpdateFilterMatchSummary(3);
+
+        Assert.True(viewModel.FilterMatchSummaryVisible);
+        Assert.Equal("(3)", viewModel.FilterMatchSummaryText);
+    }
+
+    [Fact]
+    public void FilterMatchSummaryVisible_IsFalse_WhenFilterQueryIsEmpty()
+    {
+        var viewModel = CreateViewModel();
+        viewModel.FilterVisible = true;
+        viewModel.NameFilter = string.Empty;
+        viewModel.UpdateFilterMatchSummary(3);
+
+        Assert.False(viewModel.FilterMatchSummaryVisible);
+    }
+
+    [Fact]
+    public void FilterMatchSummaryVisible_IsFalse_WhenNoMatchesExist()
+    {
+        var viewModel = CreateViewModel();
+        viewModel.FilterVisible = true;
+        viewModel.NameFilter = "app";
+        viewModel.UpdateFilterMatchSummary(0);
+
+        Assert.False(viewModel.FilterMatchSummaryVisible);
+    }
+
+    [Fact]
+    public void FilterMatchSummaryVisible_IsFalse_WhileFilterIsInProgress()
+    {
+        var viewModel = CreateViewModel();
+        viewModel.FilterVisible = true;
+        viewModel.NameFilter = "app";
+        viewModel.UpdateFilterMatchSummary(3);
+        viewModel.SetFilterInProgress(true);
+
+        Assert.False(viewModel.FilterMatchSummaryVisible);
+    }
+
+    [Fact]
+    public void UpdateFilterMatchSummary_ClampsNegativeValuesToZero()
+    {
+        var viewModel = CreateViewModel();
+
+        viewModel.UpdateFilterMatchSummary(-5);
+
+        Assert.Equal(0, viewModel.FilterMatchCount);
+        Assert.Equal("(0)", viewModel.FilterMatchSummaryText);
     }
 
     [Fact]
@@ -184,6 +354,124 @@ public sealed class MainWindowViewModelTests
     }
 
     [Fact]
+    public void PreviewWorkspaceMode_TreeAndPreview_EnablesPreviewPane_WithoutForcingCompactUntilActivated()
+    {
+        var viewModel = CreateViewModel();
+
+        viewModel.PreviewWorkspaceMode = PreviewWorkspaceMode.TreeAndPreview;
+
+        Assert.True(viewModel.IsPreviewMode);
+        Assert.True(viewModel.IsAnyPreviewVisible);
+        Assert.True(viewModel.IsPreviewPaneVisible);
+        Assert.True(viewModel.IsTreePaneVisible);
+        Assert.True(viewModel.IsPreviewTreeVisible);
+        Assert.False(viewModel.IsCompactModeEffective);
+        Assert.False(viewModel.CanToggleCompactMode);
+    }
+
+    [Fact]
+    public void SetPreviewCompactModeActive_AppliesCompactOverride_OnlyAfterPreviewIsOpen()
+    {
+        var viewModel = CreateViewModel();
+        viewModel.IsCompactMode = false;
+        viewModel.PreviewWorkspaceMode = PreviewWorkspaceMode.TreeAndPreview;
+
+        viewModel.SetPreviewCompactModeActive(true);
+
+        Assert.True(viewModel.IsCompactModeEffective);
+        Assert.False(viewModel.CanToggleCompactMode);
+    }
+
+    [Fact]
+    public void Constructor_DefaultPreviewContentMode_IsTree()
+    {
+        var viewModel = CreateViewModel();
+
+        Assert.Equal(PreviewContentMode.Tree, viewModel.SelectedPreviewContentMode);
+        Assert.True(viewModel.IsPreviewTreeSelected);
+        Assert.False(viewModel.IsPreviewContentSelected);
+        Assert.False(viewModel.IsPreviewTreeAndContentSelected);
+    }
+
+    [Fact]
+    public void PreviewWorkspaceMode_TreeAndPreview_KeepsSearchAndFilterAvailable_WhenProjectLoaded()
+    {
+        var viewModel = CreateViewModel();
+        viewModel.IsProjectLoaded = true;
+
+        viewModel.PreviewWorkspaceMode = PreviewWorkspaceMode.TreeAndPreview;
+
+        Assert.True(viewModel.IsSearchFilterAvailable);
+        Assert.True(viewModel.AreFilterSettingsEnabled);
+    }
+
+    [Fact]
+    public void PreviewWorkspaceMode_PreviewOnly_HidesTreeAndSearchButKeepsSettingsEnabled()
+    {
+        var viewModel = CreateViewModel();
+        viewModel.IsProjectLoaded = true;
+
+        viewModel.PreviewWorkspaceMode = PreviewWorkspaceMode.PreviewOnly;
+
+        Assert.True(viewModel.IsPreviewMode);
+        Assert.True(viewModel.IsPreviewOnlyMode);
+        Assert.False(viewModel.IsTreePaneVisible);
+        Assert.False(viewModel.IsSearchFilterAvailable);
+        Assert.True(viewModel.AreFilterSettingsEnabled);
+    }
+
+    [Fact]
+    public void PreviewWorkspaceMode_TreeToPreviewOnly_DoesNotRaiseCompactModeEffectiveAgain()
+    {
+        var viewModel = CreateViewModel();
+        var compactModeNotifications = 0;
+
+        viewModel.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(MainWindowViewModel.IsCompactModeEffective))
+                compactModeNotifications++;
+        };
+
+        viewModel.PreviewWorkspaceMode = PreviewWorkspaceMode.TreeAndPreview;
+        viewModel.SetPreviewCompactModeActive(true);
+        compactModeNotifications = 0;
+
+        viewModel.PreviewWorkspaceMode = PreviewWorkspaceMode.PreviewOnly;
+
+        Assert.Equal(0, compactModeNotifications);
+        Assert.True(viewModel.IsCompactModeEffective);
+        Assert.False(viewModel.CanToggleCompactMode);
+    }
+
+    [Fact]
+    public void IsCompactModeEffective_UsesPreviewOverride_WithoutChangingUserSetting()
+    {
+        var viewModel = CreateViewModel();
+        viewModel.IsCompactMode = false;
+
+        viewModel.PreviewWorkspaceMode = PreviewWorkspaceMode.TreeAndPreview;
+        viewModel.SetPreviewCompactModeActive(true);
+
+        Assert.False(viewModel.IsCompactMode);
+        Assert.True(viewModel.IsCompactModeEffective);
+    }
+
+    [Fact]
+    public void CompactTreeLayout_KeepsNonNegativePadding_AndShrinksConsolasTopMargin()
+    {
+        var viewModel = CreateViewModel();
+        viewModel.SelectedFontFamily = new global::Avalonia.Media.FontFamily("Consolas");
+
+        var regularMargin = viewModel.TreeTextMargin;
+
+        viewModel.IsCompactMode = true;
+
+        Assert.True(viewModel.TreeItemPadding.Top >= 0);
+        Assert.True(viewModel.TreeItemPadding.Bottom >= 0);
+        Assert.True(viewModel.TreeTextMargin.Top < regularMargin.Top);
+    }
+
+    [Fact]
     public void FilterVisible_Changes()
     {
         var viewModel = CreateViewModel();
@@ -202,6 +490,65 @@ public sealed class MainWindowViewModelTests
         viewModel.FilterVisible = false;
 
         Assert.False(viewModel.FilterVisible);
+    }
+
+    [Fact]
+    public void PreviewHideTreeTooltip_UsesLocalizedValue()
+    {
+        var viewModel = CreateViewModel(new Dictionary<string, string>
+        {
+            ["Preview.HideTree.Tooltip"] = "Hide tree pane"
+        });
+
+        Assert.Equal("Hide tree pane", viewModel.PreviewHideTreeTooltip);
+    }
+
+    [Fact]
+    public void PreviewModeShortLabels_UseLocalizedValues()
+    {
+        var viewModel = CreateViewModel(new Dictionary<string, string>
+        {
+            ["Preview.Mode.Tree.Short"] = "Tree",
+            ["Preview.Mode.Content.Short"] = "Content",
+            ["Preview.Mode.TreeAndContent.Short"] = "Both"
+        });
+
+        Assert.Equal("Tree", viewModel.PreviewModeTreeShort);
+        Assert.Equal("Content", viewModel.PreviewModeContentShort);
+        Assert.Equal("Both", viewModel.PreviewModeTreeAndContentShort);
+    }
+
+    [Fact]
+    public void CenteredPreviewSelectionMetricsVisible_IsTrue_WhenSelectionVisibleAndNotBusy()
+    {
+        var viewModel = CreateViewModel();
+
+        viewModel.StatusPreviewSelectionVisible = true;
+        viewModel.StatusBusy = false;
+
+        Assert.True(viewModel.CenteredPreviewSelectionMetricsVisible);
+    }
+
+    [Fact]
+    public void CenteredPreviewSelectionMetricsVisible_IsFalse_WhenBusy()
+    {
+        var viewModel = CreateViewModel();
+
+        viewModel.StatusPreviewSelectionVisible = true;
+        viewModel.StatusBusy = true;
+
+        Assert.False(viewModel.CenteredPreviewSelectionMetricsVisible);
+    }
+
+    [Fact]
+    public void CenteredPreviewSelectionMetricsVisible_IsFalse_WhenSelectionMetricsHidden()
+    {
+        var viewModel = CreateViewModel();
+
+        viewModel.StatusPreviewSelectionVisible = false;
+        viewModel.StatusBusy = false;
+
+        Assert.False(viewModel.CenteredPreviewSelectionMetricsVisible);
     }
 
     [Fact]

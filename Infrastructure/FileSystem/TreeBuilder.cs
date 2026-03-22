@@ -151,7 +151,9 @@ public sealed class TreeBuilder : ITreeBuilder
 		var ignore = options.IgnoreRules;
 		if (isDir)
 		{
-			var directoryGitIgnore = ignore.EvaluateGitIgnore(entry.FullName, isDirectory: true, name);
+			var directoryGitIgnore = ignore.UseGitIgnore
+				? ignore.EvaluateGitIgnore(entry.FullName, isDirectory: true, name)
+				: IgnoreRules.GitIgnoreEvaluation.NotIgnored;
 			if (ShouldSkipDirectory(entry, ignore, directoryGitIgnore))
 				return null;
 
@@ -201,7 +203,9 @@ public sealed class TreeBuilder : ITreeBuilder
 			return dirNode;
 		}
 
-		var fileGitIgnore = ignore.EvaluateGitIgnore(entry.FullName, isDirectory: false, name);
+		var fileGitIgnore = ignore.UseGitIgnore
+			? ignore.EvaluateGitIgnore(entry.FullName, isDirectory: false, name)
+			: IgnoreRules.GitIgnoreEvaluation.NotIgnored;
 		if (ShouldSkipFile(entry, ignore, shouldApplySmartIgnoreForFiles, fileGitIgnore))
 			return null;
 
@@ -320,6 +324,9 @@ public sealed class TreeBuilder : ITreeBuilder
 		if (rules.IgnoreExtensionlessFiles && IsExtensionlessFileName(entry.Name))
 			return true;
 
+		if (rules.IgnoreEmptyFiles && IsZeroLengthFile(entry))
+			return true;
+
 		if (rules.IgnoreHiddenFiles)
 		{
 			try
@@ -348,6 +355,20 @@ public sealed class TreeBuilder : ITreeBuilder
 
 		var extension = Path.GetExtension(fileName);
 		return string.IsNullOrEmpty(extension) || extension == ".";
+	}
+
+	private static bool IsZeroLengthFile(FileSystemInfo entry)
+	{
+		try
+		{
+			return entry is FileInfo fileInfo
+				? fileInfo.Length == 0
+				: new FileInfo(entry.FullName).Length == 0;
+		}
+		catch
+		{
+			return false;
+		}
 	}
 
 	private sealed class BuildState

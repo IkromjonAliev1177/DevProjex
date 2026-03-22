@@ -8,105 +8,102 @@ namespace DevProjex.Tests.Unit;
 /// </summary>
 public sealed class CancellationPatternTests
 {
-	/// <summary>
-	/// Verifies that cancellation prevents execution of heavy calculations.
-	/// This mirrors the pattern in RecalculateMetricsAsync.
-	/// </summary>
 	[Fact]
-	public void CancellationToken_PreventsExecution_WhenCancelledBeforeStart()
+	public async Task CancellationToken_PreventsExecution_WhenCancelledBeforeStart()
 	{
 		using var cts = new CancellationTokenSource();
 		var executed = false;
 
-		cts.Cancel(); // Cancel before starting
+		cts.Cancel();
 
-		Task.Run(() =>
-		{
-			if (cts.Token.IsCancellationRequested)
-				return;
+		var task = Task.Run(() => executed = true, cts.Token);
 
-			executed = true;
-		}, cts.Token);
-
-		Thread.Sleep(50); // Give task time to potentially execute
-
+		await Assert.ThrowsAnyAsync<OperationCanceledException>(() => task);
 		Assert.False(executed);
 	}
 
-	/// <summary>
-	/// Verifies that Task.WaitAll respects cancellation token.
-	/// </summary>
 	[Fact]
-	public void TaskWaitAll_ThrowsOperationCancelled_WhenTokenCancelled()
+	public async Task TaskWaitAll_ThrowsOperationCancelled_WhenTokenCancelled()
 	{
 		using var cts = new CancellationTokenSource();
+		using var gate = new ManualResetEventSlim(false);
 
-		var longTask1 = Task.Run(() =>
+		var task1 = Task.Run(() =>
 		{
-			Thread.Sleep(1000);
+			gate.Wait();
 			return 1;
-		}, cts.Token);
+		});
 
-		var longTask2 = Task.Run(() =>
+		var task2 = Task.Run(() =>
 		{
-			Thread.Sleep(1000);
+			gate.Wait();
 			return 2;
-		}, cts.Token);
+		});
 
-		// Cancel after short delay
-		cts.CancelAfter(50);
+		cts.Cancel();
 
-		Assert.Throws<OperationCanceledException>(() =>
-			Task.WaitAll([longTask1, longTask2], cts.Token));
+		try
+		{
+			await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+				Task.Run(() => Task.WaitAll([task1, task2], cts.Token)));
+		}
+		finally
+		{
+			gate.Set();
+			await Task.WhenAll(task1, task2);
+		}
 	}
 
-	/// <summary>
-	/// Verifies that new CancellationTokenSource cancels previous operations.
-	/// This is the pattern used for "cancel previous calculation".
-	/// </summary>
 	[Fact]
 	public async Task NewCts_CancelsPreviousCalculation()
 	{
 		CancellationTokenSource? currentCts = null;
 		var firstCalculationCompleted = false;
 		var secondCalculationCompleted = false;
+		var firstStarted = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+		var releaseFirst = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
 
-		// Start first calculation
-		currentCts?.Cancel();
 		currentCts = new CancellationTokenSource();
 		var token1 = currentCts.Token;
 
 		var task1 = Task.Run(async () =>
 		{
-			await Task.Delay(200, token1);
+			firstStarted.TrySetResult(true);
+			await releaseFirst.Task.WaitAsync(token1);
 			if (!token1.IsCancellationRequested)
 				firstCalculationCompleted = true;
 		}, token1);
 
-		// Start second calculation (should cancel first)
-		await Task.Delay(50);
+		await firstStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+
 		currentCts.Cancel();
+		currentCts.Dispose();
+
 		currentCts = new CancellationTokenSource();
 		var token2 = currentCts.Token;
-
-		var task2 = Task.Run(async () =>
+		var task2 = Task.Run(() =>
 		{
-			await Task.Delay(100, token2);
 			if (!token2.IsCancellationRequested)
 				secondCalculationCompleted = true;
 		}, token2);
 
-		// Wait for both to settle
-		try { await task1; } catch (OperationCanceledException) { }
+		releaseFirst.TrySetResult(true);
+
+		try
+		{
+			await task1;
+		}
+		catch (OperationCanceledException)
+		{
+			// Expected for the superseded calculation.
+		}
+
 		await task2;
 
 		Assert.False(firstCalculationCompleted);
 		Assert.True(secondCalculationCompleted);
 	}
 
-	/// <summary>
-	/// Verifies cancellation check after parallel calculations complete.
-	/// </summary>
 	[Fact]
 	public async Task CancellationCheck_AfterParallelCalculations_SkipsUIUpdate()
 	{
@@ -119,8 +116,6 @@ public sealed class CancellationPatternTests
 			var calc2 = Task.Run(() => 2, cts.Token);
 
 			await Task.WhenAll(calc1, calc2);
-
-			// Simulate cancellation happening after calculations but before UI update
 			cts.Cancel();
 
 			if (cts.Token.IsCancellationRequested)
@@ -134,89 +129,91 @@ public sealed class CancellationPatternTests
 		Assert.False(uiUpdated);
 	}
 
-	/// <summary>
-	/// Verifies version check combined with cancellation provides double protection.
-	/// This mirrors the pattern: "version must match AND not cancelled".
-	/// </summary>
 	[Fact]
 	public async Task VersionCheckAndCancellation_DoubleProtection()
 	{
 		var version = 0;
-		CancellationTokenSource? cts = null;
+		CancellationTokenSource? currentCts = null;
 		var updates = new ConcurrentBag<int>();
 
-		async Task SimulateRecalculate(int expectedVersion)
+		async Task<(Task Worker, Task Started, TaskCompletionSource<bool> ReleaseGate, int Version)> StartRecalculationAsync()
 		{
-			cts?.Cancel();
-			cts = new CancellationTokenSource();
-			var localCts = cts;
-			var localVersion = Interlocked.Increment(ref version);
+			currentCts?.Cancel();
+			currentCts?.Dispose();
 
+			currentCts = new CancellationTokenSource();
+			var localCts = currentCts;
+			// Capture the token once, because the source itself can be disposed by a newer recalculation
+			// before the worker reaches the next cancellation check.
+			var localToken = localCts.Token;
+			var localVersion = Interlocked.Increment(ref version);
+			var started = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+			var releaseGate = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+			var worker = Task.Run(async () =>
+			{
+				started.TrySetResult(true);
+				await releaseGate.Task.WaitAsync(localToken);
+
+				if (!localToken.IsCancellationRequested &&
+				    localVersion == Volatile.Read(ref version))
+				{
+					updates.Add(localVersion);
+				}
+			}, localToken);
+
+			await started.Task.WaitAsync(TimeSpan.FromSeconds(2));
+			return (worker, started.Task, releaseGate, localVersion);
+		}
+
+		var calc1 = await StartRecalculationAsync();
+		var calc2 = await StartRecalculationAsync();
+		var calc3 = await StartRecalculationAsync();
+
+		calc1.ReleaseGate.TrySetResult(true);
+		calc2.ReleaseGate.TrySetResult(true);
+		calc3.ReleaseGate.TrySetResult(true);
+
+		foreach (var task in new[] { calc1.Worker, calc2.Worker, calc3.Worker })
+		{
 			try
 			{
-				await Task.Run(async () =>
-				{
-					if (localCts.Token.IsCancellationRequested)
-						return;
-
-					await Task.Delay(50, localCts.Token); // Simulate calculation
-
-					if (localCts.Token.IsCancellationRequested)
-						return;
-
-					// Double-check: version must match AND not cancelled
-					if (!localCts.Token.IsCancellationRequested &&
-					    localVersion == Volatile.Read(ref version))
-					{
-						updates.Add(localVersion);
-					}
-				}, localCts.Token);
+				await task;
 			}
 			catch (OperationCanceledException)
 			{
-				// Expected when previous calculation is cancelled
+				// Expected for superseded calculations.
 			}
 		}
 
-		// Rapid fire multiple recalculations
-		var tasks = new[]
-		{
-			SimulateRecalculate(1),
-			SimulateRecalculate(2),
-			SimulateRecalculate(3),
-		};
-
-		await Task.WhenAll(tasks);
-
-		// Only the last version should have updated
 		Assert.Single(updates);
-		Assert.Contains(3, updates);
+		Assert.Contains(calc3.Version, updates);
+		currentCts?.Dispose();
 	}
 
-	/// <summary>
-	/// Verifies graceful handling of OperationCanceledException.
-	/// </summary>
 	[Fact]
 	public async Task OperationCanceledException_HandledGracefully()
 	{
 		using var cts = new CancellationTokenSource();
 		var handledGracefully = false;
+		var releaseGate = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
 
 		var task = Task.Run(async () =>
 		{
 			var calc1 = Task.Run(async () =>
 			{
-				await Task.Delay(100, cts.Token);
+				await releaseGate.Task.WaitAsync(cts.Token);
 				return 1;
 			}, cts.Token);
 
 			var calc2 = Task.Run(async () =>
 			{
-				await Task.Delay(100, cts.Token);
+				await releaseGate.Task.WaitAsync(cts.Token);
 				return 2;
 			}, cts.Token);
 
 			cts.Cancel();
+			releaseGate.TrySetResult(true);
 
 			try
 			{
@@ -228,7 +225,6 @@ public sealed class CancellationPatternTests
 				return;
 			}
 
-			// Should not reach here
 			Assert.Fail("Should have caught OperationCanceledException");
 		});
 
@@ -237,9 +233,6 @@ public sealed class CancellationPatternTests
 		Assert.True(handledGracefully);
 	}
 
-	/// <summary>
-	/// Verifies CTS disposal pattern is correct.
-	/// </summary>
 	[Fact]
 	public void Cts_DisposalPattern_NoExceptions()
 	{
@@ -247,18 +240,16 @@ public sealed class CancellationPatternTests
 		{
 			CancellationTokenSource? cts = null;
 
-			// Simulate multiple operations
-			for (int i = 0; i < 5; i++)
+			for (var i = 0; i < 5; i++)
 			{
 				cts?.Cancel();
+				cts?.Dispose();
 				cts = new CancellationTokenSource();
 			}
 
-			// Final cleanup
 			cts?.Cancel();
 			cts?.Dispose();
 
-			// Disposing null should not throw
 			CancellationTokenSource? nullCts = null;
 			nullCts?.Dispose();
 		});
@@ -266,15 +257,13 @@ public sealed class CancellationPatternTests
 		Assert.Null(exception);
 	}
 
-	/// <summary>
-	/// Verifies that cancelled inner tasks don't prevent graceful exit.
-	/// </summary>
 	[Fact]
 	public async Task CancelledInnerTasks_ExitGracefully()
 	{
 		using var cts = new CancellationTokenSource();
 		var exitedGracefully = false;
 		var innerTasksStarted = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+		var releaseGate = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
 
 		var outerTask = Task.Run(async () =>
 		{
@@ -283,15 +272,14 @@ public sealed class CancellationPatternTests
 
 			var innerTask1 = Task.Run(async () =>
 			{
-				await Task.Delay(200, cts.Token);
+				innerTasksStarted.TrySetResult(true);
+				await releaseGate.Task.WaitAsync(cts.Token);
 			}, cts.Token);
 
 			var innerTask2 = Task.Run(async () =>
 			{
-				await Task.Delay(200, cts.Token);
+				await releaseGate.Task.WaitAsync(cts.Token);
 			}, cts.Token);
-
-			innerTasksStarted.TrySetResult(true);
 
 			try
 			{
@@ -299,15 +287,13 @@ public sealed class CancellationPatternTests
 			}
 			catch (OperationCanceledException)
 			{
-				// Inner tasks were cancelled - exit gracefully
 				exitedGracefully = true;
-				return;
 			}
 		}, cts.Token);
 
-		// Ensure cancellation happens after inner tasks are scheduled.
 		await innerTasksStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
 		cts.Cancel();
+		releaseGate.TrySetResult(true);
 
 		try
 		{
@@ -321,30 +307,22 @@ public sealed class CancellationPatternTests
 		Assert.True(exitedGracefully || outerTask.IsCanceled);
 	}
 
-	/// <summary>
-	/// Verifies early exit when token is already cancelled.
-	/// </summary>
 	[Fact]
-	public void EarlyExit_WhenTokenAlreadyCancelled()
+	public async Task EarlyExit_WhenTokenAlreadyCancelled()
 	{
 		using var cts = new CancellationTokenSource();
 		cts.Cancel();
 
 		var heavyWorkExecuted = false;
-
-		Task.Run(() =>
+		var task = Task.Run(() =>
 		{
-			// Early exit check
 			if (cts.Token.IsCancellationRequested)
 				return;
 
-			// Heavy work
-			Thread.Sleep(100);
 			heavyWorkExecuted = true;
 		}, cts.Token);
 
-		Thread.Sleep(200);
-
+		await Assert.ThrowsAnyAsync<OperationCanceledException>(() => task);
 		Assert.False(heavyWorkExecuted);
 	}
 }

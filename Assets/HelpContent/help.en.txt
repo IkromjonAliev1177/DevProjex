@@ -106,7 +106,12 @@ Tree + content:
 ## 6) Preview mode
 Opened with the eye icon button in the top bar or with Ctrl+B.
 
-Shows the final result in read-only mode, without copying to clipboard and without exporting to file.
+Shows the final result in a separate workspace next to the tree. This mode does not copy to the clipboard and does not export to a file on its own — it is a viewing mode.
+
+By default, the workspace opens as:
+* left — project tree;
+* center — preview pane;
+* right — settings panel, if it was open.
 
 Available modes:
 * Tree
@@ -118,21 +123,37 @@ The same rules as copy and export are applied:
 * if selection is empty, the full data set is used;
 * current ignore rules and selection options are applied.
 
-When preview is open, search and filter are unavailable.
-In settings, only font change is available.
-Close: X button or click the eye icon again.
+Additionally:
+* files in preview are separated by horizontal lines;
+* while scrolling, the path of the current file is pinned at the top;
+* tree and preview zoom can live independently.
+
+Buttons:
+* X in the tree pane — hides the tree and leaves only the preview pane;
+* X in the top preview pane — closes Preview mode completely;
+* pressing the eye icon again or Ctrl+B also closes Preview mode.
+
+Search and Filter are available while the tree pane is visible in Preview.
+If the tree is hidden, Search and Filter are temporarily unavailable until you leave preview-only mode.
 
 ## 7) View
 ### Zoom
 * Ctrl++ / Ctrl+= — zoom in
 * Ctrl+- — zoom out
 * Ctrl+0 — reset
-* Ctrl + mouse wheel over the tree and in preview mode — smooth zoom
+* Ctrl + mouse wheel — smooth zoom in the pane under the cursor
+
+Behavior:
+* in normal mode, the tree is zoomed;
+* in Preview with the tree visible, Zoom In, Zoom Out, and Reset from the menu apply to both the tree and the preview;
+* with Ctrl + mouse wheel, tree and preview zoom independently depending on where the cursor is;
+* in preview-only mode, only the preview pane is zoomed.
 
 Range: 6–28, reset is 15.
 
 ### Compact Mode
 Makes the UI denser: smaller spacing in the tree and settings.
+While the preview workspace is active, Compact Mode is enabled automatically.
 
 ### Tree animation
 Enables smooth slide animation when hovering over tree rows.
@@ -155,7 +176,8 @@ When the search bar is closed, the query is cleared after the close animation co
 
 Constraints:
 * opening Search closes Filter automatically;
-* in Preview mode, Search is unavailable.
+* Search is available in Preview while the tree pane is visible;
+* if the tree is hidden, Search is temporarily unavailable.
 
 ## 9) Filter (by name)
 Shows only nodes matching the filter string and their parents. Updates are debounced.
@@ -164,7 +186,8 @@ Shows only nodes matching the filter string and their parents. Updates are debou
 
 Constraints:
 * opening Filter closes Search automatically;
-* in Preview mode, Filter is unavailable.
+* Filter is available in Preview while the tree pane is visible;
+* if the tree is hidden, Filter is temporarily unavailable.
 
 ## 10) Options (settings panel)
 Lists on the right:
@@ -202,6 +225,7 @@ Option order:
 * Smart ignore (when available)
 * Use .gitignore (when at least one `.gitignore` is found)
 * Empty folders
+* Empty files
 * Hidden folders
 * Hidden files
 * Dot-prefixed folders
@@ -238,6 +262,7 @@ Options:
 * Dot-prefixed folders
 * Dot-prefixed files
 * Empty folders
+* Empty files
 * Files without extension
 
 When enabled, an option hides matching elements from the tree and from copy/export results.
@@ -269,10 +294,13 @@ Only basic visibility rules remain.
 ### 11.6 Empty folders
 Hides logically empty folders from the tree and from copy/export results.
 
-### 11.7 Files without extension
+### 11.7 Empty files
+Hides empty files with size 0 bytes from the tree and from copy/export results.
+
+### 11.8 Files without extension
 Hides files without extension (for example: `Dockerfile`, `Makefile`, `README`) from the tree and from copy/export results.
 
-### 11.8 Counters in the "Ignore" block
+### 11.9 Counters in the "Ignore" block
 When "View → Additional counters" is enabled, counts are shown near available options in the `(N)` format.
 ## 12) How the tree and metrics are calculated
 Result depends on:
