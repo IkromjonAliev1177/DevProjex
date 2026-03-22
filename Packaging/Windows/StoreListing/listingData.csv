@@ -1,4 +1,4 @@
-﻿"Field","ID","Type (Тип)","default","en-us","ru-ru","uz-latn-uz","tg-cyrl-tj","kk-kz","fr-fr","de-de","it-it"
+"Field","ID","Type (Тип)","default","en-us","ru-ru","uz-latn-uz","tg-cyrl-tj","kk-kz","fr-fr","de-de","it-it"
 "Description","2","","Preparing project context for an AI chat takes more time than it should. DevProjex speeds that up: open a folder or repository, choose what to include, and get a project tree or file contents with a live preview before copying.
 Smart Ignore and .gitignore support filter out noise automatically — dependencies, system folders, build artifacts. The tree exports to ASCII or JSON. Works with any stack and any codebase size.
 For Git repositories: clone, switch branches, pull updates to local cache. For large projects: search and filtering, a progress bar with cancellation, and live metrics in the status bar — lines, characters, and estimated token count.
