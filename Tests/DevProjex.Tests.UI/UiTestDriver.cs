@@ -318,42 +318,80 @@ internal static class UiTestDriver
     public static async Task ScrollPreviewUntilStickyHeaderVisibleAsync(MainWindow window)
     {
         var stickyHeaderContainer = GetRequiredControl<Border>(window, "PreviewStickyHeaderContainer");
+        var stickyHeaderText = GetRequiredControl<TextBlock>(window, "PreviewStickyHeaderText");
         var scrollViewer = GetRequiredPreviewScrollViewer(window);
+        var previewTextControl = GetRequiredControl<DevProjex.Avalonia.Controls.VirtualizedPreviewTextControl>(window, "PreviewTextControl");
 
-        await WaitForConditionAsync(
-            window,
-            () =>
-            {
-                var viewModel = GetViewModel(window);
-                return viewModel.PreviewDocument is { Sections.Count: > 0 };
-            },
-            "preview document with sections to become available");
+        var firstSectionStartLine = await WaitForPreviewScrollRangeAsync(window, scrollViewer);
 
         var maxOffset = Math.Max(0, scrollViewer.Extent.Height - scrollViewer.Viewport.Height);
-        var step = Math.Max(72, scrollViewer.Viewport.Height / 3);
+        var step = ResolvePreviewScrollStep(scrollViewer);
+        var reachedTopLine = previewTextControl.GetLineNumberAtVerticalOffset(scrollViewer.Offset.Y);
+        var reachedOffset = scrollViewer.Offset.Y;
 
         for (var offset = step; offset <= maxOffset + step; offset += step)
         {
-            scrollViewer.Offset = new Vector(scrollViewer.Offset.X, Math.Min(maxOffset, offset));
+            reachedOffset = Math.Min(maxOffset, offset);
+            scrollViewer.Offset = new Vector(scrollViewer.Offset.X, reachedOffset);
+
+            // Linux headless can lag one render behind when the ScrollViewer offset is
+            // applied to the virtualized preview control. We wait for the propagated
+            // VerticalOffset instead of waiting for the sticky threshold itself, because
+            // the first section may require several scroll steps before it becomes reachable.
+            await WaitForConditionAsync(
+                window,
+                () => stickyHeaderContainer.IsVisible ||
+                      Math.Abs(previewTextControl.VerticalOffset - reachedOffset) <= 0.5,
+                "preview scroll position to propagate into the virtualized preview control",
+                timeout: TimeSpan.FromSeconds(2));
+
             await WaitForSettledFramesAsync(frameCount: 3);
-            if (stickyHeaderContainer.IsVisible)
+            reachedTopLine = previewTextControl.GetLineNumberAtVerticalOffset(previewTextControl.VerticalOffset);
+            if (stickyHeaderContainer.IsVisible && !string.IsNullOrWhiteSpace(stickyHeaderText.Text))
                 return;
+
+            if (reachedTopLine >= firstSectionStartLine)
+                break;
         }
 
-        throw new XunitException("Sticky preview path never became visible after scrolling through the preview content.");
+        await WaitForConditionAsync(
+            window,
+            () => stickyHeaderContainer.IsVisible && !string.IsNullOrWhiteSpace(stickyHeaderText.Text),
+            "sticky preview path to become visible after the viewport reaches the first file section",
+            timeout: TimeSpan.FromSeconds(5));
+
+        if (stickyHeaderContainer.IsVisible && !string.IsNullOrWhiteSpace(stickyHeaderText.Text))
+            return;
+
+        throw new XunitException(
+            "Sticky preview path never became visible after scrolling through the preview content. " +
+            $"firstSectionStartLine={firstSectionStartLine}, reachedTopLine={reachedTopLine}, " +
+            $"offset={reachedOffset:0.##}, controlOffset={previewTextControl.VerticalOffset:0.##}, maxOffset={maxOffset:0.##}, " +
+            $"extent={scrollViewer.Extent.Height:0.##}, viewport={scrollViewer.Viewport.Height:0.##}");
     }
 
     public static async Task ScrollPreviewUntilStickyHeaderTextChangesAsync(MainWindow window, string previousText)
     {
         var stickyHeaderText = GetRequiredControl<TextBlock>(window, "PreviewStickyHeaderText");
         var scrollViewer = GetRequiredPreviewScrollViewer(window);
+        var previewTextControl = GetRequiredControl<DevProjex.Avalonia.Controls.VirtualizedPreviewTextControl>(window, "PreviewTextControl");
+        var firstSectionStartLine = await WaitForPreviewScrollRangeAsync(window, scrollViewer);
         var maxOffset = Math.Max(0, scrollViewer.Extent.Height - scrollViewer.Viewport.Height);
-        var step = Math.Max(96, scrollViewer.Viewport.Height / 3);
+        var step = ResolvePreviewScrollStep(scrollViewer);
 
         for (var offset = scrollViewer.Offset.Y + step; offset <= maxOffset + step; offset += step)
         {
-            scrollViewer.Offset = new Vector(scrollViewer.Offset.X, Math.Min(maxOffset, offset));
+            var targetOffset = Math.Min(maxOffset, offset);
+            scrollViewer.Offset = new Vector(scrollViewer.Offset.X, targetOffset);
+            await WaitForConditionAsync(
+                window,
+                () => Math.Abs(previewTextControl.VerticalOffset - targetOffset) <= 0.5,
+                "preview scroll position to propagate into the virtualized preview control",
+                timeout: TimeSpan.FromSeconds(2));
             await WaitForSettledFramesAsync(frameCount: 3);
+
+            if (previewTextControl.GetLineNumberAtVerticalOffset(previewTextControl.VerticalOffset) < firstSectionStartLine)
+                continue;
 
             if (!string.IsNullOrWhiteSpace(stickyHeaderText.Text) &&
                 !string.Equals(stickyHeaderText.Text, previousText, StringComparison.Ordinal))
@@ -364,6 +402,34 @@ internal static class UiTestDriver
 
         throw new XunitException("Sticky preview path text never changed after scrolling through multiple preview sections.");
     }
+
+    private static async Task<int> WaitForPreviewScrollRangeAsync(MainWindow window, ScrollViewer scrollViewer)
+    {
+        var firstSectionStartLine = 1;
+
+        // The sticky header depends on the virtualized preview document sections and on
+        // the ScrollViewer extent being fully measured. If we start scrolling before both
+        // are ready, CI can observe a zero or undersized scroll range and falsely report
+        // that the sticky header never appears.
+        await WaitForConditionAsync(
+            window,
+            () =>
+            {
+                var document = GetViewModel(window).PreviewDocument;
+                if (document?.Sections is not { Count: > 0 })
+                    return false;
+
+                firstSectionStartLine = document.Sections[0].StartLine;
+                return scrollViewer.Viewport.Height > 0 &&
+                       scrollViewer.Extent.Height > scrollViewer.Viewport.Height;
+            },
+            "preview document sections and scroll range to become measurable");
+
+        return firstSectionStartLine;
+    }
+
+    private static double ResolvePreviewScrollStep(ScrollViewer scrollViewer)
+        => Math.Max(48, Math.Min(144, scrollViewer.Viewport.Height / 4));
 
     public static ScrollViewer GetRequiredPreviewScrollViewer(MainWindow window)
         => GetRequiredControl<ScrollViewer>(window, "PreviewTextScrollViewer");

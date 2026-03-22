@@ -234,9 +234,7 @@ public sealed class MainWindowPreviewUiTests(UiWorkspaceFixture workspace)
         try
         {
             await UiTestDriver.OpenPreviewAsync(window);
-            var treeAndContentModeButton = UiTestDriver.GetRequiredControl<Button>(window, "PreviewTreeAndContentModeButton");
-            await UiTestDriver.ClickAsync(window, treeAndContentModeButton);
-            await UiTestDriver.WaitForPreviewReadyAsync(window);
+            await UiTestDriver.SwitchPreviewModeAsync(window, PreviewContentMode.TreeAndContent);
 
             var stickyHeader = UiTestDriver.GetRequiredControl<Border>(window, "PreviewStickyHeaderContainer");
             var stickyHeaderText = UiTestDriver.GetRequiredControl<TextBlock>(window, "PreviewStickyHeaderText");
