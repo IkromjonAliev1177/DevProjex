@@ -19,21 +19,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  validate-release-config:
-    name: Validate Release Config
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Validate release metadata
-        shell: pwsh
-        run: ./Scripts/release-all.ps1 -ValidateConfigOnly
-
   test-suite:
     name: CI (${{ matrix.os_name }} / ${{ matrix.suite_name }})
-    needs: validate-release-config
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 45
     strategy:

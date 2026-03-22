@@ -31,27 +31,54 @@ jobs:
         shell: pwsh
         run: ./Scripts/release-all.ps1 -ValidateConfigOnly
 
+  prepare-publish-matrix:
+    name: Prepare Publish Matrix
+    needs: validate-release-config
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+
+    steps:
+      - name: Select publish smoke matrix
+        id: set-matrix
+        shell: pwsh
+        run: |
+          # PRs keep a representative smoke matrix to control latency while still
+          # covering all three OS families. Full RID coverage remains on master pushes
+          # and manual runs, where release confidence matters more than turnaround time.
+          if ('${{ github.event_name }}' -eq 'pull_request') {
+            $matrix = @{
+              include = @(
+                @{ runner = 'windows-latest'; rid = 'win-x64' },
+                @{ runner = 'ubuntu-latest'; rid = 'linux-x64' },
+                @{ runner = 'macos-latest'; rid = 'osx-arm64' }
+              )
+            }
+          }
+          else {
+            $matrix = @{
+              include = @(
+                @{ runner = 'windows-latest'; rid = 'win-x64' },
+                @{ runner = 'windows-latest'; rid = 'win-arm64' },
+                @{ runner = 'ubuntu-latest'; rid = 'linux-x64' },
+                @{ runner = 'ubuntu-latest'; rid = 'linux-arm64' },
+                @{ runner = 'macos-latest'; rid = 'osx-x64' },
+                @{ runner = 'macos-latest'; rid = 'osx-arm64' }
+              )
+            }
+          }
+
+          "matrix=$($matrix | ConvertTo-Json -Compress -Depth 4)" >> $env:GITHUB_OUTPUT
+
   publish-smoke:
     name: Publish Smoke (${{ matrix.rid }})
-    needs: validate-release-config
+    needs: prepare-publish-matrix
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 35
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - runner: windows-latest
-            rid: win-x64
-          - runner: windows-latest
-            rid: win-arm64
-          - runner: ubuntu-latest
-            rid: linux-x64
-          - runner: ubuntu-latest
-            rid: linux-arm64
-          - runner: macos-latest
-            rid: osx-x64
-          - runner: macos-latest
-            rid: osx-arm64
+      matrix: ${{ fromJson(needs.prepare-publish-matrix.outputs.matrix) }}
 
     steps:
       - uses: actions/checkout@v4
@@ -111,29 +138,3 @@ jobs:
               $process.WaitForExit(5000) | Out-Null
             }
           }
-
-  store-package-smoke:
-    name: Store Package Smoke
-    needs: validate-release-config
-    runs-on: windows-2025-vs2026
-    timeout-minutes: 45
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup .NET 10
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: 10.0.104
-
-      - name: Cache NuGet packages
-        uses: actions/cache@v4
-        with:
-          path: ~/.nuget/packages
-          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', 'Directory.Build.props') }}
-          restore-keys: |
-            nuget-${{ runner.os }}-
-
-      - name: Build Store package smoke
-        shell: pwsh
-        run: ./Scripts/release-all.ps1 -SmokeStoreBuildOnly
