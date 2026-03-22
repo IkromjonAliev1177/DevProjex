@@ -21,4 +21,8 @@
     <ProjectReference Include="..\..\Assets\Assets.csproj" />
     <ProjectReference Include="..\..\Application\Application.csproj" />
   </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\Shared\StoreListing\**\*.cs" LinkBase="StoreListing" />
+  </ItemGroup>
 </Project>

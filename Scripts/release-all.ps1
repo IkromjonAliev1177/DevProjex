@@ -274,6 +274,15 @@ function Get-CsvHeaderColumns([string]$path) {
     )
 }
 
+function Invoke-StoreListingValidationScript([string]$repoRoot) {
+    $validationScriptPath = Join-Path $repoRoot "Scripts\validate-store-listing.ps1"
+    Assert-Condition (Test-Path $validationScriptPath) "Store listing validation script was not found: $validationScriptPath"
+
+    # Keep release validation and local script execution on the exact same code path.
+    # If Partner Center quirks change, we want one authoritative script to update.
+    & $validationScriptPath -RepositoryRoot $repoRoot
+}
+
 function Invoke-ReleaseConfigValidation([string]$repoRoot) {
     $versionInfo = Get-DefaultReleaseVersionInfo -repoRoot $repoRoot
 
@@ -306,6 +315,7 @@ function Invoke-ReleaseConfigValidation([string]$repoRoot) {
     $listingCsvPath = Join-Path $repoRoot "Packaging\Windows\StoreListing\listing.csv"
     $listingHeaders = Get-CsvHeaderColumns -path $listingCsvPath
     Assert-Condition (($listingHeaders -contains 'en-us') -and ($listingHeaders -contains 'ru-ru')) "Store listing CSV must include en-us and ru-ru columns."
+    Invoke-StoreListingValidationScript -repoRoot $repoRoot
 
     $releaseAllPath = Join-Path $repoRoot "Scripts\release-all.ps1"
     $releaseAllContent = Get-Content -Path $releaseAllPath -Raw
@@ -1260,6 +1270,8 @@ Write-Host "GitHub build: Release (single-file, self-contained)"
 Write-Host "Store build : ReleaseStore (.msixupload, x64|arm64)"
 Write-Host "Store check : WACK (must pass before artifacts are published)"
 Write-Host "Store listing CSV: not modified"
+Write-Step "Validating release config"
+Invoke-ReleaseConfigValidation -repoRoot $repoRoot
 
 try {
     Create-IsolatedWorkspace -sourceRoot $sourceRoot
