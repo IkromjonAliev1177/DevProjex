@@ -21,9 +21,9 @@ internal static class StoreListingPaths
         "ru-ru"
     ];
 
-    internal const string ImportFolderRelativePath = @"Packaging\Windows\StoreListing\ImportFolder";
-    internal const string ImportCsvRelativePath = @"Packaging\Windows\StoreListing\ImportFolder\listingData.csv";
-    internal const string StoreListingRootRelativePath = @"Packaging\Windows\StoreListing";
+    internal const string ImportFolderRelativePath = "Packaging/Windows/StoreListing/ImportFolder";
+    internal const string ImportCsvRelativePath = "Packaging/Windows/StoreListing/ImportFolder/listingData.csv";
+    internal const string StoreListingRootRelativePath = "Packaging/Windows/StoreListing";
 
     internal static readonly string[] LocaleColumns =
     [
@@ -59,17 +59,17 @@ internal static class StoreListingPaths
 
     internal static string GetImportFolder(string repositoryRoot)
     {
-        return Path.Combine(repositoryRoot, ImportFolderRelativePath);
+        return CombineRelativePath(repositoryRoot, ImportFolderRelativePath);
     }
 
     internal static string GetImportCsvPath(string repositoryRoot)
     {
-        return Path.Combine(repositoryRoot, ImportCsvRelativePath);
+        return CombineRelativePath(repositoryRoot, ImportCsvRelativePath);
     }
 
     internal static string GetStoreListingRoot(string repositoryRoot)
     {
-        return Path.Combine(repositoryRoot, StoreListingRootRelativePath);
+        return CombineRelativePath(repositoryRoot, StoreListingRootRelativePath);
     }
 
     internal static string[] GetLocaleColumns(IEnumerable<string> headers)
@@ -114,6 +114,16 @@ internal static class StoreListingPaths
         }
 
         return Path.Combine(importFolderPath, relativeAssetPath.Replace('/', Path.DirectorySeparatorChar));
+    }
+
+    internal static string CombineRelativePath(string basePath, string relativePath)
+    {
+        // Test code runs on Windows, Linux, and macOS. Relative paths stored in repository-facing
+        // constants may use either slash style, so normalize them once before combining.
+        var segments = relativePath
+            .Split(['\\', '/'], StringSplitOptions.RemoveEmptyEntries);
+
+        return segments.Aggregate(basePath, Path.Combine);
     }
 
     internal static int CountWords(string value)

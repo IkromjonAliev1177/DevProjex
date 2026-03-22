@@ -205,8 +205,8 @@ public sealed class StoreListingValidationScriptIntegrationTests
         var tempDirectory = new TemporaryDirectory();
         var repositoryRoot = tempDirectory.Path;
 
-        CopyFileIntoFixture("Scripts\\validate-store-listing.ps1", repositoryRoot);
-        CopyFileIntoFixture("Scripts\\release-helpers.ps1", repositoryRoot);
+        CopyFileIntoFixture("Scripts/validate-store-listing.ps1", repositoryRoot);
+        CopyFileIntoFixture("Scripts/release-helpers.ps1", repositoryRoot);
 
         var storeListingRoot = Path.Combine(repositoryRoot, "Packaging", "Windows", "StoreListing");
         Directory.CreateDirectory(storeListingRoot);
@@ -250,8 +250,8 @@ public sealed class StoreListingValidationScriptIntegrationTests
 
     private static void CopyFileIntoFixture(string relativePath, string fixtureRoot)
     {
-        var sourcePath = Path.Combine(RepoRoot.Value, relativePath);
-        var targetPath = Path.Combine(fixtureRoot, relativePath);
+        var sourcePath = StoreListingPaths.CombineRelativePath(RepoRoot.Value, relativePath);
+        var targetPath = StoreListingPaths.CombineRelativePath(fixtureRoot, relativePath);
         Directory.CreateDirectory(Path.GetDirectoryName(targetPath)!);
         File.Copy(sourcePath, targetPath, overwrite: true);
     }
