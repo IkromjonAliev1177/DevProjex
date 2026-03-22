@@ -1,1 +1,0 @@
-Build project context fast: preview, copy, and export tree/content in ASCII or JSON. Read-only and safe.

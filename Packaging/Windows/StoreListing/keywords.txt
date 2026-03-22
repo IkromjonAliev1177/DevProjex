@@ -1,1 +1,0 @@
-project context,folder tree,ascii,json,preview,clipboard export,git,repository,developer tools,read-only,code review,tree view,status bar,progress bar,msix
