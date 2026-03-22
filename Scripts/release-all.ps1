@@ -259,6 +259,21 @@ function Assert-VersionFormat([string]$value, [string]$name, [string]$pattern) {
     }
 }
 
+function Get-CsvHeaderColumns([string]$path) {
+    $headerLine = Get-Content -Path $path -First 1
+    if ([string]::IsNullOrWhiteSpace($headerLine)) {
+        return @()
+    }
+
+    # Store listing CSVs may contain quoted headers and a UTF-8 BOM.
+    # Normalize them so validation stays consistent on Windows and Linux.
+    return @(
+        $headerLine -split ',' | ForEach-Object {
+            $_.Trim().Trim('"').Trim([char]0xFEFF)
+        }
+    )
+}
+
 function Invoke-ReleaseConfigValidation([string]$repoRoot) {
     $versionInfo = Get-DefaultReleaseVersionInfo -repoRoot $repoRoot
 
@@ -289,7 +304,7 @@ function Invoke-ReleaseConfigValidation([string]$repoRoot) {
     Assert-Condition ([string]$bundlePlatformsNode.InnerText -eq "x64|arm64") "AppxBundlePlatforms must stay x64|arm64."
 
     $listingCsvPath = Join-Path $repoRoot "Packaging\Windows\StoreListing\listing.csv"
-    $listingHeaders = (Get-Content -Path $listingCsvPath -First 1) -split ','
+    $listingHeaders = Get-CsvHeaderColumns -path $listingCsvPath
     Assert-Condition (($listingHeaders -contains 'en-us') -and ($listingHeaders -contains 'ru-ru')) "Store listing CSV must include en-us and ru-ru columns."
 
     $releaseAllPath = Join-Path $repoRoot "Scripts\release-all.ps1"
@@ -800,7 +815,7 @@ function Build-StoreArtifactsInWorkspace(
     }
 
     if (Test-Path $listingCsvPath) {
-        $listingHeaders = (Get-Content -Path $listingCsvPath -First 1) -split ','
+        $listingHeaders = Get-CsvHeaderColumns -path $listingCsvPath
         if (($listingHeaders -notcontains 'en-us') -or ($listingHeaders -notcontains 'ru-ru')) {
             throw "Store listing CSV must include 'en-us' and 'ru-ru' columns: $listingCsvPath"
         }
