@@ -30,7 +30,10 @@ public sealed class SelectionSyncCoordinator(
 
     private IReadOnlyList<IgnoreOptionDescriptor> _ignoreOptions = [];
     private HashSet<IgnoreOptionId> _ignoreSelectionCache = [];
+    // Persist dynamic ignore-option state independently from the current visible list.
+    private Dictionary<IgnoreOptionId, bool> _ignoreOptionStateCache = [];
     private bool _ignoreSelectionInitialized;
+    private bool? _ignoreAllPreference;
     private HashSet<string> _rootSelectionCache = new(PathComparer.Default);
     private bool _rootSelectionInitialized;
     private HashSet<string> _extensionsSelectionCache = new(StringComparer.OrdinalIgnoreCase);
@@ -210,6 +213,8 @@ public sealed class SelectionSyncCoordinator(
         if (_suppressIgnoreAllCheck) return;
 
         _ignoreSelectionInitialized = true;
+        _ignoreAllPreference = isChecked;
+        ApplyIgnoreAllPreferenceToKnownStates(isChecked);
 
         _suppressIgnoreAllCheck = true;
         viewModel.AllIgnoreChecked = isChecked;
@@ -417,8 +422,12 @@ public sealed class SelectionSyncCoordinator(
             profile.SelectedExtensions,
             StringComparer.OrdinalIgnoreCase);
 
+        _ignoreAllPreference = null;
         _ignoreSelectionInitialized = true;
         _ignoreSelectionCache = new HashSet<IgnoreOptionId>(profile.SelectedIgnoreOptions);
+        _ignoreOptionStateCache = [];
+        foreach (var id in _ignoreSelectionCache)
+            _ignoreOptionStateCache[id] = true;
     }
 
     public void ResetProjectProfileSelections(string projectPath)
@@ -439,9 +448,11 @@ public sealed class SelectionSyncCoordinator(
         _extensionsSelectionCache.Clear();
         _extensionsSelectionCache.TrimExcess();
 
+        _ignoreAllPreference = null;
         _ignoreSelectionInitialized = false;
         _ignoreSelectionCache.Clear();
         _ignoreSelectionCache.TrimExcess();
+        _ignoreOptionStateCache.Clear();
     }
 
     public async Task UpdateLiveOptionsFromRootSelectionAsync(
@@ -566,8 +577,10 @@ public sealed class SelectionSyncCoordinator(
         _ignoreOptionCounts = IgnoreOptionCounts.Empty;
 
         // Clear ignore selection cache
+        _ignoreAllPreference = null;
         _ignoreSelectionCache.Clear();
         _ignoreSelectionCache.TrimExcess();
+        _ignoreOptionStateCache.Clear();
         _ignoreSelectionInitialized = false;
 
         // Clear ignore options
@@ -594,13 +607,8 @@ public sealed class SelectionSyncCoordinator(
     public IReadOnlyCollection<IgnoreOptionId> GetSelectedIgnoreOptionIds()
     {
         EnsureIgnoreSelectionCache();
-        if (_ignoreOptions.Count == 0 || viewModel.IgnoreOptions.Count == 0)
-            return _ignoreSelectionCache;
-
-        var selected = CollectCheckedIgnoreIds(viewModel.IgnoreOptions);
-
-        _ignoreSelectionCache = selected;
-        return selected;
+        UpdateIgnoreSelectionCache();
+        return _ignoreSelectionCache;
     }
 
     private void EnsureIgnoreSelectionCache()
@@ -612,14 +620,11 @@ public sealed class SelectionSyncCoordinator(
         var selectedRoots = GetSelectedRootFolders();
         var availability = ResolveIgnoreOptionsAvailability(path, selectedRoots);
         _ignoreOptions = ignoreOptionsService.GetOptions(availability);
-        var selected = new HashSet<IgnoreOptionId>();
+        _ignoreOptionStateCache = [];
         foreach (var option in _ignoreOptions)
-        {
-            if (option.DefaultChecked)
-                selected.Add(option.Id);
-        }
+            _ignoreOptionStateCache[option.Id] = option.DefaultChecked;
 
-        _ignoreSelectionCache = selected;
+        _ignoreSelectionCache = BuildSelectedIgnoreOptionSet();
     }
 
     private IgnoreOptionsAvailability ResolveIgnoreOptionsAvailability(
@@ -684,10 +689,11 @@ public sealed class SelectionSyncCoordinator(
             var useDefaultCheckedFallback = ShouldUseIgnoreDefaultFallback(options, previousSelections);
             foreach (var option in _ignoreOptions)
             {
-                var isChecked = useDefaultCheckedFallback
-                    ? option.DefaultChecked
-                    : previousSelections.Contains(option.Id) ||
-                      (!hasPreviousSelections && option.DefaultChecked);
+                var isChecked = ResolveIgnoreOptionCheckedState(
+                    option,
+                    previousSelections,
+                    hasPreviousSelections,
+                    useDefaultCheckedFallback);
                 viewModel.IgnoreOptions.Add(new IgnoreOptionViewModel(option.Id, option.Label, isChecked));
             }
         }
@@ -695,9 +701,6 @@ public sealed class SelectionSyncCoordinator(
         {
             _suppressIgnoreItemCheck = false;
         }
-
-        if (!ShouldSuppressAllTogglesOverride() && viewModel.AllIgnoreChecked)
-            SetAllChecked(viewModel.IgnoreOptions, true, ref _suppressIgnoreItemCheck);
 
         UpdateIgnoreSelectionCache(hasPreviousSelections ? previousSelections : null);
         SyncIgnoreAllCheckbox();
@@ -746,31 +749,13 @@ public sealed class SelectionSyncCoordinator(
 
     public void UpdateIgnoreSelectionCache(IReadOnlySet<IgnoreOptionId>? preserveMissingFrom = null)
     {
-        if (_ignoreOptions.Count == 0 || viewModel.IgnoreOptions.Count == 0)
-        {
-            if (preserveMissingFrom is not null && preserveMissingFrom.Count > 0)
-                _ignoreSelectionCache = [..preserveMissingFrom];
-            return;
-        }
-
-        var selected = CollectCheckedIgnoreIds(viewModel.IgnoreOptions);
-
         if (preserveMissingFrom is not null && preserveMissingFrom.Count > 0)
-        {
-            // Keep user selections for ignore options that are temporarily unavailable
-            // (e.g. extensionless option before extension scan has completed).
-            var visibleIds = new HashSet<IgnoreOptionId>();
-            foreach (var option in _ignoreOptions)
-                visibleIds.Add(option.Id);
+            PreserveMissingIgnoreSelections(preserveMissingFrom);
 
-            foreach (var id in preserveMissingFrom)
-            {
-                if (!visibleIds.Contains(id))
-                    selected.Add(id);
-            }
-        }
+        foreach (var option in viewModel.IgnoreOptions)
+            _ignoreOptionStateCache[option.Id] = option.IsChecked;
 
-        _ignoreSelectionCache = selected;
+        _ignoreSelectionCache = BuildSelectedIgnoreOptionSet();
     }
 
     public void SyncIgnoreAllCheckbox()
@@ -812,6 +797,7 @@ public sealed class SelectionSyncCoordinator(
         if (_suppressIgnoreItemCheck) return;
 
         _ignoreSelectionInitialized = true;
+        _ignoreAllPreference = null;
 
         SyncAllCheckbox(viewModel.IgnoreOptions, ref _suppressIgnoreAllCheck,
             value => viewModel.AllIgnoreChecked = value);
@@ -972,18 +958,6 @@ public sealed class SelectionSyncCoordinator(
         {
             if (option.IsChecked)
                 selected.Add(option.Name);
-        }
-
-        return selected;
-    }
-
-    private static HashSet<IgnoreOptionId> CollectCheckedIgnoreIds(IEnumerable<IgnoreOptionViewModel> options)
-    {
-        var selected = new HashSet<IgnoreOptionId>();
-        foreach (var option in options)
-        {
-            if (option.IsChecked)
-                selected.Add(option.Id);
         }
 
         return selected;
@@ -1224,7 +1198,9 @@ public sealed class SelectionSyncCoordinator(
         // Clear caches
         _rootSelectionCache.Clear();
         _ignoreSelectionCache.Clear();
+        _ignoreOptionStateCache.Clear();
         _extensionsSelectionCache.Clear();
+        _ignoreAllPreference = null;
         _preparedSelectionPath = null;
         _ignoreOptions = [];
 
@@ -1264,6 +1240,32 @@ public sealed class SelectionSyncCoordinator(
         return _preparedSelectionMode == PreparedSelectionMode.Profile;
     }
 
+    private bool ResolveIgnoreOptionCheckedState(
+        IgnoreOptionDescriptor option,
+        IReadOnlySet<IgnoreOptionId> previousSelections,
+        bool hasPreviousSelections,
+        bool useDefaultCheckedFallback)
+    {
+        // Resolution order keeps explicit runtime state first, then applies the last
+        // "All ignore" intent, then profile selections, and only then falls back to defaults.
+        if (_ignoreOptionStateCache.TryGetValue(option.Id, out var cachedState))
+            return cachedState;
+
+        if (useDefaultCheckedFallback)
+            return option.DefaultChecked;
+
+        if (!ShouldSuppressAllTogglesOverride() && _ignoreAllPreference.HasValue)
+            return _ignoreAllPreference.Value;
+
+        if (_preparedSelectionMode == PreparedSelectionMode.Profile && hasPreviousSelections)
+            return previousSelections.Contains(option.Id);
+
+        if (previousSelections.Contains(option.Id))
+            return true;
+
+        return option.DefaultChecked;
+    }
+
     private IReadOnlyList<SelectionOption> ApplyMissingProfileSelectionsFallbackToExtensions(
         IReadOnlyList<SelectionOption> options) =>
         SelectionSyncCoordinatorPolicy.ApplyMissingProfileSelectionsFallbackToExtensions(
@@ -1291,6 +1293,46 @@ public sealed class SelectionSyncCoordinator(
             _preparedSelectionMode,
             options,
             previousSelections);
+
+    private void ApplyIgnoreAllPreferenceToKnownStates(bool isChecked)
+    {
+        if (_ignoreOptionStateCache.Count == 0)
+            return;
+
+        var knownIds = new List<IgnoreOptionId>(_ignoreOptionStateCache.Count);
+        foreach (var id in _ignoreOptionStateCache.Keys)
+            knownIds.Add(id);
+
+        foreach (var id in knownIds)
+            _ignoreOptionStateCache[id] = isChecked;
+    }
+
+    private void PreserveMissingIgnoreSelections(IReadOnlySet<IgnoreOptionId> preserveMissingFrom)
+    {
+        // Hidden options must keep their last known state even while they are temporarily absent
+        // from the visible list, otherwise dynamic availability would silently erase choices.
+        var visibleIds = new HashSet<IgnoreOptionId>();
+        foreach (var option in _ignoreOptions)
+            visibleIds.Add(option.Id);
+
+        foreach (var id in preserveMissingFrom)
+        {
+            if (!visibleIds.Contains(id) && !_ignoreOptionStateCache.ContainsKey(id))
+                _ignoreOptionStateCache[id] = true;
+        }
+    }
+
+    private HashSet<IgnoreOptionId> BuildSelectedIgnoreOptionSet()
+    {
+        var selected = new HashSet<IgnoreOptionId>();
+        foreach (var (id, isChecked) in _ignoreOptionStateCache)
+        {
+            if (isChecked)
+                selected.Add(id);
+        }
+
+        return selected;
+    }
 
     private void UpdateRootSelectionCache()
     {

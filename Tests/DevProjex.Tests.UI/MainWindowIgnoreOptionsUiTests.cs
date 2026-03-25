@@ -1,0 +1,100 @@
+namespace DevProjex.Tests.UI;
+
+public sealed class MainWindowIgnoreOptionsUiTests
+{
+    [AvaloniaFact]
+    public async Task NewWorkspace_WithDynamicIgnoreEntries_KeepsDynamicOptionsCheckedByDefault()
+    {
+        using var project = UiTestProject.CreateWithDynamicIgnoreEntries();
+        var window = await UiTestDriver.CreateLoadedMainWindowAsync(project);
+
+        try
+        {
+            await UiTestDriver.WaitForIgnoreOptionStateAsync(
+                window,
+                IgnoreOptionId.ExtensionlessFiles,
+                visible: true,
+                isChecked: true);
+
+            await UiTestDriver.WaitForIgnoreOptionStateAsync(
+                window,
+                IgnoreOptionId.EmptyFolders,
+                visible: true,
+                isChecked: true);
+
+            await UiTestDriver.WaitForIgnoreOptionStateAsync(
+                window,
+                IgnoreOptionId.EmptyFiles,
+                visible: true,
+                isChecked: true);
+
+            Assert.True(UiTestDriver.GetViewModel(window).AllIgnoreChecked);
+        }
+        finally
+        {
+            await UiTestDriver.CloseWindowAsync(window);
+        }
+    }
+
+    [AvaloniaFact]
+    public async Task RootSelectionRefresh_PreservesUncheckedExtensionlessStateWhenOptionReappears()
+    {
+        await AssertDynamicIgnoreOptionStateIsPreservedWhenRootSelectionRestoresIt(IgnoreOptionId.ExtensionlessFiles);
+    }
+
+    [AvaloniaFact]
+    public async Task RootSelectionRefresh_PreservesUncheckedEmptyFoldersStateWhenOptionReappears()
+    {
+        await AssertDynamicIgnoreOptionStateIsPreservedWhenRootSelectionRestoresIt(IgnoreOptionId.EmptyFolders);
+    }
+
+    [AvaloniaFact]
+    public async Task RootSelectionRefresh_PreservesUncheckedEmptyFilesStateWhenOptionReappears()
+    {
+        await AssertDynamicIgnoreOptionStateIsPreservedWhenRootSelectionRestoresIt(IgnoreOptionId.EmptyFiles);
+    }
+
+    private static async Task AssertDynamicIgnoreOptionStateIsPreservedWhenRootSelectionRestoresIt(
+        IgnoreOptionId optionId)
+    {
+        using var project = UiTestProject.CreateWithDynamicIgnoreEntries();
+        var window = await UiTestDriver.CreateLoadedMainWindowAsync(project);
+
+        try
+        {
+            await UiTestDriver.WaitForIgnoreOptionStateAsync(
+                window,
+                optionId,
+                visible: true,
+                isChecked: true);
+
+            var dynamicCheckBox = UiTestDriver.GetRequiredIgnoreOptionCheckBox(window, optionId);
+            await UiTestDriver.ClickAsync(window, dynamicCheckBox);
+            await UiTestDriver.WaitForIgnoreOptionStateAsync(
+                window,
+                optionId,
+                visible: true,
+                isChecked: false);
+
+            var srcRootCheckBox = UiTestDriver.GetRequiredRootFolderCheckBox(window, "src");
+            await UiTestDriver.ClickAsync(window, srcRootCheckBox);
+            await UiTestDriver.WaitForIgnoreOptionStateAsync(
+                window,
+                optionId,
+                visible: false);
+
+            await UiTestDriver.ClickAsync(window, srcRootCheckBox);
+            await UiTestDriver.WaitForIgnoreOptionStateAsync(
+                window,
+                optionId,
+                visible: true,
+                isChecked: false);
+
+            Assert.False(UiTestDriver.GetViewModel(window).AllIgnoreChecked);
+        }
+        finally
+        {
+            await UiTestDriver.CloseWindowAsync(window);
+        }
+    }
+}

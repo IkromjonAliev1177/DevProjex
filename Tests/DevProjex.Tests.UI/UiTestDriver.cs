@@ -1,3 +1,5 @@
+using Avalonia.VisualTree;
+
 namespace DevProjex.Tests.UI;
 
 internal static class UiTestDriver
@@ -78,6 +80,28 @@ internal static class UiTestDriver
         var topMenuBar = GetRequiredControl<TopMenuBarView>(window, "TopMenuBar");
         var control = topMenuBar.FindControl<T>(name);
         return Assert.IsType<T>(control);
+    }
+
+    public static CheckBox GetRequiredIgnoreOptionCheckBox(MainWindow window, IgnoreOptionId optionId)
+    {
+        var checkBox = window
+            .GetVisualDescendants()
+            .OfType<CheckBox>()
+            .FirstOrDefault(control => control.DataContext is IgnoreOptionViewModel option &&
+                                       option.Id == optionId);
+
+        return Assert.IsType<CheckBox>(checkBox);
+    }
+
+    public static CheckBox GetRequiredRootFolderCheckBox(MainWindow window, string rootFolderName)
+    {
+        var checkBox = window
+            .GetVisualDescendants()
+            .OfType<CheckBox>()
+            .FirstOrDefault(control => control.DataContext is SelectionOptionViewModel option &&
+                                       string.Equals(option.Name, rootFolderName, StringComparison.Ordinal));
+
+        return Assert.IsType<CheckBox>(checkBox);
     }
 
     public static async Task ClickAsync(MainWindow window, Control control)
@@ -237,6 +261,30 @@ internal static class UiTestDriver
             $"settings visibility to become {visible}");
 
         await WaitForSettledFramesAsync(frameCount: 12);
+    }
+
+    public static async Task WaitForIgnoreOptionStateAsync(
+        MainWindow window,
+        IgnoreOptionId optionId,
+        bool visible,
+        bool? isChecked = null)
+    {
+        await WaitForConditionAsync(
+            window,
+            () =>
+            {
+                var option = GetViewModel(window).IgnoreOptions.FirstOrDefault(item => item.Id == optionId);
+                if (!visible)
+                    return option is null;
+
+                if (option is null)
+                    return false;
+
+                return isChecked is null || option.IsChecked == isChecked.Value;
+            },
+            $"ignore option {optionId} to become visible={visible} checked={isChecked?.ToString() ?? "<any>"}");
+
+        await WaitForSettledFramesAsync(frameCount: 8);
     }
 
     public static async Task SwitchPreviewModeAsync(MainWindow window, PreviewContentMode mode)

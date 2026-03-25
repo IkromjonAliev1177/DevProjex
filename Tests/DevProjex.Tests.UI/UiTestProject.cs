@@ -13,6 +13,34 @@ internal sealed class UiTestProject : IDisposable
 
     public static UiTestProject CreateDefault()
     {
+        return Create(static rootPath =>
+        {
+            SeedDefaultWorkspace(rootPath);
+        });
+    }
+
+    public static UiTestProject CreateWithScopedExtensionlessEntries()
+    {
+        return Create(static rootPath =>
+        {
+            SeedDefaultWorkspace(rootPath);
+            WriteFile(rootPath, Path.Combine("src", "Makefile"), "build:\n\tdotnet build");
+        });
+    }
+
+    public static UiTestProject CreateWithDynamicIgnoreEntries()
+    {
+        return Create(static rootPath =>
+        {
+            SeedDefaultWorkspace(rootPath);
+            WriteFile(rootPath, Path.Combine("src", "Makefile"), "build:\n\tdotnet build");
+            WriteFile(rootPath, Path.Combine("src", "empty.txt"), string.Empty);
+            Directory.CreateDirectory(Path.Combine(rootPath, "src", "empty-folder"));
+        });
+    }
+
+    private static UiTestProject Create(Action<string> seedWorkspace)
+    {
         var rootPath = Path.Combine(
             Path.GetTempPath(),
             "DevProjex",
@@ -20,21 +48,7 @@ internal sealed class UiTestProject : IDisposable
             Guid.NewGuid().ToString("N"));
 
         Directory.CreateDirectory(rootPath);
-
-        WriteFile(rootPath, "README.md", BuildMarkdown("DevProjex UI test workspace", 24));
-        WriteFile(rootPath, Path.Combine("docs", "app-preview-notes.md"), BuildMarkdown("App preview notes", 32));
-        WriteFile(rootPath, Path.Combine("configs", "appsettings.json"), BuildJson("Production"));
-        WriteFile(rootPath, Path.Combine("configs", "appsettings.Development.json"), BuildJson("Development"));
-        WriteFile(rootPath, Path.Combine("src", "AppHost", "Program.cs"), BuildCSharpFile("AppHost", "Program", 52));
-        WriteFile(rootPath, Path.Combine("src", "AppHost", "AppBootstrap.cs"), BuildCSharpFile("AppHost", "AppBootstrap", 44));
-        WriteFile(rootPath, Path.Combine("src", "AppCore", "Services", "AppService.cs"), BuildCSharpFile("AppCore.Services", "AppService", 68));
-        WriteFile(rootPath, Path.Combine("src", "AppCore", "Services", "PreviewService.cs"), BuildCSharpFile("AppCore.Services", "PreviewService", 74));
-        WriteFile(rootPath, Path.Combine("src", "AppCore", "Features", "ApplicationFeature.cs"), BuildCSharpFile("AppCore.Features", "ApplicationFeature", 58));
-        WriteFile(rootPath, Path.Combine("src", "AppCore", "Features", "FilterSupport.cs"), BuildCSharpFile("AppCore.Features", "FilterSupport", 46));
-        WriteFile(rootPath, Path.Combine("src", "AppCore", "ViewModels", "AppViewModel.cs"), BuildCSharpFile("AppCore.ViewModels", "AppViewModel", 64));
-        WriteFile(rootPath, Path.Combine("src", "AppCore", "Widgets", "AppWidget.cs"), BuildCSharpFile("AppCore.Widgets", "AppWidget", 48));
-        WriteFile(rootPath, Path.Combine("tests", "AppHost.Tests", "AppServiceTests.cs"), BuildCSharpFile("AppHost.Tests", "AppServiceTests", 36));
-        WriteFile(rootPath, Path.Combine("tests", "AppHost.Tests", "PreviewFeatureTests.cs"), BuildCSharpFile("AppHost.Tests", "PreviewFeatureTests", 42));
+        seedWorkspace(rootPath);
 
         return new UiTestProject(rootPath);
     }
@@ -60,6 +74,24 @@ internal sealed class UiTestProject : IDisposable
             Directory.CreateDirectory(directoryPath);
 
         File.WriteAllText(fullPath, content, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+    }
+
+    private static void SeedDefaultWorkspace(string rootPath)
+    {
+        WriteFile(rootPath, "README.md", BuildMarkdown("DevProjex UI test workspace", 24));
+        WriteFile(rootPath, Path.Combine("docs", "app-preview-notes.md"), BuildMarkdown("App preview notes", 32));
+        WriteFile(rootPath, Path.Combine("configs", "appsettings.json"), BuildJson("Production"));
+        WriteFile(rootPath, Path.Combine("configs", "appsettings.Development.json"), BuildJson("Development"));
+        WriteFile(rootPath, Path.Combine("src", "AppHost", "Program.cs"), BuildCSharpFile("AppHost", "Program", 52));
+        WriteFile(rootPath, Path.Combine("src", "AppHost", "AppBootstrap.cs"), BuildCSharpFile("AppHost", "AppBootstrap", 44));
+        WriteFile(rootPath, Path.Combine("src", "AppCore", "Services", "AppService.cs"), BuildCSharpFile("AppCore.Services", "AppService", 68));
+        WriteFile(rootPath, Path.Combine("src", "AppCore", "Services", "PreviewService.cs"), BuildCSharpFile("AppCore.Services", "PreviewService", 74));
+        WriteFile(rootPath, Path.Combine("src", "AppCore", "Features", "ApplicationFeature.cs"), BuildCSharpFile("AppCore.Features", "ApplicationFeature", 58));
+        WriteFile(rootPath, Path.Combine("src", "AppCore", "Features", "FilterSupport.cs"), BuildCSharpFile("AppCore.Features", "FilterSupport", 46));
+        WriteFile(rootPath, Path.Combine("src", "AppCore", "ViewModels", "AppViewModel.cs"), BuildCSharpFile("AppCore.ViewModels", "AppViewModel", 64));
+        WriteFile(rootPath, Path.Combine("src", "AppCore", "Widgets", "AppWidget.cs"), BuildCSharpFile("AppCore.Widgets", "AppWidget", 48));
+        WriteFile(rootPath, Path.Combine("tests", "AppHost.Tests", "AppServiceTests.cs"), BuildCSharpFile("AppHost.Tests", "AppServiceTests", 36));
+        WriteFile(rootPath, Path.Combine("tests", "AppHost.Tests", "PreviewFeatureTests.cs"), BuildCSharpFile("AppHost.Tests", "PreviewFeatureTests", 42));
     }
 
     private static string BuildMarkdown(string title, int lineCount)
