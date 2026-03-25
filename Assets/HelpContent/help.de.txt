@@ -266,7 +266,7 @@ Optionen:
 * Dateien ohne Erweiterung
 
 Wenn aktiviert, blendet eine Option die passenden Elemente im Baum sowie in Kopier-/Exportergebnissen aus.
-Diese Regeln sind unabhängig von `.gitignore` und Smart Ignore.
+Die Grundregeln werden getrennt von `.gitignore` und Smart Ignore aktiviert, aber das Endergebnis wird immer anhand des aktuellen Baums nach Anwendung aller aktiven Filter berechnet.
 
 ### 11.5 Internes Verhalten: typische Fälle
 1. Ein Projekt mit `.gitignore`.
@@ -293,6 +293,8 @@ Es bleiben nur die grundlegenden Sichtbarkeitsregeln.
 
 ### 11.6 Leere Ordner
 Blendet logisch leere Ordner im Baum sowie in Kopier-/Exportergebnissen aus.
+Ein logisch leerer Ordner ist ein Ordner, in dem nach Anwendung der aktuellen Sichtbarkeitsregeln, von `.gitignore`, Smart Ignore und der ausgewählten Dateitypen keine sichtbaren Nachfolger mehr verbleiben.
+Wenn der Ordner selbst nicht durch andere Regeln ausgeblendet wird, wird seine Entfernung aus dem Baum genau durch diese Option gesteuert.
 
 ### 11.7 Leere Dateien
 Blendet leere Dateien mit Größe 0 Byte im Baum sowie in Kopier-/Exportergebnissen aus.
@@ -302,6 +304,7 @@ Blendet Dateien ohne Erweiterung (zum Beispiel: `Dockerfile`, `Makefile`, `READM
 
 ### 11.9 Zähler im Block „Ignorieren“
 Wenn „Ansicht → Zusätzliche Zähler“ aktiviert ist, wird bei verfügbaren Optionen die Anzahl im Format `(N)` angezeigt.
+Bei Grundregeln zeigt diese Zahl, wie viele Elemente in der aktuellen Baumkonfiguration genau durch diese Regel ausgeblendet werden.
 ## 12) Wie Baum und Kennzahlen berechnet werden
 Das Ergebnis hängt ab von:
 * ausgewählte Ordner der obersten Ebene

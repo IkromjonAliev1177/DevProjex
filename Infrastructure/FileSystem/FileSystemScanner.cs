@@ -1,6 +1,6 @@
 namespace DevProjex.Infrastructure.FileSystem;
 
-public sealed class FileSystemScanner : IFileSystemScanner, IFileSystemScannerAdvanced
+public sealed class FileSystemScanner : IFileSystemScanner, IFileSystemScannerAdvanced, IFileSystemScannerEffectiveEmptyFolderCounter
 {
 	// Optimal parallelism for modern multi-core CPUs with NVMe SSDs
 	private static readonly int MaxParallelism = Math.Max(4, Environment.ProcessorCount);
@@ -59,6 +59,15 @@ public sealed class FileSystemScanner : IFileSystemScanner, IFileSystemScannerAd
 		CancellationToken cancellationToken = default)
 	{
 		return ScanRootFilesCore(rootPath, rules, collectIgnoreOptionCounts: true, cancellationToken);
+	}
+
+	public ScanResult<int> GetEffectiveEmptyFolderCount(
+		string rootPath,
+		IReadOnlySet<string> allowedExtensions,
+		IgnoreRules rules,
+		CancellationToken cancellationToken = default)
+	{
+		return ScanEffectiveEmptyFolderCountCore(rootPath, allowedExtensions, rules, cancellationToken);
 	}
 
 	public ScanResult<List<string>> GetRootFolderNames(string rootPath, IgnoreRules rules, CancellationToken cancellationToken = default)
@@ -511,6 +520,230 @@ public sealed class FileSystemScanner : IFileSystemScanner, IFileSystemScannerAd
 			HadAccessDenied: false);
 	}
 
+	private ScanResult<int> ScanEffectiveEmptyFolderCountCore(
+		string rootPath,
+		IReadOnlySet<string> allowedExtensions,
+		IgnoreRules rules,
+		CancellationToken cancellationToken)
+	{
+		cancellationToken.ThrowIfCancellationRequested();
+
+		var useGitIgnore = rules.UseGitIgnore;
+		if (string.IsNullOrWhiteSpace(rootPath) || !Directory.Exists(rootPath))
+			return new ScanResult<int>(0, RootAccessDenied: false, HadAccessDenied: false);
+
+		var directories = new List<TreeVisibilityScanNode>(capacity: 256);
+		var rootAccessDenied = 0;
+		var hadAccessDenied = 0;
+
+		var pending = new Stack<(string Path, int ParentIndex, bool IsRootDirectory, bool IsSelfIgnoredButTraversed)>();
+		pending.Push((rootPath, ParentIndex: -1, IsRootDirectory: true, IsSelfIgnoredButTraversed: false));
+
+		while (pending.Count > 0)
+		{
+			cancellationToken.ThrowIfCancellationRequested();
+
+			var (dir, parentIndex, isRootDirectory, isSelfIgnoredButTraversed) = pending.Pop();
+			var currentDirectoryIndex = directories.Count;
+			directories.Add(new TreeVisibilityScanNode(dir, parentIndex, isAccessDenied: false, isSelfIgnoredButTraversed));
+
+			try
+			{
+				foreach (var sd in Directory.EnumerateDirectories(dir))
+				{
+					cancellationToken.ThrowIfCancellationRequested();
+
+					var dirName = Path.GetFileName(sd);
+					var directoryGitIgnore = useGitIgnore
+						? rules.EvaluateGitIgnore(sd, isDirectory: true, dirName)
+						: IgnoreRules.GitIgnoreEvaluation.NotIgnored;
+					if (ShouldSkipDirectoryByName(dirName, sd, rules, directoryGitIgnore))
+						continue;
+
+					pending.Push((
+						sd,
+						currentDirectoryIndex,
+						IsRootDirectory: false,
+						IsSelfIgnoredButTraversed: directoryGitIgnore.IsIgnored && directoryGitIgnore.ShouldTraverseIgnoredDirectory));
+				}
+			}
+			catch (OperationCanceledException)
+			{
+				throw;
+			}
+			catch (UnauthorizedAccessException)
+			{
+				var accessDeniedNode = directories[currentDirectoryIndex];
+				accessDeniedNode.IsAccessDenied = true;
+				directories[currentDirectoryIndex] = accessDeniedNode;
+				Interlocked.Exchange(ref hadAccessDenied, 1);
+				if (isRootDirectory)
+					Interlocked.Exchange(ref rootAccessDenied, 1);
+				continue;
+			}
+			catch
+			{
+				continue;
+			}
+		}
+
+		if (directories.Count == 0)
+			return new ScanResult<int>(0, rootAccessDenied == 1, hadAccessDenied == 1);
+
+		var hasVisibleFilesByDirectory = new bool[directories.Count];
+		var isAccessDeniedByDirectory = new bool[directories.Count];
+		var isSelfIgnoredButTraversedByDirectory = new bool[directories.Count];
+		for (var i = 0; i < directories.Count; i++)
+		{
+			isAccessDeniedByDirectory[i] = directories[i].IsAccessDenied;
+			isSelfIgnoredButTraversedByDirectory[i] = directories[i].IsSelfIgnoredButTraversed;
+		}
+
+		if (directories.Count < SequentialDirectoryScanThreshold)
+		{
+			for (var index = 0; index < directories.Count; index++)
+			{
+				cancellationToken.ThrowIfCancellationRequested();
+
+				var dir = directories[index].Path;
+				var shouldApplySmartIgnoreForFiles = rules.ShouldApplySmartIgnore(dir, isDirectory: true);
+				var hasVisibleFiles = false;
+
+				try
+				{
+					foreach (var file in Directory.EnumerateFiles(dir))
+					{
+						cancellationToken.ThrowIfCancellationRequested();
+
+						var name = Path.GetFileName(file);
+						var fileGitIgnore = useGitIgnore
+							? rules.EvaluateGitIgnore(file, isDirectory: false, name)
+							: IgnoreRules.GitIgnoreEvaluation.NotIgnored;
+						if (!ShouldTreatFileAsVisibleForTree(
+							    name,
+							    file,
+							    allowedExtensions,
+							    rules,
+							    shouldApplySmartIgnoreForFiles,
+							    fileGitIgnore))
+						{
+							continue;
+						}
+
+						hasVisibleFiles = true;
+						break;
+					}
+				}
+				catch (OperationCanceledException)
+				{
+					throw;
+				}
+				catch (UnauthorizedAccessException)
+				{
+					Interlocked.Exchange(ref hadAccessDenied, 1);
+					isAccessDeniedByDirectory[index] = true;
+					continue;
+				}
+				catch
+				{
+					continue;
+				}
+
+				hasVisibleFilesByDirectory[index] = hasVisibleFiles;
+			}
+		}
+		else
+		{
+			var parallelOptions = new ParallelOptions
+			{
+				MaxDegreeOfParallelism = Math.Min(MaxParallelism, directories.Count),
+				CancellationToken = cancellationToken
+			};
+
+			Parallel.For(
+				0,
+				directories.Count,
+				parallelOptions,
+				index =>
+				{
+					parallelOptions.CancellationToken.ThrowIfCancellationRequested();
+
+					var dir = directories[index].Path;
+					var shouldApplySmartIgnoreForFiles = rules.ShouldApplySmartIgnore(dir, isDirectory: true);
+					var hasVisibleFiles = false;
+
+					try
+					{
+						foreach (var file in Directory.EnumerateFiles(dir))
+						{
+							parallelOptions.CancellationToken.ThrowIfCancellationRequested();
+
+							var name = Path.GetFileName(file);
+							var fileGitIgnore = useGitIgnore
+								? rules.EvaluateGitIgnore(file, isDirectory: false, name)
+								: IgnoreRules.GitIgnoreEvaluation.NotIgnored;
+							if (!ShouldTreatFileAsVisibleForTree(
+								    name,
+								    file,
+								    allowedExtensions,
+								    rules,
+								    shouldApplySmartIgnoreForFiles,
+								    fileGitIgnore))
+							{
+								continue;
+							}
+
+							hasVisibleFiles = true;
+							break;
+						}
+					}
+					catch (OperationCanceledException)
+					{
+						throw;
+					}
+					catch (UnauthorizedAccessException)
+					{
+						Interlocked.Exchange(ref hadAccessDenied, 1);
+						isAccessDeniedByDirectory[index] = true;
+						return;
+					}
+					catch
+					{
+						return;
+					}
+
+					hasVisibleFilesByDirectory[index] = hasVisibleFiles;
+				});
+		}
+
+		var emptyFolderCount = 0;
+		var nonPrunedChildCounts = new int[directories.Count];
+		for (var index = directories.Count - 1; index >= 0; index--)
+		{
+			var hasVisibleFiles = hasVisibleFilesByDirectory[index];
+			var hasVisibleChildren = nonPrunedChildCounts[index] > 0;
+			var isAccessDenied = isAccessDeniedByDirectory[index];
+			var isSelfIgnoredButTraversed = isSelfIgnoredButTraversedByDirectory[index];
+			var parentIndex = directories[index].ParentIndex;
+
+			var shouldRemain = isAccessDenied || hasVisibleFiles || hasVisibleChildren;
+			if (!shouldRemain)
+			{
+				// Directories hidden by an explicit gitignore match are controlled by
+				// UseGitIgnore itself. Empty-folder counts should only reflect parents
+				// whose visibility is decided by the EmptyFolders toggle.
+				if (!isSelfIgnoredButTraversed)
+					emptyFolderCount++;
+				continue;
+			}
+
+			if (parentIndex >= 0)
+				nonPrunedChildCounts[parentIndex]++;
+		}
+
+		return new ScanResult<int>(emptyFolderCount, rootAccessDenied == 1, hadAccessDenied == 1);
+	}
+
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	private static void AccumulateDirectoryIgnoreOptionCounts(
 		string fullPath,
@@ -557,6 +790,28 @@ public sealed class FileSystemScanner : IFileSystemScanner, IFileSystemScannerAd
 		}
 	}
 
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	private static bool ShouldTreatFileAsVisibleForTree(
+		string name,
+		string fullPath,
+		IReadOnlySet<string> allowedExtensions,
+		IgnoreRules rules,
+		bool shouldApplySmartIgnore,
+		in IgnoreRules.GitIgnoreEvaluation gitIgnoreEvaluation)
+	{
+		if (ShouldSkipFileByName(name, fullPath, rules, shouldApplySmartIgnore, gitIgnoreEvaluation))
+			return false;
+
+		if (IsExtensionlessFileName(name))
+			return true;
+
+		if (allowedExtensions.Count == 0)
+			return false;
+
+		var ext = Path.GetExtension(name);
+		return !string.IsNullOrWhiteSpace(ext) && allowedExtensions.Contains(ext);
+	}
+
 	private static bool IsZeroLengthFile(string fullPath)
 	{
 		try
@@ -591,6 +846,18 @@ public sealed class FileSystemScanner : IFileSystemScanner, IFileSystemScannerAd
 	{
 		public HashSet<string> Extensions { get; } = new(StringComparer.OrdinalIgnoreCase);
 		public MutableIgnoreOptionCounts Counts;
+	}
+
+	private struct TreeVisibilityScanNode(
+		string path,
+		int parentIndex,
+		bool isAccessDenied,
+		bool isSelfIgnoredButTraversed)
+	{
+		public string Path { get; } = path;
+		public int ParentIndex { get; } = parentIndex;
+		public bool IsAccessDenied { get; set; } = isAccessDenied;
+		public bool IsSelfIgnoredButTraversed { get; } = isSelfIgnoredButTraversed;
 	}
 
 	private struct DirectoryScanNode(string path, int parentIndex, bool isAccessDenied)

@@ -39,6 +39,15 @@ internal sealed class UiTestProject : IDisposable
         });
     }
 
+    public static UiTestProject CreateWithExtensionSensitiveEmptyFolders()
+    {
+        return Create(static rootPath =>
+        {
+            WriteFile(rootPath, Path.Combine("src", "ExtensionSensitive", "keep.cs"), BuildCSharpFile("AppCore.ExtensionSensitive", "Keep", 12));
+            WriteFile(rootPath, Path.Combine("src", "ExtensionSensitive", "mixed-parent", "docs", "readme.md"), BuildMarkdown("Extension-sensitive folder", 12));
+        });
+    }
+
     private static UiTestProject Create(Action<string> seedWorkspace)
     {
         var rootPath = Path.Combine(

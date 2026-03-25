@@ -266,7 +266,7 @@ Options :
 * Fichiers sans extension
 
 Quand une option est activée, elle masque les éléments correspondants dans l’arbre et dans les résultats de copie/export.
-Ces règles sont indépendantes de `.gitignore` et Smart Ignore.
+Les règles de base s’activent séparément de `.gitignore` et de Smart Ignore, mais le résultat final est toujours calculé à partir de l’arbre courant après application de tous les filtres actifs.
 
 ### 11.5 Fonctionnement interne : cas typiques
 1. Projet unique avec `.gitignore`.
@@ -293,6 +293,8 @@ Seules les règles de visibilité de base restent actives.
 
 ### 11.6 Dossiers vides
 Masque les dossiers logiquement vides dans l’arbre et dans les résultats de copie/export.
+Un dossier logiquement vide est un dossier dans lequel il ne reste plus aucun descendant visible après application des règles de visibilité actuelles, de `.gitignore`, de Smart Ignore et des types de fichiers sélectionnés.
+Si le dossier lui-même n’est pas masqué par d’autres règles, sa suppression de l’arbre est contrôlée précisément par cette option.
 
 ### 11.7 Fichiers vides
 Masque les fichiers vides de taille 0 octet dans l’arbre et dans les résultats de copie/export.
@@ -302,6 +304,7 @@ Masque les fichiers sans extension (par exemple : `Dockerfile`, `Makefile`, `REA
 
 ### 11.9 Compteurs dans le bloc « Ignorer »
 Quand « Affichage → Compteurs supplémentaires » est activé, le nombre est affiché à côté des options disponibles au format `(N)`.
+Pour les règles de base, ce nombre indique combien d’éléments sont masqués précisément par cette règle dans la configuration actuelle de l’arbre.
 ## 12) Comment l'arbre et les métriques sont calculés
 Le résultat dépend de :
 * dossiers de premier niveau sélectionnés

@@ -70,7 +70,10 @@ internal static class UiTestDriver
     public static T GetRequiredControl<T>(MainWindow window, string name)
         where T : Control
     {
-        var control = window.FindControl<T>(name);
+        var control = window.FindControl<T>(name) ??
+                      window.GetVisualDescendants()
+                          .OfType<T>()
+                          .FirstOrDefault(candidate => string.Equals(candidate.Name, name, StringComparison.Ordinal));
         return Assert.IsType<T>(control);
     }
 
@@ -88,7 +91,8 @@ internal static class UiTestDriver
             .GetVisualDescendants()
             .OfType<CheckBox>()
             .FirstOrDefault(control => control.DataContext is IgnoreOptionViewModel option &&
-                                       option.Id == optionId);
+                                       option.Id == optionId &&
+                                       IsInteractableWithinWindow(control, window));
 
         return Assert.IsType<CheckBox>(checkBox);
     }
@@ -99,7 +103,21 @@ internal static class UiTestDriver
             .GetVisualDescendants()
             .OfType<CheckBox>()
             .FirstOrDefault(control => control.DataContext is SelectionOptionViewModel option &&
-                                       string.Equals(option.Name, rootFolderName, StringComparison.Ordinal));
+                                       string.Equals(option.Name, rootFolderName, StringComparison.Ordinal) &&
+                                       IsInteractableWithinWindow(control, window));
+
+        return Assert.IsType<CheckBox>(checkBox);
+    }
+
+    public static CheckBox GetRequiredExtensionCheckBox(MainWindow window, string extensionName)
+    {
+        var checkBox = window
+            .GetVisualDescendants()
+            .OfType<CheckBox>()
+            .FirstOrDefault(control => control.DataContext is SelectionOptionViewModel option &&
+                                       string.Equals(option.Name, extensionName, StringComparison.Ordinal) &&
+                                       GetViewModel(window).Extensions.Contains(option) &&
+                                       IsInteractableWithinWindow(control, window));
 
         return Assert.IsType<CheckBox>(checkBox);
     }
@@ -283,6 +301,24 @@ internal static class UiTestDriver
                 return isChecked is null || option.IsChecked == isChecked.Value;
             },
             $"ignore option {optionId} to become visible={visible} checked={isChecked?.ToString() ?? "<any>"}");
+
+        await WaitForSettledFramesAsync(frameCount: 8);
+    }
+
+    public static async Task WaitForIgnoreOptionLabelAsync(
+        MainWindow window,
+        IgnoreOptionId optionId,
+        string expectedLabel)
+    {
+        await WaitForConditionAsync(
+            window,
+            () =>
+            {
+                var option = GetViewModel(window).IgnoreOptions.FirstOrDefault(item => item.Id == optionId);
+                return option is not null &&
+                       string.Equals(option.Label, expectedLabel, StringComparison.Ordinal);
+            },
+            $"ignore option {optionId} label to become '{expectedLabel}'");
 
         await WaitForSettledFramesAsync(frameCount: 8);
     }
@@ -565,4 +601,7 @@ internal static class UiTestDriver
                 $"StatusBusy={viewModel.StatusBusy}"
             ]);
     }
+
+    private static bool IsInteractableWithinWindow(Control control, MainWindow window)
+        => control.IsVisible && control.TranslatePoint(default, window).HasValue;
 }

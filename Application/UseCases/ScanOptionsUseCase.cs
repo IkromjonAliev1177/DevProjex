@@ -233,6 +233,88 @@ public sealed class ScanOptionsUseCase(IFileSystemScanner scanner)
 			hadAccessDenied == 1);
 	}
 
+	public ScanResult<int> GetEffectiveEmptyFolderCountForRootFolders(
+		string rootPath,
+		IReadOnlyCollection<string> rootFolders,
+		IReadOnlySet<string> allowedExtensions,
+		IgnoreRules ignoreRules,
+		CancellationToken cancellationToken = default)
+	{
+		cancellationToken.ThrowIfCancellationRequested();
+
+		if (rootFolders.Count == 0 || string.IsNullOrWhiteSpace(rootPath) || !Directory.Exists(rootPath))
+			return new ScanResult<int>(0, RootAccessDenied: false, HadAccessDenied: false);
+
+		if (scanner is not IFileSystemScannerEffectiveEmptyFolderCounter counter)
+		{
+			var fallback = GetExtensionsAndIgnoreCountsForRootFolders(rootPath, rootFolders, ignoreRules, cancellationToken);
+			return new ScanResult<int>(
+				fallback.Value.IgnoreOptionCounts.EmptyFolders,
+				fallback.RootAccessDenied,
+				fallback.HadAccessDenied);
+		}
+
+		var emptyFolderCount = 0;
+		var rootAccessDenied = 0;
+		var hadAccessDenied = 0;
+		var mergeLock = new object();
+
+		if (rootFolders.Count <= 2)
+		{
+			foreach (var folder in rootFolders)
+			{
+				cancellationToken.ThrowIfCancellationRequested();
+
+				var folderPath = Path.Combine(rootPath, folder);
+				var result = counter.GetEffectiveEmptyFolderCount(folderPath, allowedExtensions, ignoreRules, cancellationToken);
+				emptyFolderCount += result.Value;
+
+				if (result.RootAccessDenied)
+					Interlocked.Exchange(ref rootAccessDenied, 1);
+				if (result.HadAccessDenied)
+					Interlocked.Exchange(ref hadAccessDenied, 1);
+			}
+		}
+		else
+		{
+			var parallelOptions = new ParallelOptions
+			{
+				MaxDegreeOfParallelism = Math.Min(MaxParallelism, rootFolders.Count),
+				CancellationToken = cancellationToken
+			};
+
+			Parallel.ForEach(
+				rootFolders,
+				parallelOptions,
+				() => 0,
+				(folder, _, localCount) =>
+				{
+					cancellationToken.ThrowIfCancellationRequested();
+
+					var folderPath = Path.Combine(rootPath, folder);
+					var result = counter.GetEffectiveEmptyFolderCount(folderPath, allowedExtensions, ignoreRules, cancellationToken);
+					if (result.RootAccessDenied)
+						Interlocked.Exchange(ref rootAccessDenied, 1);
+					if (result.HadAccessDenied)
+						Interlocked.Exchange(ref hadAccessDenied, 1);
+
+					return localCount + result.Value;
+				},
+				localCount =>
+				{
+					if (localCount == 0)
+						return;
+
+					lock (mergeLock)
+					{
+						emptyFolderCount += localCount;
+					}
+				});
+		}
+
+		return new ScanResult<int>(emptyFolderCount, rootAccessDenied == 1, hadAccessDenied == 1);
+	}
+
 	public bool CanReadRoot(string rootPath) => scanner.CanReadRoot(rootPath);
 
 	private sealed class LocalRootSelectionScanAccumulator

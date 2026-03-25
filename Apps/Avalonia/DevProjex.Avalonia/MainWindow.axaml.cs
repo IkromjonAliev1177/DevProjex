@@ -6221,6 +6221,8 @@ public partial class MainWindow : Window
             }
 
             await RefreshTreeAsync();
+            // Keep dynamic ignore counts aligned with the tree that was just applied.
+            await _selectionCoordinator.UpdateLiveOptionsFromRootSelectionAsync(_currentPath);
             await _selectionCoordinator.WaitForPendingRefreshesAsync();
             PersistLocalProjectProfileIfNeeded();
         }

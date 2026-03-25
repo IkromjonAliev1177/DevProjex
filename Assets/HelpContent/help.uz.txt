@@ -266,7 +266,7 @@ Variantlar:
 * Kengaytmasiz fayllar
 
 Band yoqilganda mos elementlar daraxtdan va nusxalash/eksport natijalaridan yashiriladi.
-Bu qoidalar `.gitignore` va Smart Ignore’dan mustaqil.
+Asosiy qoidalar `.gitignore` va Smart Ignore’dan alohida yoqiladi, ammo yakuniy natija har doim barcha faol filtrlardan keyingi joriy daraxt bo‘yicha hisoblanadi.
 
 ### 11.5 Ichki ishlash: odatiy holatlar
 1. Bitta loyiha, `.gitignore` bor.
@@ -293,6 +293,8 @@ Faqat asosiy ko‘rinish qoidalari qoladi.
 
 ### 11.6 Bo‘sh papkalar
 Mantiqan bo‘sh papkalarni daraxtdan va nusxalash/eksport natijalaridan yashiradi.
+Mantiqan bo‘sh papka — joriy ko‘rinish qoidalari, `.gitignore`, Smart Ignore va tanlangan fayl turlari qo‘llangandan keyin ichida ko‘rinadigan avlodlar qolmaydigan papka.
+Agar papkaning o‘zi boshqa qoidalar bilan yashirilmagan bo‘lsa, uni daraxtdan olib tashlash aynan shu band bilan boshqariladi.
 
 ### 11.7 Bo‘sh fayllar
 Hajmi 0 bayt bo‘lgan bo‘sh fayllarni daraxtdan va nusxalash/eksport natijalaridan yashiradi.
@@ -302,6 +304,7 @@ Kengaytmasi yo‘q fayllarni (masalan: `Dockerfile`, `Makefile`, `README`) darax
 
 ### 11.9 «E’tiborsiz qoldirish» blokidagi hisoblagichlar
 «Ko‘rinish → Qo‘shimcha hisoblagichlar» yoqilganda, mavjud bandlar yonida son `(N)` formatida ko‘rsatiladi.
+Asosiy qoidalar uchun bu son joriy daraxt konfiguratsiyasida aynan shu qoida nechta elementni yashirishini ko‘rsatadi.
 ## 12) Daraxt va metrikalar qanday hisoblanadi
 Natija quyidagilarga bog‘liq:
 * tanlangan yuqori darajadagi jildlar

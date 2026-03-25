@@ -266,7 +266,7 @@ Opzioni:
 * File senza estensione
 
 Quando un’opzione è attiva, nasconde gli elementi corrispondenti nell’albero e nei risultati di copia/esportazione.
-Queste regole sono indipendenti da `.gitignore` e Smart Ignore.
+Le regole di base vengono attivate separatamente da `.gitignore` e Smart Ignore, ma il risultato finale viene sempre calcolato sull’albero corrente dopo l’applicazione di tutti i filtri attivi.
 
 ### 11.5 Comportamento interno: casi tipici
 1. Progetto singolo con `.gitignore`.
@@ -293,6 +293,8 @@ Restano solo le regole base di visibilità.
 
 ### 11.6 Cartelle vuote
 Nasconde le cartelle logicamente vuote dall’albero e dai risultati di copia/esportazione.
+Una cartella logicamente vuota è una cartella nella quale non restano discendenti visibili dopo l’applicazione delle regole di visibilità correnti, di `.gitignore`, di Smart Ignore e dei tipi di file selezionati.
+Se la cartella stessa non è nascosta da altre regole, la sua rimozione dall’albero è controllata proprio da questa opzione.
 
 ### 11.7 File vuoti
 Nasconde i file vuoti di dimensione 0 byte dall’albero e dai risultati di copia/esportazione.
@@ -302,6 +304,7 @@ Nasconde i file senza estensione (ad esempio: `Dockerfile`, `Makefile`, `README`
 
 ### 11.9 Contatori nel blocco « Ignora »
 Quando « Visualizza → Contatori aggiuntivi » è attivo, vicino alle opzioni disponibili viene mostrato il numero nel formato `(N)`.
+Per le regole di base, questo numero mostra quanti elementi vengono nascosti proprio da quella regola nella configurazione corrente dell’albero.
 ## 12) Come vengono calcolati albero e metriche
 Il risultato dipende da:
 * cartelle di primo livello selezionate

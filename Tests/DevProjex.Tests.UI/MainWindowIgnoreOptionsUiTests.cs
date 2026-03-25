@@ -86,6 +86,85 @@ public sealed class MainWindowIgnoreOptionsUiTests
         }
     }
 
+    [AvaloniaFact]
+    public async Task ExtensionSelectionRefresh_ShowsAndHidesEmptyFoldersCounterBasedOnEffectiveTreeDelta()
+    {
+        using var project = UiTestProject.CreateWithExtensionSensitiveEmptyFolders();
+        var window = await UiTestDriver.CreateLoadedMainWindowAsync(project);
+
+        try
+        {
+            await UiTestDriver.WaitForIgnoreOptionStateAsync(
+                window,
+                IgnoreOptionId.EmptyFolders,
+                visible: false);
+
+            var markdownOption = UiTestDriver.GetViewModel(window).Extensions.Single(option => option.Name == ".md");
+            markdownOption.IsChecked = false;
+            await UiTestDriver.WaitForSettledFramesAsync(frameCount: 8);
+
+            await UiTestDriver.WaitForIgnoreOptionStateAsync(
+                window,
+                IgnoreOptionId.EmptyFolders,
+                visible: true,
+                isChecked: true);
+            await UiTestDriver.WaitForIgnoreOptionLabelAsync(
+                window,
+                IgnoreOptionId.EmptyFolders,
+                "Empty folders (2)");
+
+            markdownOption = UiTestDriver.GetViewModel(window).Extensions.Single(option => option.Name == ".md");
+            markdownOption.IsChecked = true;
+            await UiTestDriver.WaitForSettledFramesAsync(frameCount: 8);
+            await UiTestDriver.WaitForIgnoreOptionStateAsync(
+                window,
+                IgnoreOptionId.EmptyFolders,
+                visible: false);
+        }
+        finally
+        {
+            await UiTestDriver.CloseWindowAsync(window);
+        }
+    }
+
+    [AvaloniaFact]
+    public async Task ExtensionsAllToggleRefresh_RecomputesEmptyFoldersCounterForBulkSelectionChanges()
+    {
+        using var project = UiTestProject.CreateWithExtensionSensitiveEmptyFolders();
+        var window = await UiTestDriver.CreateLoadedMainWindowAsync(project);
+
+        try
+        {
+            await UiTestDriver.WaitForIgnoreOptionStateAsync(
+                window,
+                IgnoreOptionId.EmptyFolders,
+                visible: false);
+
+            var allExtensionsCheckBox = UiTestDriver.GetRequiredControl<CheckBox>(window, "ExtensionsAllCheckBox");
+            await UiTestDriver.ClickAsync(window, allExtensionsCheckBox);
+
+            await UiTestDriver.WaitForIgnoreOptionStateAsync(
+                window,
+                IgnoreOptionId.EmptyFolders,
+                visible: true,
+                isChecked: true);
+            await UiTestDriver.WaitForIgnoreOptionLabelAsync(
+                window,
+                IgnoreOptionId.EmptyFolders,
+                "Empty folders (4)");
+
+            await UiTestDriver.ClickAsync(window, allExtensionsCheckBox);
+            await UiTestDriver.WaitForIgnoreOptionStateAsync(
+                window,
+                IgnoreOptionId.EmptyFolders,
+                visible: false);
+        }
+        finally
+        {
+            await UiTestDriver.CloseWindowAsync(window);
+        }
+    }
+
     private static async Task AssertDynamicIgnoreOptionStateIsPreservedWhenRootSelectionRestoresIt(
         IgnoreOptionId optionId)
     {

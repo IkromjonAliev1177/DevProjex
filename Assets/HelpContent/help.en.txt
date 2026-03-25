@@ -266,7 +266,7 @@ Options:
 * Files without extension
 
 When enabled, an option hides matching elements from the tree and from copy/export results.
-These rules are independent from `.gitignore` and Smart Ignore.
+Basic rules are enabled separately from `.gitignore` and Smart Ignore, but the final result is always calculated from the current tree after all active filters are applied.
 
 ### 11.5 Internal behavior: common cases
 1. Single project with `.gitignore`.
@@ -293,6 +293,8 @@ Only basic visibility rules remain.
 
 ### 11.6 Empty folders
 Hides logically empty folders from the tree and from copy/export results.
+A logically empty folder is a folder that has no visible descendants after the current visibility rules, `.gitignore`, Smart Ignore, and selected file types are applied.
+If the folder itself is not hidden by other rules, removing it from the tree is controlled by this option.
 
 ### 11.7 Empty files
 Hides empty files with size 0 bytes from the tree and from copy/export results.
@@ -302,6 +304,7 @@ Hides files without extension (for example: `Dockerfile`, `Makefile`, `README`) 
 
 ### 11.9 Counters in the "Ignore" block
 When "View → Additional counters" is enabled, counts are shown near available options in the `(N)` format.
+For basic rules, this count shows how many elements are hidden by that specific rule in the current tree configuration.
 ## 12) How the tree and metrics are calculated
 Result depends on:
 * selected Root folders

@@ -182,16 +182,9 @@ public sealed class TreeBuilder : ITreeBuilder
 				return (hasMatchingChildren || matchesName) ? dirNode : null;
 			}
 
-			// Keep empty directories hidden when gitignore effectively ignores their content
-			// (e.g. patterns like **/bin/* that may not ignore the directory entry itself).
-			if (dirNode.Children.Count == 0 &&
-			    !dirNode.IsAccessDenied &&
-			    IsEffectivelyGitIgnoredDirectory(entry, ignore, directoryGitIgnore))
-			{
-				return null;
-			}
-
 			// Keep ignored directories out of UI when traversal found no visible descendants.
+			// Parents that only became empty after descendant filtering remain visible until
+			// IgnoreEmptyFolders explicitly removes them.
 			if (directoryGitIgnore.IsIgnored &&
 			    directoryGitIgnore.ShouldTraverseIgnoredDirectory &&
 			    dirNode.Children.Count == 0 &&
@@ -288,22 +281,6 @@ public sealed class TreeBuilder : ITreeBuilder
 		}
 
 		return false;
-	}
-
-	private static bool IsEffectivelyGitIgnoredDirectory(
-		FileSystemInfo entry,
-		IgnoreRules rules,
-		in IgnoreRules.GitIgnoreEvaluation directoryGitIgnoreEvaluation)
-	{
-		if (!rules.UseGitIgnore)
-			return false;
-
-		if (directoryGitIgnoreEvaluation.IsIgnored)
-			return true;
-
-		const string probeName = "__devprojex_ignore_probe__";
-		var probePath = Path.Combine(entry.FullName, probeName);
-		return rules.EvaluateGitIgnore(probePath, isDirectory: false, probeName).IsIgnored;
 	}
 
 	private static bool ShouldSkipFile(
