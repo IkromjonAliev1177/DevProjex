@@ -20,6 +20,7 @@
     <ProjectReference Include="..\..\Kernel\Kernel.csproj" />
     <ProjectReference Include="..\..\Assets\Assets.csproj" />
     <ProjectReference Include="..\..\Application\Application.csproj" />
+    <ProjectReference Include="..\..\Apps\Avalonia\DevProjex.Avalonia\DevProjex.Avalonia.csproj" />
   </ItemGroup>
 
   <ItemGroup>

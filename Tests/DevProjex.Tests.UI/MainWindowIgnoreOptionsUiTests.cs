@@ -54,6 +54,38 @@ public sealed class MainWindowIgnoreOptionsUiTests
         await AssertDynamicIgnoreOptionStateIsPreservedWhenRootSelectionRestoresIt(IgnoreOptionId.EmptyFiles);
     }
 
+    [AvaloniaFact]
+    public async Task RootSelectionRefresh_HidesAllDynamicOptions_WhenSelectedRootDoesNotContainThem()
+    {
+        using var project = UiTestProject.CreateWithDynamicIgnoreEntries();
+        var window = await UiTestDriver.CreateLoadedMainWindowAsync(project);
+
+        try
+        {
+            var srcRootCheckBox = UiTestDriver.GetRequiredRootFolderCheckBox(window, "src");
+            await UiTestDriver.ClickAsync(window, srcRootCheckBox);
+
+            await UiTestDriver.WaitForIgnoreOptionStateAsync(
+                window,
+                IgnoreOptionId.ExtensionlessFiles,
+                visible: false);
+
+            await UiTestDriver.WaitForIgnoreOptionStateAsync(
+                window,
+                IgnoreOptionId.EmptyFolders,
+                visible: false);
+
+            await UiTestDriver.WaitForIgnoreOptionStateAsync(
+                window,
+                IgnoreOptionId.EmptyFiles,
+                visible: false);
+        }
+        finally
+        {
+            await UiTestDriver.CloseWindowAsync(window);
+        }
+    }
+
     private static async Task AssertDynamicIgnoreOptionStateIsPreservedWhenRootSelectionRestoresIt(
         IgnoreOptionId optionId)
     {
