@@ -135,15 +135,15 @@ public static class ProjectLoadWorkflowRuntime
 
             metricsInputs.Add(new ContentFileMetrics(
                 Path: path,
-                SizeBytes: metrics.Value.SizeBytes,
-                LineCount: metrics.Value.LineCount,
-                CharCount: metrics.Value.CharCount,
-                IsEmpty: metrics.Value.IsEmpty,
-                IsWhitespaceOnly: metrics.Value.IsWhitespaceOnly,
-                IsEstimated: metrics.Value.IsEstimated,
-                CrLfPairCount: metrics.Value.CrLfPairCount,
-                TrailingNewlineChars: metrics.Value.TrailingNewlineChars,
-                TrailingNewlineLineBreaks: metrics.Value.TrailingNewlineLineBreaks));
+                SizeBytes: metrics.SizeBytes,
+                LineCount: metrics.LineCount,
+                CharCount: metrics.CharCount,
+                IsEmpty: metrics.IsEmpty,
+                IsWhitespaceOnly: metrics.IsWhitespaceOnly,
+                IsEstimated: metrics.IsEstimated,
+                CrLfPairCount: metrics.CrLfPairCount,
+                TrailingNewlineChars: metrics.TrailingNewlineChars,
+                TrailingNewlineLineBreaks: metrics.TrailingNewlineLineBreaks));
         }
 
         return ExportOutputMetricsCalculator.FromOrderedContentFiles(metricsInputs);
