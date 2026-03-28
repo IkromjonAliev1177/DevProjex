@@ -43,8 +43,9 @@ public sealed class PreviewClipboardPayloadBuilderTests
         using var document = await builder.BuildContentDocumentAsync([largeFile], CancellationToken.None, Path.GetFileName);
 
         var payload = PreviewClipboardPayloadBuilder.BuildFullDocumentPayload(document);
+        var expectedPrefix = string.Join(Environment.NewLine, "large.txt:", "\u00A0", string.Empty);
 
-        Assert.StartsWith("large.txt:\n\u00A0\n", payload, StringComparison.Ordinal);
+        Assert.StartsWith(expectedPrefix, payload, StringComparison.Ordinal);
         Assert.EndsWith(largeContent, payload, StringComparison.Ordinal);
     }
 
