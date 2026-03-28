@@ -101,7 +101,7 @@ jobs:
         run: dotnet build ${{ matrix.project_path }} -c Release --no-restore
 
       - name: Ensure Linux headless runner
-        if: ${{ matrix.os_id == 'linux' && matrix.suite_id == 'ui' }}
+        if: ${{ matrix.os_id == 'linux' }}
         shell: bash
         run: |
           if ! command -v xvfb-run >/dev/null 2>&1; then
@@ -110,7 +110,7 @@ jobs:
           fi
 
       - name: Run ${{ matrix.suite_name }} Tests
-        if: ${{ matrix.os_id != 'linux' || matrix.suite_id != 'ui' }}
+        if: ${{ matrix.os_id != 'linux' }}
         shell: pwsh
         run: >
           dotnet test ${{ matrix.project_path }}
@@ -121,7 +121,7 @@ jobs:
           --results-directory "TestResults/${{ matrix.suite_id }}"
 
       - name: Run ${{ matrix.suite_name }} Tests (Linux headless)
-        if: ${{ matrix.os_id == 'linux' && matrix.suite_id == 'ui' }}
+        if: ${{ matrix.os_id == 'linux' }}
         shell: bash
         run: >
           xvfb-run -a dotnet test ${{ matrix.project_path }}

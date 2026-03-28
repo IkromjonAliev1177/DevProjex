@@ -8,7 +8,7 @@ public sealed class EffectiveIgnoreOptionCountsContractIntegrationTests
 		string _,
 		Action<string> seedWorkspace,
 		HashSet<string> allowedExtensions,
-		IgnoreOptionCounts expectedRawCounts,
+		int expectedTargetRawCount,
 		Func<IgnoreRules, IgnoreRules> enableTargetRule,
 		Func<IgnoreOptionCounts, int> getTargetCount)
 	{
@@ -38,7 +38,12 @@ public sealed class EffectiveIgnoreOptionCountsContractIntegrationTests
 		var treeWithRule = BuildTreeDescriptor(temp.Path, allowedExtensions, enabledRules);
 		var treeWithoutRule = BuildTreeDescriptor(temp.Path, allowedExtensions, disabledRules);
 
-		Assert.Equal(expectedRawCounts, rawScan.Value.IgnoreOptionCounts);
+		// Hidden-vs-dot semantics differ across platforms: on Unix-like systems a dot-file
+		// can also surface through the HiddenFiles inventory path, while on Windows it stays
+		// purely a dot-file unless the native hidden attribute is set. The contract under test
+		// is narrower: the target rule must have raw inventory > 0, but still yield zero
+		// effective tree delta because another active rule already removes the same nodes.
+		Assert.Equal(expectedTargetRawCount, getTargetCount(rawScan.Value.IgnoreOptionCounts));
 		Assert.Equal(0, getTargetCount(effectiveScan.Value));
 		Assert.Equal(
 			0,
@@ -57,7 +62,7 @@ public sealed class EffectiveIgnoreOptionCountsContractIntegrationTests
 				WriteFile(rootPath, "README.md", "# visible\n");
 			}),
 			new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".json", ".md" },
-			new IgnoreOptionCounts(DotFiles: 2),
+			2,
 			new Func<IgnoreRules, IgnoreRules>(rules => rules with { IgnoreDotFiles = true }),
 			new Func<IgnoreOptionCounts, int>(counts => counts.DotFiles)
 		];
@@ -72,7 +77,7 @@ public sealed class EffectiveIgnoreOptionCountsContractIntegrationTests
 				WriteFile(rootPath, "keep.txt", "keep");
 			}),
 			new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".txt" },
-			new IgnoreOptionCounts(DotFiles: 1, EmptyFiles: 1),
+			1,
 			new Func<IgnoreRules, IgnoreRules>(rules => rules with { IgnoreEmptyFiles = true }),
 			new Func<IgnoreOptionCounts, int>(counts => counts.EmptyFiles)
 		];
@@ -87,7 +92,7 @@ public sealed class EffectiveIgnoreOptionCountsContractIntegrationTests
 				WriteFile(rootPath, "keep.cs", "class Keep {}");
 			}),
 			new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".cs" },
-			new IgnoreOptionCounts(DotFiles: 1, ExtensionlessFiles: 1),
+			1,
 			new Func<IgnoreRules, IgnoreRules>(rules => rules with { IgnoreExtensionlessFiles = true }),
 			new Func<IgnoreOptionCounts, int>(counts => counts.ExtensionlessFiles)
 		];

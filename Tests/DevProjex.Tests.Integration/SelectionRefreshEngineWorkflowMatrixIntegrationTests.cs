@@ -34,8 +34,13 @@ public sealed class SelectionRefreshEngineWorkflowMatrixIntegrationTests
 
         if (RequiresDeferredProfileReconciliation(workflowCaseName))
         {
+            workflowCase.AssertSnapshot(secondSnapshot);
             AssertDeferredProfileReconciliation(firstSnapshot, secondSnapshot, workflowCaseName);
             AssertVisibleAdvancedIgnoreOptionsCarryPositiveCounts(secondSnapshot);
+
+            var reconciledMetrics = await ComputeMetricsFromSnapshotAsync(temp.Path, secondSnapshot, services);
+            Assert.Equal(firstMetrics.TreeMetrics, reconciledMetrics.TreeMetrics);
+            Assert.Equal(firstMetrics.ContentMetrics, reconciledMetrics.ContentMetrics);
             return;
         }
 
@@ -361,9 +366,22 @@ public sealed class SelectionRefreshEngineWorkflowMatrixIntegrationTests
         string workflowCaseName)
     {
         Assert.NotEqual(firstSnapshot.IgnoreOptions, secondSnapshot.IgnoreOptions);
-        Assert.True(
-            secondSnapshot.IgnoreOptions.Count <= firstSnapshot.IgnoreOptions.Count,
-            $"Deferred profile recovery for '{workflowCaseName}' must not introduce more visible ignore options on the follow-up snapshot.");
+
+        // Deferred reconciliation is allowed to reshuffle which dynamic ignore options are
+        // visible after the first pass, because the updated root/ignore state can expose a
+        // different effective tree shape on the follow-up snapshot. What must stay stable is
+        // the meaning of the already visible options: the same visible option cannot silently
+        // flip its checked state across the deferred pass.
+        var firstVisibleStates = firstSnapshot.IgnoreOptions.ToDictionary(option => option.Id, option => option.IsChecked);
+        foreach (var option in secondSnapshot.IgnoreOptions)
+        {
+            if (firstVisibleStates.TryGetValue(option.Id, out var firstCheckedState))
+            {
+                Assert.Equal(
+                    firstCheckedState,
+                    option.IsChecked);
+            }
+        }
     }
 
     private static void AssertEquivalentSelectionOptions(

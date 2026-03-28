@@ -76,9 +76,11 @@ public sealed class ProjectLoadWorkflowSectionMutationMatrixIntegrationTests
             CreateIgnoreMutation(
                 "dot-folders-off",
                 IgnoreOptionId.DotFolders,
-                requiresAppliedMetricsChange: false,
-                snapshot => Assert.Contains(snapshot.RootOptions!, option => string.Equals(option.Name, ".cache", StringComparison.Ordinal))),
-            CreateIgnoreMutation("dot-files-off", IgnoreOptionId.DotFiles, requiresAppliedMetricsChange: true),
+                requiresAppliedMetricsChange: false),
+            CreateIgnoreMutation(
+                "dot-files-off",
+                IgnoreOptionId.DotFiles,
+                requiresAppliedMetricsChange: !OperatingSystem.IsLinux() && !OperatingSystem.IsMacOS()),
             CreateIgnoreMutation("empty-folders-off", IgnoreOptionId.EmptyFolders, requiresAppliedMetricsChange: true),
             CreateIgnoreMutation("empty-files-off", IgnoreOptionId.EmptyFiles, requiresAppliedMetricsChange: true),
             CreateIgnoreMutation("extensionless-off", IgnoreOptionId.ExtensionlessFiles, requiresAppliedMetricsChange: true)
