@@ -79,11 +79,11 @@ public static class ProjectLoadWorkflowRuntime
         var treeText = treeExport.BuildFullTree(rootPath, buildResult.Root, TreeTextFormat.Ascii);
         var treeMetrics = ExportOutputMetricsCalculator.FromText(treeText);
 
-        var contentExport = new SelectedContentExportService(new FileContentAnalyzer());
-        var contentText = await contentExport.BuildAsync(
-            EnumerateAllFiles(buildResult.Root),
-            cancellationToken);
-        var contentMetrics = ExportOutputMetricsCalculator.FromText(contentText);
+        var orderedPaths = EnumerateAllFiles(buildResult.Root)
+            .Distinct(PathComparer.Default)
+            .OrderBy(static path => path, PathComparer.Default)
+            .ToArray();
+        var contentMetrics = await ComputeContentMetricsAsync(orderedPaths, cancellationToken);
 
         var computedMetrics = new ProjectLoadWorkflowMetrics(treeMetrics, contentMetrics);
         lock (MetricsCacheLock)
@@ -116,6 +116,38 @@ public static class ProjectLoadWorkflowRuntime
     public sealed record ProjectLoadWorkflowMetrics(
         ExportOutputMetrics TreeMetrics,
         ExportOutputMetrics ContentMetrics);
+
+    private static async Task<ExportOutputMetrics> ComputeContentMetricsAsync(
+        IReadOnlyList<string> orderedPaths,
+        CancellationToken cancellationToken)
+    {
+        if (orderedPaths.Count == 0)
+            return ExportOutputMetrics.Empty;
+
+        var analyzer = new FileContentAnalyzer();
+        var metricsInputs = new List<ContentFileMetrics>(orderedPaths.Count);
+        foreach (var path in orderedPaths)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var metrics = await analyzer.GetTextFileMetricsAsync(path, cancellationToken);
+            if (metrics is null)
+                continue;
+
+            metricsInputs.Add(new ContentFileMetrics(
+                Path: path,
+                SizeBytes: metrics.Value.SizeBytes,
+                LineCount: metrics.Value.LineCount,
+                CharCount: metrics.Value.CharCount,
+                IsEmpty: metrics.Value.IsEmpty,
+                IsWhitespaceOnly: metrics.Value.IsWhitespaceOnly,
+                IsEstimated: metrics.Value.IsEstimated,
+                CrLfPairCount: metrics.Value.CrLfPairCount,
+                TrailingNewlineChars: metrics.Value.TrailingNewlineChars,
+                TrailingNewlineLineBreaks: metrics.Value.TrailingNewlineLineBreaks));
+        }
+
+        return ExportOutputMetricsCalculator.FromOrderedContentFiles(metricsInputs);
+    }
 
     private readonly record struct MetricsCacheKey(
         string RootPath,
