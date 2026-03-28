@@ -390,6 +390,10 @@ public sealed class MainWindowPreviewUiTests(UiWorkspaceFixture workspace)
             Assert.True(stickyHeaderContainer.IsVisible);
             Assert.InRange(Math.Abs(buttonBounds.Width - 24), 0, 1.5);
             Assert.InRange(Math.Abs(buttonBounds.Height - 24), 0, 1.5);
+            Assert.True(stickyHeaderCopyButton.BorderThickness.Left >= 0.9);
+            Assert.True(stickyHeaderCopyButton.BorderThickness.Top >= 0.9);
+            Assert.NotNull(stickyHeaderCopyButton.Background);
+            Assert.NotNull(stickyHeaderCopyButton.BorderBrush);
             Assert.True(buttonBounds.Left >= capBounds.Left - 1);
             Assert.True(buttonBounds.Right <= capBounds.Right + 1);
             Assert.True(buttonBounds.Right <= headerBounds.Left + 2);

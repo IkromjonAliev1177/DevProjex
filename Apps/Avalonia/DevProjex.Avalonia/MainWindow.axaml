@@ -784,27 +784,30 @@
                         Name="PreviewStickyHeaderCap"
                         Classes="preview-sticky-header-cap"
                         IsVisible="False">
-                  <Button Name="PreviewStickyHeaderCopyButton"
-                          Classes="menu-icon-button preview-sticky-copy-button"
-                          ToolTip.Placement="Right"
-                          ToolTip.ShowDelay="700"
-                          HorizontalAlignment="Center"
-                          VerticalAlignment="Center"
-                          Click="OnPreviewCopyVisibleFilePath">
-                    <ToolTip.Tip>
-                      <ToolTip Classes="preview-blurred-tooltip"
-                               Loaded="OnPreviewToolTipLoaded">
-                        <TextBlock Text="{Binding PreviewCopyFilePathTooltip}" />
-                      </ToolTip>
-                    </ToolTip.Tip>
-                    <Viewbox Width="12"
-                             Height="12"
-                             Stretch="Uniform">
-                      <Path Classes="preview-icon"
-                            Data="{StaticResource PreviewCopyIconGeometry}"
-                            Fill="{DynamicResource AppTextBrush}" />
-                    </Viewbox>
-                  </Button>
+                  <Border Classes="preview-sticky-copy-host">
+                    <Button Name="PreviewStickyHeaderCopyButton"
+                            Classes="menu-icon-button preview-sticky-copy-button"
+                            ToolTip.Placement="Right"
+                            ToolTip.ShowDelay="700"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center"
+                            Click="OnPreviewCopyVisibleFilePath">
+                      <ToolTip.Tip>
+                        <ToolTip Classes="preview-blurred-tooltip"
+                                 Loaded="OnPreviewToolTipLoaded">
+                          <TextBlock Text="{Binding PreviewCopyFilePathTooltip}" />
+                        </ToolTip>
+                      </ToolTip.Tip>
+                      <Viewbox Width="12"
+                               Height="12"
+                               Margin="-1,0,0,0"
+                               Stretch="Uniform">
+                        <Path Classes="preview-icon"
+                              Data="{StaticResource PreviewCopyIconGeometry}"
+                              Fill="{DynamicResource AppTextBrush}" />
+                      </Viewbox>
+                    </Button>
+                  </Border>
                 </Border>
 
                 <Border Grid.Row="0"
