@@ -10,6 +10,7 @@ internal sealed class SelectionRefreshEngine(
     Func<string, IReadOnlyCollection<IgnoreOptionId>, IReadOnlyCollection<string>?, IgnoreRules> buildIgnoreRules,
     Func<string, IReadOnlyCollection<string>, IgnoreOptionsAvailability> getIgnoreOptionsAvailability)
 {
+    private const int MaximumDynamicSnapshotPasses = 3;
     private static readonly HashSet<string> EmptyRootSelection = new(PathComparer.Default);
     private static readonly HashSet<string> EmptyExtensionSelection = new(StringComparer.OrdinalIgnoreCase);
     private static readonly HashSet<IgnoreOptionId> EmptyIgnoreSelection = [];
@@ -119,45 +120,73 @@ internal sealed class SelectionRefreshEngine(
         IgnoreSectionSnapshotState beforeSnapshot,
         CancellationToken cancellationToken)
     {
-        var firstPass = BuildSingleDynamicSnapshot(
-            context,
-            selectedRoots,
-            selectedIgnoreOptions,
-            ignoreStateCache,
-            cancellationToken);
+        var currentRoots = selectedRoots;
+        var currentSelectedIgnoreOptions = selectedIgnoreOptions;
+        var currentIgnoreStateCache = ignoreStateCache;
+        var previousSnapshot = beforeSnapshot;
+        IReadOnlyList<SelectionOption>? refreshedRootOptions = null;
+        var rootAccessDenied = false;
+        var hadAccessDenied = false;
 
-        var refreshPlan = IgnoreSectionRefreshPlanBuilder.Build(
-            beforeSnapshot,
-            firstPass.SnapshotState,
-            selectedIgnoreOptions,
-            firstPass.SelectedIgnoreOptions);
-        if (!refreshPlan.RequiresSecondSnapshotPass)
-            return firstPass with { RootOptions = null };
-
-        var rootsForSecondPass = selectedRoots;
-        RootSectionSnapshot? rebuiltRootSection = null;
-        if (refreshPlan.RequiresRootFolderRefresh)
+        // Dynamic ignore availability can feed back into the selected ignore set, especially
+        // when profile fallback revives default-checked options that immediately change the
+        // tree shape. A bounded convergence loop keeps the load path deterministic without
+        // requiring the user to trigger another refresh manually.
+        for (var passIndex = 0; passIndex < MaximumDynamicSnapshotPasses; passIndex++)
         {
-            rebuiltRootSection = BuildRootSection(
+            var snapshot = BuildSingleDynamicSnapshot(
                 context,
-                firstPass.SelectedIgnoreOptions,
+                currentRoots,
+                currentSelectedIgnoreOptions,
+                currentIgnoreStateCache,
                 cancellationToken);
-            rootsForSecondPass = rebuiltRootSection.SelectedRoots;
+
+            rootAccessDenied |= snapshot.RootAccessDenied;
+            hadAccessDenied |= snapshot.HadAccessDenied;
+
+            var refreshPlan = IgnoreSectionRefreshPlanBuilder.Build(
+                previousSnapshot,
+                snapshot.SnapshotState,
+                currentSelectedIgnoreOptions,
+                snapshot.SelectedIgnoreOptions);
+            if (!refreshPlan.RequiresSecondSnapshotPass)
+            {
+                return snapshot with
+                {
+                    RootOptions = refreshedRootOptions,
+                    RootAccessDenied = rootAccessDenied,
+                    HadAccessDenied = hadAccessDenied
+                };
+            }
+
+            if (refreshPlan.RequiresRootFolderRefresh)
+            {
+                var rebuiltRootSection = BuildRootSection(
+                    context,
+                    snapshot.SelectedIgnoreOptions,
+                    cancellationToken);
+                currentRoots = rebuiltRootSection.SelectedRoots;
+                refreshedRootOptions = rebuiltRootSection.Options;
+                rootAccessDenied |= rebuiltRootSection.RootAccessDenied;
+                hadAccessDenied |= rebuiltRootSection.HadAccessDenied;
+            }
+
+            currentSelectedIgnoreOptions = snapshot.SelectedIgnoreOptions;
+            currentIgnoreStateCache = snapshot.IgnoreOptionStateCache;
+            previousSnapshot = snapshot.SnapshotState;
+
+            if (passIndex == MaximumDynamicSnapshotPasses - 1)
+            {
+                return snapshot with
+                {
+                    RootOptions = refreshedRootOptions,
+                    RootAccessDenied = rootAccessDenied,
+                    HadAccessDenied = hadAccessDenied
+                };
+            }
         }
 
-        var secondPass = BuildSingleDynamicSnapshot(
-            context,
-            rootsForSecondPass,
-            firstPass.SelectedIgnoreOptions,
-            firstPass.IgnoreOptionStateCache,
-            cancellationToken);
-
-        return secondPass with
-        {
-            RootOptions = rebuiltRootSection?.Options,
-            RootAccessDenied = firstPass.RootAccessDenied || secondPass.RootAccessDenied || (rebuiltRootSection?.RootAccessDenied ?? false),
-            HadAccessDenied = firstPass.HadAccessDenied || secondPass.HadAccessDenied || (rebuiltRootSection?.HadAccessDenied ?? false)
-        };
+        throw new InvalidOperationException("The dynamic selection refresh loop exited unexpectedly.");
     }
 
     private DynamicSectionSnapshot BuildSingleDynamicSnapshot(

@@ -1,3 +1,5 @@
+using DevProjex.Tests.Shared.ProjectLoadWorkflow;
+
 namespace DevProjex.Tests.UI;
 
 internal sealed class UiTestProject : IDisposable
@@ -75,6 +77,14 @@ internal sealed class UiTestProject : IDisposable
                     Path.Combine(".cache", "nested", $"artifact-{index:000}"),
                     $"noise {index}");
             }
+        });
+    }
+
+    public static UiTestProject CreateWithProjectLoadWorkflowWorkspace()
+    {
+        return Create(static rootPath =>
+        {
+            ProjectLoadWorkflowWorkspaceSeeder.Seed(rootPath);
         });
     }
 

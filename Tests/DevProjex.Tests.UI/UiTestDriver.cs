@@ -1,4 +1,8 @@
 using Avalonia.VisualTree;
+using DevProjex.Application.Services;
+using System.Globalization;
+using System.Reflection;
+using System.Text.RegularExpressions;
 
 namespace DevProjex.Tests.UI;
 
@@ -120,6 +124,18 @@ internal static class UiTestDriver
                                        IsInteractableWithinWindow(control, window));
 
         return Assert.IsType<CheckBox>(checkBox);
+    }
+
+    public static Button GetRequiredApplySettingsButton(MainWindow window)
+    {
+        var viewModel = GetViewModel(window);
+        var button = window
+            .GetVisualDescendants()
+            .OfType<Button>()
+            .FirstOrDefault(control => control.IsVisible &&
+                                       string.Equals(control.Content?.ToString(), viewModel.SettingsApply, StringComparison.Ordinal));
+
+        return Assert.IsType<Button>(button);
     }
 
     public static async Task ClickAsync(MainWindow window, Control control)
@@ -321,6 +337,73 @@ internal static class UiTestDriver
             $"ignore option {optionId} label to become '{expectedLabel}'");
 
         await WaitForSettledFramesAsync(frameCount: 8);
+    }
+
+    public static async Task WaitForStatusMetricsAsync(
+        MainWindow window,
+        ExportOutputMetrics expectedTreeMetrics,
+        ExportOutputMetrics expectedContentMetrics)
+    {
+        await WaitForConditionAsync(
+            window,
+            () =>
+            {
+                var viewModel = GetViewModel(window);
+                if (!viewModel.StatusMetricsVisible ||
+                    string.IsNullOrWhiteSpace(viewModel.StatusTreeStatsText) ||
+                    string.IsNullOrWhiteSpace(viewModel.StatusContentStatsText))
+                {
+                    return false;
+                }
+
+                return TryParseStatusMetrics(viewModel.StatusTreeStatsText, out var actualTreeMetrics) &&
+                       TryParseStatusMetrics(viewModel.StatusContentStatsText, out var actualContentMetrics) &&
+                       actualTreeMetrics == expectedTreeMetrics &&
+                       actualContentMetrics == expectedContentMetrics;
+            },
+            "status metrics to match the expected applied export snapshot",
+            timeout: TimeSpan.FromSeconds(30));
+
+        await WaitForSettledFramesAsync(frameCount: 12);
+    }
+
+    public static bool TryParseStatusMetrics(string text, out ExportOutputMetrics metrics)
+    {
+        metrics = ExportOutputMetrics.Empty;
+        if (string.IsNullOrWhiteSpace(text))
+            return false;
+
+        var normalizedText = text.Replace('\u00A0', ' ');
+        var segments = normalizedText.Trim('[', ']').Split('|', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        if (segments.Length < 3)
+            return false;
+
+        var tokens = new string[3];
+        for (var index = 0; index < 3; index++)
+        {
+            var match = Regex.Match(segments[index], @"([0-9][0-9 ]*(?:\.[0-9])?[KM]?)");
+            if (!match.Success)
+                return false;
+
+            tokens[index] = match.Groups[1].Value;
+        }
+
+        if (!TryParseMetricNumber(tokens[0], out var lines) ||
+            !TryParseMetricNumber(tokens[1], out var chars) ||
+            !TryParseMetricNumber(tokens[2], out var tokenCount))
+        {
+            return false;
+        }
+
+        metrics = new ExportOutputMetrics(lines, chars, tokenCount);
+        return true;
+    }
+
+    public static IReadOnlyCollection<IgnoreOptionId> GetSelectedIgnoreOptionIds(MainWindow window)
+    {
+        var field = typeof(MainWindow).GetField("_selectionCoordinator", BindingFlags.Instance | BindingFlags.NonPublic);
+        var coordinator = Assert.IsType<DevProjex.Avalonia.Coordinators.SelectionSyncCoordinator>(field?.GetValue(window));
+        return coordinator.GetSelectedIgnoreOptionIds();
     }
 
     public static async Task SwitchPreviewModeAsync(MainWindow window, PreviewContentMode mode)
@@ -598,10 +681,40 @@ internal static class UiTestDriver
                 $"FilterVisible={viewModel.FilterVisible}",
                 $"SearchBusy={viewModel.IsSearchInProgress}",
                 $"FilterBusy={viewModel.IsFilterInProgress}",
-                $"StatusBusy={viewModel.StatusBusy}"
+                $"StatusBusy={viewModel.StatusBusy}",
+                $"StatusTree={viewModel.StatusTreeStatsText}",
+                $"StatusContent={viewModel.StatusContentStatsText}"
             ]);
     }
 
     private static bool IsInteractableWithinWindow(Control control, MainWindow window)
         => control.IsVisible && control.TranslatePoint(default, window).HasValue;
+
+    private static bool TryParseMetricNumber(string text, out int value)
+    {
+        value = 0;
+        if (string.IsNullOrWhiteSpace(text))
+            return false;
+
+        var normalized = text
+            .Replace(",", string.Empty, StringComparison.Ordinal)
+            .Replace(" ", string.Empty, StringComparison.Ordinal);
+        var multiplier = 1.0;
+        if (normalized.EndsWith('K'))
+        {
+            multiplier = 1_000.0;
+            normalized = normalized[..^1];
+        }
+        else if (normalized.EndsWith('M'))
+        {
+            multiplier = 1_000_000.0;
+            normalized = normalized[..^1];
+        }
+
+        if (!double.TryParse(normalized, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed))
+            return false;
+
+        value = (int)Math.Round(parsed * multiplier, MidpointRounding.AwayFromZero);
+        return true;
+    }
 }
