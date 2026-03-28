@@ -251,16 +251,21 @@ public sealed class SelectionSyncCoordinator(
         var ignoreRules = GetOrBuildIgnoreRules(path, selectedIgnoreOptions, rootFolders);
         var extensionScanRules = BuildExtensionAvailabilityScanRules(ignoreRules);
         var forceAllExtensionsChecked = !ShouldSuppressAllTogglesOverride() && viewModel.AllExtensionsChecked;
+        var effectiveAllowedExtensions = BuildEffectiveAllowedExtensionsForLiveCounts(forceAllExtensionsChecked);
         return Task.Run(async () =>
         {
             cancellationToken.ThrowIfCancellationRequested();
             if (IsStalePathRequest(path)) return;
 
-            // Scan extensions and ignore-option counts in one pass to avoid extra IO on large trees.
-            var scan = scanOptions.GetExtensionsAndIgnoreCountsForRootFolders(
+            // The live ignore section needs extension availability and effective counts to come
+            // from the same snapshot. Keeping them coupled removes a whole extra filesystem pass
+            // and prevents the coordinator from stitching together mismatched intermediate states.
+            var scan = scanOptions.GetIgnoreSectionSnapshotForRootFolders(
                 path,
                 rootFolders,
                 extensionScanRules,
+                ignoreRules,
+                effectiveAllowedExtensions,
                 cancellationToken);
             if (scan.RootAccessDenied)
             {
@@ -274,14 +279,6 @@ public sealed class SelectionSyncCoordinator(
             var extensionlessEntriesCount = SplitExtensions(scan.Value.Extensions, visibleExtensions);
             var options = filterSelectionService.BuildExtensionOptions(visibleExtensions, prev);
             options = ApplyMissingProfileSelectionsFallbackToExtensions(options);
-            var effectiveIgnoreCounts = ResolveEffectiveIgnoreOptionCounts(
-                path,
-                rootFolders,
-                options,
-                ignoreRules,
-                scan.Value.IgnoreOptionCounts,
-                forceAllExtensionsChecked,
-                cancellationToken);
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -290,7 +287,7 @@ public sealed class SelectionSyncCoordinator(
                 ApplyExtensionOptions(
                     options,
                     extensionlessEntriesCount,
-                    effectiveIgnoreCounts,
+                    scan.Value.EffectiveIgnoreOptionCounts,
                     hasIgnoreOptionCounts: true);
             });
         }, cancellationToken);
@@ -997,48 +994,19 @@ public sealed class SelectionSyncCoordinator(
         return extensionlessEntriesCount;
     }
 
-    private IgnoreOptionCounts ResolveEffectiveIgnoreOptionCounts(
-        string path,
-        IReadOnlyCollection<string> rootFolders,
-        IReadOnlyList<SelectionOption> extensionOptions,
-        IgnoreRules ignoreRules,
-        IgnoreOptionCounts rawCounts,
-        bool forceAllExtensionsChecked,
-        CancellationToken cancellationToken)
-    {
-        if (rootFolders.Count == 0)
-            return scanOptions.GetEffectiveIgnoreOptionCountsForRootFolders(
-                path,
-                rootFolders,
-                BuildEffectiveSelectedExtensionSet(extensionOptions, forceAllExtensionsChecked),
-                ignoreRules,
-                rawCounts,
-                cancellationToken).Value;
-
-        var allowedExtensions = BuildEffectiveSelectedExtensionSet(extensionOptions, forceAllExtensionsChecked);
-        var effectiveCounts = scanOptions.GetEffectiveIgnoreOptionCountsForRootFolders(
-            path,
-            rootFolders,
-            allowedExtensions,
-            ignoreRules,
-            rawCounts,
-            cancellationToken);
-
-        return effectiveCounts.Value;
-    }
-
-    private static HashSet<string> BuildEffectiveSelectedExtensionSet(
-        IReadOnlyList<SelectionOption> extensionOptions,
+    private HashSet<string>? BuildEffectiveAllowedExtensionsForLiveCounts(
         bool forceAllExtensionsChecked)
     {
-        var selected = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var option in extensionOptions)
-        {
-            if (forceAllExtensionsChecked || option.IsChecked)
-                selected.Add(option.Name);
-        }
+        if (forceAllExtensionsChecked)
+            return null;
 
-        return selected;
+        if (_extensionsSelectionInitialized)
+            return new HashSet<string>(_extensionsSelectionCache, StringComparer.OrdinalIgnoreCase);
+
+        if (viewModel.Extensions.Count == 0)
+            return null;
+
+        return CollectCheckedSelectionNames(viewModel.Extensions, StringComparer.OrdinalIgnoreCase);
     }
 
     private static bool IsExtensionlessEntry(string value)
