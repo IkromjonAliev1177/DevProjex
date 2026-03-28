@@ -311,6 +311,64 @@ public sealed class MainWindowPreviewUiTests(UiWorkspaceFixture workspace)
     }
 
     [AvaloniaFact]
+    public async Task StickyPathCopyButton_IsVisibleOnHeaderRightEdge_AndUsesCompactSize()
+    {
+        var window = await UiTestDriver.CreateLoadedMainWindowAsync(workspace.Project);
+
+        try
+        {
+            await UiTestDriver.OpenPreviewAsync(window);
+            await UiTestDriver.SwitchPreviewModeAsync(window, PreviewContentMode.TreeAndContent);
+            await UiTestDriver.ScrollPreviewUntilStickyHeaderVisibleAsync(window);
+
+            var stickyHeaderContainer = UiTestDriver.GetRequiredControl<Border>(window, "PreviewStickyHeaderContainer");
+            var stickyHeaderCopyButton = UiTestDriver.GetRequiredControl<Button>(window, "PreviewStickyHeaderCopyButton");
+            var stickyHeaderText = UiTestDriver.GetRequiredControl<TextBlock>(window, "PreviewStickyHeaderText");
+
+            var headerBounds = UiTestDriver.GetBoundsInWindow(stickyHeaderContainer, window);
+            var buttonBounds = UiTestDriver.GetBoundsInWindow(stickyHeaderCopyButton, window);
+            var textBounds = UiTestDriver.GetBoundsInWindow(stickyHeaderText, window);
+
+            Assert.True(stickyHeaderContainer.IsVisible);
+            Assert.InRange(Math.Abs(buttonBounds.Width - 24), 0, 1.5);
+            Assert.InRange(Math.Abs(buttonBounds.Height - 24), 0, 1.5);
+            Assert.True(buttonBounds.Left >= textBounds.Right - 2);
+            Assert.InRange(headerBounds.Right - buttonBounds.Right, 0, 10);
+        }
+        finally
+        {
+            await UiTestDriver.CloseWindowAsync(window);
+        }
+    }
+
+    [AvaloniaFact]
+    public async Task StickyPathCopyButton_CopiesVisibleSectionPath()
+    {
+        var window = await UiTestDriver.CreateLoadedMainWindowAsync(workspace.Project);
+
+        try
+        {
+            await UiTestDriver.OpenPreviewAsync(window);
+            await UiTestDriver.SwitchPreviewModeAsync(window, PreviewContentMode.TreeAndContent);
+            await UiTestDriver.ScrollPreviewUntilStickyHeaderVisibleAsync(window);
+
+            var stickyHeaderText = UiTestDriver.GetRequiredControl<TextBlock>(window, "PreviewStickyHeaderText");
+            var expectedPayload = UiTestDriver.ComputeVisibleStickyHeaderCopyPayload(window);
+
+            Assert.False(string.IsNullOrWhiteSpace(stickyHeaderText.Text));
+            Assert.StartsWith($"{stickyHeaderText.Text}:", expectedPayload, StringComparison.Ordinal);
+
+            await UiTestDriver.SetClipboardTextAsync(window, $"sticky-header-sentinel-{Guid.NewGuid():N}");
+            await UiTestDriver.ClickPreviewStickyHeaderCopyButtonAsync(window);
+            await UiTestDriver.WaitForClipboardTextAsync(window, expectedPayload);
+        }
+        finally
+        {
+            await UiTestDriver.CloseWindowAsync(window);
+        }
+    }
+
+    [AvaloniaFact]
     public async Task SpaceKey_DoesNotReinvokeLastToolbarButtonAfterPreviewButtonClick()
     {
         var window = await UiTestDriver.CreateLoadedMainWindowAsync(workspace.Project);

@@ -2476,36 +2476,7 @@ public partial class MainWindow : Window
 
     private void UpdatePreviewStickyPath()
     {
-        if (_previewTextControl is null)
-            return;
-
-        if (!_viewModel.IsAnyPreviewVisible)
-        {
-            HidePreviewStickyPath();
-            return;
-        }
-
-        var document = _previewTextControl.Document ?? _viewModel.PreviewDocument;
-        if (document?.Sections is not { Count: > 0 } sections)
-        {
-            HidePreviewStickyPath();
-            return;
-        }
-
-        var verticalOffset = _previewTextScrollViewer?.Offset.Y ?? _previewTextControl.VerticalOffset;
-        var topLine = _previewTextControl.GetLineNumberAtVerticalOffset(verticalOffset);
-        // Keep the sticky header hidden until the viewport actually enters the first file section.
-        if (topLine < sections[0].StartLine)
-        {
-            HidePreviewStickyPath();
-            return;
-        }
-
-        var currentSection = PreviewDocumentSectionLookup.FindContainingSection(sections, topLine) ??
-                             PreviewDocumentSectionLookup.FindContainingOrNextSection(sections, topLine) ??
-                             sections[^1];
-
-        if (currentSection is null)
+        if (!TryGetCurrentPreviewStickySection(out var currentSection))
         {
             HidePreviewStickyPath();
             return;
@@ -2520,14 +2491,128 @@ public partial class MainWindow : Window
         if (_previewStickyHeaderCap is not null)
             _previewStickyHeaderCap.IsVisible = true;
 
-        _previewTextControl.StickyHeaderReserved = false;
-        _previewTextControl.StickyHeaderVisible = false;
-        _previewTextControl.StickyHeaderText = string.Empty;
+        if (_previewTextControl is not null)
+        {
+            _previewTextControl.StickyHeaderReserved = false;
+            _previewTextControl.StickyHeaderVisible = false;
+            _previewTextControl.StickyHeaderText = string.Empty;
+        }
 
         if (_previewLineNumbersControl is not null)
         {
             _previewLineNumbersControl.StickyHeaderReserved = false;
             _previewLineNumbersControl.StickyHeaderVisible = false;
+        }
+    }
+
+    private void OnPreviewToolTipLoaded(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not ToolTip toolTip)
+            return;
+
+        ApplyPreviewToolTipBackdrop(toolTip);
+    }
+
+    private void OnPreviewCopyVisibleFilePath(object? sender, RoutedEventArgs e)
+    {
+        if (!TryBuildCurrentPreviewStickySectionCopyPayload(out var sectionPayload))
+        {
+            return;
+        }
+
+        _ = CopyPreviewVisibleFilePathAsync(sectionPayload);
+    }
+
+    private async Task CopyPreviewVisibleFilePathAsync(string text)
+    {
+        try
+        {
+            await SetClipboardTextAsync(text);
+            _toastService.Show(_localization["Toast.Copy.Preview"]);
+        }
+        catch (Exception ex)
+        {
+            await ShowErrorAsync(ex.Message);
+        }
+    }
+
+    private bool TryGetCurrentPreviewStickySection(out PreviewDocumentSection currentSection)
+    {
+        currentSection = null!;
+        if (_previewTextControl is null || !_viewModel.IsAnyPreviewVisible)
+            return false;
+
+        var document = _previewTextControl.Document ?? _viewModel.PreviewDocument;
+        if (document?.Sections is not { Count: > 0 } sections)
+            return false;
+
+        var verticalOffset = _previewTextScrollViewer?.Offset.Y ?? _previewTextControl.VerticalOffset;
+        var topLine = _previewTextControl.GetLineNumberAtVerticalOffset(verticalOffset);
+        if (topLine < sections[0].StartLine)
+            return false;
+
+        currentSection = PreviewDocumentSectionLookup.FindContainingSection(sections, topLine) ??
+                         PreviewDocumentSectionLookup.FindContainingOrNextSection(sections, topLine) ??
+                         sections[^1];
+
+        return currentSection is not null;
+    }
+
+    private bool TryBuildCurrentPreviewStickySectionCopyPayload(out string sectionPayload)
+    {
+        sectionPayload = string.Empty;
+
+        if (!TryGetCurrentPreviewStickySection(out var currentSection) ||
+            _previewTextControl is null)
+        {
+            return false;
+        }
+
+        var document = _previewTextControl.Document ?? _viewModel.PreviewDocument;
+        if (document is null)
+            return false;
+
+        sectionPayload = document.GetLineRangeText(currentSection.HeaderLine, currentSection.EndLine);
+        return !string.IsNullOrWhiteSpace(sectionPayload);
+    }
+
+    private void ApplyPreviewToolTipBackdrop(ToolTip toolTip)
+    {
+        if (toolTip.GetVisualRoot() is null)
+            return;
+
+        if (TopLevel.GetTopLevel(toolTip) is not TopLevel tooltipLevel)
+            return;
+
+        var host = TopLevel.GetTopLevel(this);
+        if (host is not null && ReferenceEquals(tooltipLevel, host))
+            return;
+
+        try
+        {
+            if (_viewModel.HasAnyEffect)
+            {
+                tooltipLevel.TransparencyLevelHint =
+                [
+                    WindowTransparencyLevel.AcrylicBlur,
+                    WindowTransparencyLevel.Blur,
+                    WindowTransparencyLevel.Transparent,
+                    WindowTransparencyLevel.None
+                ];
+
+                tooltipLevel.Background = Brushes.Transparent;
+            }
+            else
+            {
+                tooltipLevel.TransparencyLevelHint =
+                [
+                    WindowTransparencyLevel.None
+                ];
+            }
+        }
+        catch
+        {
+            // Ignore: tooltip could have closed before the backdrop was applied.
         }
     }
 

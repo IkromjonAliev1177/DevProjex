@@ -555,6 +555,17 @@ public sealed class MainWindowViewModelTests
     }
 
     [Fact]
+    public void PreviewCopyFilePathTooltip_UsesLocalizedValue()
+    {
+        var viewModel = CreateViewModel(new Dictionary<string, string>
+        {
+            ["Preview.FilePath.Copy.Tooltip"] = "Copy current file"
+        });
+
+        Assert.Equal("Copy current file", viewModel.PreviewCopyFilePathTooltip);
+    }
+
+    [Fact]
     public void CenteredPreviewSelectionMetricsVisible_IsTrue_WhenSelectionVisibleAndNotBusy()
     {
         var viewModel = CreateViewModel();

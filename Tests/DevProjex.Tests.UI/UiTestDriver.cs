@@ -1,4 +1,5 @@
 using Avalonia.VisualTree;
+using DevProjex.Application.Preview;
 using DevProjex.Application.Services;
 using DevProjex.Kernel;
 using DevProjex.Kernel.Contracts;
@@ -243,6 +244,12 @@ internal static class UiTestDriver
     {
         var previewCopyButton = GetRequiredControl<Button>(window, "PreviewCopyButton");
         await ClickAsync(window, previewCopyButton);
+    }
+
+    public static async Task ClickPreviewStickyHeaderCopyButtonAsync(MainWindow window)
+    {
+        var stickyHeaderCopyButton = GetRequiredControl<Button>(window, "PreviewStickyHeaderCopyButton");
+        await ClickAsync(window, stickyHeaderCopyButton);
     }
 
     public static async Task WaitForPreviewClosedAsync(MainWindow window)
@@ -494,6 +501,26 @@ internal static class UiTestDriver
                 pathPresentation),
             _ => throw new ArgumentOutOfRangeException(nameof(mode), mode, null)
         };
+    }
+
+    public static string ComputeVisibleStickyHeaderCopyPayload(MainWindow window)
+    {
+        var viewModel = GetViewModel(window);
+        var previewTextControl = GetRequiredControl<DevProjex.Avalonia.Controls.VirtualizedPreviewTextControl>(window, "PreviewTextControl");
+        var previewScrollViewer = GetRequiredPreviewScrollViewer(window);
+        var document = previewTextControl.Document ?? viewModel.PreviewDocument;
+        if (document?.Sections is not { Count: > 0 } sections)
+            throw new XunitException("Preview document sections are not available for sticky-header copy.");
+
+        var topLine = previewTextControl.GetLineNumberAtVerticalOffset(previewScrollViewer.Offset.Y);
+        if (topLine < sections[0].StartLine)
+            throw new XunitException("Sticky-header copy payload was requested before the first file section became visible.");
+
+        var currentSection = PreviewDocumentSectionLookup.FindContainingSection(sections, topLine) ??
+                             PreviewDocumentSectionLookup.FindContainingOrNextSection(sections, topLine) ??
+                             sections[^1];
+
+        return document.GetLineRangeText(currentSection.HeaderLine, currentSection.EndLine);
     }
 
     public static async Task SetClipboardTextAsync(MainWindow window, string content)
