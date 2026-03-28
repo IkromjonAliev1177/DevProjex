@@ -153,7 +153,7 @@ public sealed class MainWindowPreviewUiTests(UiWorkspaceFixture workspace)
                      })
             {
                 await UiTestDriver.SwitchPreviewModeAsync(window, mode);
-                var expectedText = await UiTestDriver.ComputeAppliedPreviewCopyPayloadAsync(window, mode);
+                var expectedText = UiTestDriver.ComputeCurrentPreviewCopyPayload(window);
                 Assert.False(string.IsNullOrWhiteSpace(expectedText));
 
                 await UiTestDriver.SetClipboardTextAsync(window, $"preview-copy-sentinel-{mode}-{Guid.NewGuid():N}");
@@ -197,7 +197,7 @@ public sealed class MainWindowPreviewUiTests(UiWorkspaceFixture workspace)
                 await UiTestDriver.ClickPreviewCopyButtonAsync(window);
                 await UiTestDriver.WaitForClipboardTextAsync(
                     window,
-                    await UiTestDriver.ComputeAppliedPreviewCopyPayloadAsync(window, mode));
+                    UiTestDriver.ComputeCurrentPreviewCopyPayload(window));
 
                 await UiTestDriver.WaitForSettledFramesAsync(frameCount: 10);
 

@@ -503,6 +503,15 @@ internal static class UiTestDriver
         };
     }
 
+    public static string ComputeCurrentPreviewCopyPayload(MainWindow window)
+    {
+        var viewModel = GetViewModel(window);
+        var document = GetRequiredControl<DevProjex.Avalonia.Controls.VirtualizedPreviewTextControl>(window, "PreviewTextControl").Document ??
+                       viewModel.PreviewDocument;
+        Assert.NotNull(document);
+        return PreviewClipboardPayloadBuilder.BuildFullDocumentPayload(document);
+    }
+
     public static string ComputeVisibleStickyHeaderCopyPayload(MainWindow window)
     {
         var viewModel = GetViewModel(window);
@@ -520,7 +529,7 @@ internal static class UiTestDriver
                              PreviewDocumentSectionLookup.FindContainingOrNextSection(sections, topLine) ??
                              sections[^1];
 
-        return document.GetLineRangeText(currentSection.HeaderLine, currentSection.EndLine);
+        return PreviewClipboardPayloadBuilder.BuildSectionPayload(document, currentSection);
     }
 
     public static async Task SetClipboardTextAsync(MainWindow window, string content)

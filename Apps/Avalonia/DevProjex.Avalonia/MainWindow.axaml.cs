@@ -2513,14 +2513,15 @@ public partial class MainWindow : Window
         ApplyPreviewToolTipBackdrop(toolTip);
     }
 
-    private void OnPreviewCopyVisibleFilePath(object? sender, RoutedEventArgs e)
+    private async void OnPreviewCopyVisibleFilePath(object? sender, RoutedEventArgs e)
     {
-        if (!TryBuildCurrentPreviewStickySectionCopyPayload(out var sectionPayload))
+        if (!await WaitForPreviewClipboardSourceReadyAsync().ConfigureAwait(true) ||
+            !TryBuildCurrentPreviewStickySectionCopyPayload(out var sectionPayload))
         {
             return;
         }
 
-        _ = CopyPreviewVisibleFilePathAsync(sectionPayload);
+        await CopyPreviewVisibleFilePathAsync(sectionPayload);
     }
 
     private async Task CopyPreviewVisibleFilePathAsync(string text)
@@ -2572,8 +2573,43 @@ public partial class MainWindow : Window
         if (document is null)
             return false;
 
-        sectionPayload = document.GetLineRangeText(currentSection.HeaderLine, currentSection.EndLine);
+        sectionPayload = PreviewClipboardPayloadBuilder.BuildSectionPayload(document, currentSection);
         return !string.IsNullOrWhiteSpace(sectionPayload);
+    }
+
+    private bool TryBuildCurrentPreviewCopyPayload(out string previewPayload)
+    {
+        previewPayload = string.Empty;
+
+        var document = _previewTextControl?.Document ?? _viewModel.PreviewDocument;
+        if (document is null)
+            return false;
+
+        previewPayload = PreviewClipboardPayloadBuilder.BuildFullDocumentPayload(document);
+        return !string.IsNullOrWhiteSpace(previewPayload);
+    }
+
+    private async Task<bool> WaitForPreviewClipboardSourceReadyAsync()
+    {
+        if (!_viewModel.IsAnyPreviewVisible)
+            return false;
+
+        if (!_viewModel.IsPreviewLoading)
+            return (_previewTextControl?.Document ?? _viewModel.PreviewDocument) is not null;
+
+        var timeout = TimeSpan.FromSeconds(10);
+        var stopwatch = Stopwatch.StartNew();
+
+        while (_viewModel.IsAnyPreviewVisible &&
+               _viewModel.IsPreviewLoading &&
+               stopwatch.Elapsed < timeout)
+        {
+            await Dispatcher.UIThread.InvokeAsync(static () => { }, DispatcherPriority.Background);
+            await Task.Delay(15).ConfigureAwait(true);
+        }
+
+        return !_viewModel.IsPreviewLoading &&
+               (_previewTextControl?.Document ?? _viewModel.PreviewDocument) is not null;
     }
 
     private void ApplyPreviewToolTipBackdrop(ToolTip toolTip)
@@ -3348,24 +3384,33 @@ public partial class MainWindow : Window
         ClosePreviewMode();
     }
 
-    private void OnPreviewCopyCurrentMode(object? sender, RoutedEventArgs e)
+    private async void OnPreviewCopyCurrentMode(object? sender, RoutedEventArgs e)
     {
-        if (!_viewModel.IsProjectLoaded)
+        if (!_viewModel.IsProjectLoaded || !_viewModel.IsAnyPreviewVisible)
             return;
 
-        switch (_viewModel.SelectedPreviewContentMode)
+        if (!await WaitForPreviewClipboardSourceReadyAsync().ConfigureAwait(true) ||
+            !TryBuildCurrentPreviewCopyPayload(out var previewPayload))
         {
-            case PreviewContentMode.Tree:
-                OnCopyTree(sender, e);
-                break;
+            return;
+        }
 
-            case PreviewContentMode.Content:
-                OnCopyContent(sender, e);
-                break;
+        try
+        {
+            await SetClipboardTextAsync(previewPayload);
 
-            default:
-                OnCopyTreeAndContent(sender, e);
-                break;
+            var toastKey = _viewModel.SelectedPreviewContentMode switch
+            {
+                PreviewContentMode.Tree => "Toast.Copy.Tree",
+                PreviewContentMode.Content => "Toast.Copy.Content",
+                _ => "Toast.Copy.TreeAndContent"
+            };
+
+            _toastService.Show(_localization[toastKey]);
+        }
+        catch (Exception ex)
+        {
+            await ShowErrorAsync(ex.Message);
         }
     }
 
