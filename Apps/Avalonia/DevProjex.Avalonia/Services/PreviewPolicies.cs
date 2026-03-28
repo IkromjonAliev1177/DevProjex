@@ -165,26 +165,14 @@ internal static class PreviewFileCollectionPolicy
         bool hasSelection,
         TreeNodeDescriptor? treeRoot)
     {
-        var uniqueFiles = new HashSet<string>(PathComparer.Default);
-
         if (hasSelection)
         {
-            foreach (var path in selectedPaths)
-            {
-                if (File.Exists(path))
-                    uniqueFiles.Add(path);
-            }
-        }
-        else if (treeRoot is not null)
-        {
-            foreach (var path in EnumerateFilePaths(treeRoot))
-                uniqueFiles.Add(path);
+            return BuildOrderedSelectedFilePaths(selectedPaths);
         }
 
-        var files = new List<string>(uniqueFiles.Count);
-        files.AddRange(uniqueFiles);
-        files.Sort(PathComparer.Default);
-        return files;
+        return treeRoot is null
+            ? []
+            : BuildOrderedAllFilePaths(treeRoot);
     }
 
     public static PreviewCacheKeyData BuildPreviewCacheKey(
@@ -238,18 +226,49 @@ internal static class PreviewFileCollectionPolicy
         return orderedPaths;
     }
 
-    public static IEnumerable<string> EnumerateFilePaths(TreeNodeDescriptor node)
+    public static List<string> BuildOrderedAllFilePaths(TreeNodeDescriptor treeRoot)
     {
-        if (!node.IsDirectory)
+        // Keep a path-based uniqueness pass even though runtime trees should already be unique.
+        // Tests intentionally synthesize case-variant nodes to verify cross-platform comparer semantics.
+        var uniquePaths = new HashSet<string>(PathComparer.Default);
+        var stack = new Stack<TreeNodeDescriptor>();
+        stack.Push(treeRoot);
+
+        while (stack.Count > 0)
         {
-            yield return node.FullPath;
-            yield break;
+            var node = stack.Pop();
+            if (!node.IsDirectory)
+            {
+                uniquePaths.Add(node.FullPath);
+                continue;
+            }
+
+            for (var index = node.Children.Count - 1; index >= 0; index--)
+                stack.Push(node.Children[index]);
         }
 
-        foreach (var child in node.Children)
+        var orderedPaths = new List<string>(uniquePaths.Count);
+        orderedPaths.AddRange(uniquePaths);
+        orderedPaths.Sort(PathComparer.Default);
+        return orderedPaths;
+    }
+
+    public static IEnumerable<string> EnumerateFilePaths(TreeNodeDescriptor node)
+    {
+        var stack = new Stack<TreeNodeDescriptor>();
+        stack.Push(node);
+
+        while (stack.Count > 0)
         {
-            foreach (var path in EnumerateFilePaths(child))
-                yield return path;
+            var current = stack.Pop();
+            if (!current.IsDirectory)
+            {
+                yield return current.FullPath;
+                continue;
+            }
+
+            for (var index = current.Children.Count - 1; index >= 0; index--)
+                stack.Push(current.Children[index]);
         }
     }
 }

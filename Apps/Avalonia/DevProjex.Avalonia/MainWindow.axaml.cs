@@ -6422,6 +6422,10 @@ public partial class MainWindow : Window
         _previewMemoryCleanupCts?.Dispose();
         _previewMemoryCleanupCts = null;
 
+        // Background metrics become stale as soon as the visible tree is about to change.
+        // Cancel them before tearing down the current project state to avoid wasted I/O.
+        CancelBackgroundMetricsCalculation();
+
         // Clear search state first (holds references to TreeNodeViewModel)
         _searchCoordinator.ClearSearchState();
 
@@ -6762,7 +6766,12 @@ public partial class MainWindow : Window
             NameFilter: nameFilter);
 
         if (!interactiveFilter)
+        {
+            // Full-tree refresh invalidates the active metrics baseline.
+            // Cancel early so obsolete file reads stop before we start the next build.
+            CancelBackgroundMetricsCalculation();
             _viewModel.StatusMetricsVisible = false;
+        }
 
         try
         {
@@ -6797,12 +6806,16 @@ public partial class MainWindow : Window
                 ? _currentProjectDisplayName
                 : GetDirectoryNameSafe(_currentPath!);
 
-            var root = await Task.Run(() =>
+            TreeNodeViewModel root;
+            using (PerformanceMetrics.Measure("BuildTreeViewModel"))
             {
-                var node = BuildTreeViewModel(result.Root, null);
-                node.DisplayName = displayName;
-                return node;
-            }, linkedToken);
+                root = await Task.Run(() =>
+                {
+                    var node = BuildTreeViewModel(result.Root, null);
+                    node.DisplayName = displayName;
+                    return node;
+                }, linkedToken);
+            }
 
             linkedToken.ThrowIfCancellationRequested();
 
@@ -6844,17 +6857,7 @@ public partial class MainWindow : Window
             // Only do full scan on initial load, not on interactive filter changes
             if (!interactiveFilter)
             {
-                // Animate settings panel BEFORE metrics calculation starts
-                // so user sees the panel immediately after tree renders
-                if (_viewModel.SettingsVisible && !_settingsAnimating)
-                {
-                    await WaitForTreeRenderStabilizationAsync(linkedToken);
-                    if (_viewModel.SettingsVisible && !_settingsAnimating)
-                        AnimateSettingsPanel(true);
-                }
-
-                UpdateStatusOperationText(_viewModel.StatusOperationCalculatingData);
-                await InitializeFileMetricsCacheAsync(linkedToken);
+                StartPostLoadBackgroundWork(result.Root, cancellationToken);
             }
             else
             {
@@ -6921,6 +6924,53 @@ public partial class MainWindow : Window
         }
 
         return node;
+    }
+
+    private void StartPostLoadBackgroundWork(TreeNodeDescriptor treeRoot, CancellationToken cancellationToken)
+    {
+        // The tree is already visible at this point. Keep any non-critical post-load work detached
+        // so opening a project is no longer blocked by metrics warmup or cosmetic panel animation.
+        StartDeferredSettingsPanelAnimation(cancellationToken);
+        ObserveDetachedTask(
+            InitializeFileMetricsCacheAsync(treeRoot, cancellationToken),
+            "InitializeFileMetricsCache");
+    }
+
+    private void StartDeferredSettingsPanelAnimation(CancellationToken cancellationToken)
+    {
+        if (!_viewModel.SettingsVisible || _settingsAnimating)
+            return;
+
+        ObserveDetachedTask(
+            AnimateSettingsPanelWhenTreeReadyAsync(cancellationToken),
+            "AnimateSettingsPanelWhenTreeReady");
+    }
+
+    private async Task AnimateSettingsPanelWhenTreeReadyAsync(CancellationToken cancellationToken)
+    {
+        await WaitForTreeRenderStabilizationAsync(cancellationToken);
+        if (_viewModel.SettingsVisible && !_settingsAnimating)
+            AnimateSettingsPanel(true);
+    }
+
+    private static async void ObserveDetachedTask(Task task, string operationName)
+    {
+        try
+        {
+            await task;
+        }
+        catch (OperationCanceledException)
+        {
+            // Detached post-load tasks are routinely canceled by refresh/reload operations.
+        }
+        catch (ObjectDisposedException)
+        {
+            // Cancellation source disposal during shutdown/reload is expected.
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"[WARN] Background task '{operationName}' failed: {ex}");
+        }
     }
 
     /// <summary>
@@ -7601,8 +7651,10 @@ public partial class MainWindow : Window
     /// Scans all files in parallel using IFileContentAnalyzer as single source of truth.
     /// Binary files are skipped via extension check (fast) or null-byte detection.
     /// </summary>
-    private async Task InitializeFileMetricsCacheAsync(CancellationToken cancellationToken)
+    private async Task InitializeFileMetricsCacheAsync(TreeNodeDescriptor treeRoot, CancellationToken cancellationToken)
     {
+        using var _ = PerformanceMetrics.Measure("InitializeFileMetricsCacheAsync");
+
         // Cancel any previous calculation
         var metricsCts = ReplaceCancellationSource(ref _metricsCalculationCts);
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, metricsCts.Token);
@@ -7621,13 +7673,16 @@ public partial class MainWindow : Window
             if (IsStatusOperationActive(statusOperationId))
                 _viewModel.StatusProgressValue = 0;
 
-            // Collect all file paths from tree
-            var filePaths = new List<string>();
-            TreeNodeViewModel.ForEachDescendant(_viewModel.TreeNodes, node =>
+            IReadOnlyList<string> filePaths;
+            using (PerformanceMetrics.Measure("CollectMetricsWarmupFilePaths"))
             {
-                if (!node.Descriptor.IsDirectory && !node.Descriptor.IsAccessDenied)
-                    filePaths.Add(node.FullPath);
-            });
+                // Warmup must read from the descriptor tree instead of TreeNodeViewModel instances.
+                // That keeps the UI tree out of the hot path and reuses the ordered-file cache
+                // shared with preview/export metrics.
+                filePaths = await Task.Run(
+                    () => GetOrBuildAllOrderedFilePaths(treeRoot),
+                    linkedCts.Token);
+            }
 
             // Clear cache before scanning
             ClearFileMetricsCache(trimCapacity: true);
@@ -7644,7 +7699,7 @@ public partial class MainWindow : Window
             }
 
             // Skip warmup scan for obvious binary-only datasets (e.g. screenshot folders).
-            if (filePaths.TrueForAll(IsDefinitelyBinaryByExtensionForMetricsWarmup))
+            if (AreAllFilesDefinitelyBinaryForMetricsWarmup(filePaths))
             {
                 _isBackgroundMetricsActive = false;
                 _hasCompleteMetricsBaseline = true;
@@ -7756,6 +7811,17 @@ public partial class MainWindow : Window
         {
             DisposeIfCurrent(ref _metricsCalculationCts, metricsCts);
         }
+    }
+
+    private static bool AreAllFilesDefinitelyBinaryForMetricsWarmup(IReadOnlyList<string> filePaths)
+    {
+        for (var index = 0; index < filePaths.Count; index++)
+        {
+            if (!IsDefinitelyBinaryByExtensionForMetricsWarmup(filePaths[index]))
+                return false;
+        }
+
+        return true;
     }
 
     private void MergeStagedMetricsIntoCache(ConcurrentDictionary<string, FileMetricsData> stagedMetrics)
@@ -8033,13 +8099,7 @@ public partial class MainWindow : Window
             }
         }
 
-        var uniquePaths = new HashSet<string>(PathComparer.Default);
-        foreach (var path in PreviewFileCollectionPolicy.EnumerateFilePaths(treeRoot))
-            uniquePaths.Add(path);
-
-        var orderedPaths = new List<string>(uniquePaths.Count);
-        orderedPaths.AddRange(uniquePaths);
-        orderedPaths.Sort(PathComparer.Default);
+        var orderedPaths = PreviewFileCollectionPolicy.BuildOrderedAllFilePaths(treeRoot);
 
         lock (_metricsComputationCacheLock)
         {

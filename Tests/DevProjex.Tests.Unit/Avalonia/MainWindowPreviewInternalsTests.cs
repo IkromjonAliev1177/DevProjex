@@ -85,6 +85,107 @@ public sealed class MainWindowPreviewInternalsTests
     }
 
     [Fact]
+    public void BuildOrderedAllFilePaths_ReturnsSortedUniqueFiles()
+    {
+        var root = new TreeNodeDescriptor(
+            DisplayName: "root",
+            FullPath: CreatePath("root"),
+            IsDirectory: true,
+            IsAccessDenied: false,
+            IconKey: "folder",
+            Children:
+            [
+                new TreeNodeDescriptor(
+                    DisplayName: "src",
+                    FullPath: CreatePath("root", "src"),
+                    IsDirectory: true,
+                    IsAccessDenied: false,
+                    IconKey: "folder",
+                    Children:
+                    [
+                        new TreeNodeDescriptor("b.cs", CreatePath("root", "src", "b.cs"), false, false, "csharp", []),
+                        new TreeNodeDescriptor("a.cs", CreatePath("root", "src", "a.cs"), false, false, "csharp", [])
+                    ]),
+                new TreeNodeDescriptor("readme.md", CreatePath("root", "readme.md"), false, false, "markdown", [])
+            ]);
+
+        var result = PreviewFileCollectionPolicy.BuildOrderedAllFilePaths(root);
+
+        var expected = new[]
+        {
+            CreatePath("root", "readme.md"),
+            CreatePath("root", "src", "a.cs"),
+            CreatePath("root", "src", "b.cs")
+        }
+        .OrderBy(path => path, PathComparer.Default)
+        .ToList();
+
+        Assert.Equal(expected, result);
+    }
+
+    [Fact]
+    public void BuildOrderedAllFilePaths_CaseVariantPaths_FollowPlatformSemantics()
+    {
+        var upper = CreatePath("root", "A.cs");
+        var lower = CreatePath("root", "a.cs");
+        var root = new TreeNodeDescriptor(
+            DisplayName: "root",
+            FullPath: CreatePath("root"),
+            IsDirectory: true,
+            IsAccessDenied: false,
+            IconKey: "folder",
+            Children:
+            [
+                new TreeNodeDescriptor("A.cs", upper, false, false, "csharp", []),
+                new TreeNodeDescriptor("a.cs", lower, false, false, "csharp", [])
+            ]);
+
+        var result = PreviewFileCollectionPolicy.BuildOrderedAllFilePaths(root);
+        var expected = new HashSet<string>(PathComparer.Default) { upper, lower }
+            .OrderBy(path => path, PathComparer.Default)
+            .ToList();
+
+        Assert.Equal(expected, result);
+    }
+
+    [Fact]
+    public void BuildOrderedAllFilePaths_DeepTree_RemainsStable()
+    {
+        const int depth = 2048;
+        var current = new TreeNodeDescriptor(
+            DisplayName: "leaf.txt",
+            FullPath: CreatePath("root", "leaf.txt"),
+            IsDirectory: false,
+            IsAccessDenied: false,
+            IconKey: "text",
+            Children: []);
+
+        for (var index = depth - 1; index >= 0; index--)
+        {
+            current = new TreeNodeDescriptor(
+                DisplayName: $"dir{index}",
+                FullPath: CreatePath("root", $"dir{index}"),
+                IsDirectory: true,
+                IsAccessDenied: false,
+                IconKey: "folder",
+                Children: [current]);
+        }
+
+        var root = new TreeNodeDescriptor(
+            DisplayName: "root",
+            FullPath: CreatePath("root"),
+            IsDirectory: true,
+            IsAccessDenied: false,
+            IconKey: "folder",
+            Children: [current]);
+
+        var result = PreviewFileCollectionPolicy.BuildOrderedAllFilePaths(root);
+
+        Assert.Single(result);
+        Assert.EndsWith("leaf.txt", result[0], StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void BuildPreviewCacheKey_SameArguments_ProduceEqualKey()
     {
         var root = CreateTree("root");
