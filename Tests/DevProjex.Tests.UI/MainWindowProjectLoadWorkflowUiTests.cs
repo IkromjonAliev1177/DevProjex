@@ -257,6 +257,95 @@ public sealed class MainWindowProjectLoadWorkflowUiTests
     }
 
     [AvaloniaFact]
+    public async Task ApplySettings_EquivalentFinalSelections_ProduceSameMetricsAcrossDifferentMutationOrders()
+    {
+        using var project = UiTestProject.CreateWithProjectLoadWorkflowWorkspace();
+
+        var windowA = await UiTestDriver.CreateLoadedMainWindowAsync(project);
+        var windowB = await UiTestDriver.CreateLoadedMainWindowAsync(project);
+
+        try
+        {
+            var finalExpectedA = await ApplyCombinedScenarioAsync(
+                project.RootPath,
+                windowA,
+                [WorkflowUiMutationStep.Roots, WorkflowUiMutationStep.Extensions, WorkflowUiMutationStep.Ignore]);
+            var finalExpectedB = await ApplyCombinedScenarioAsync(
+                project.RootPath,
+                windowB,
+                [WorkflowUiMutationStep.Ignore, WorkflowUiMutationStep.Extensions, WorkflowUiMutationStep.Roots]);
+
+            Assert.Equal(finalExpectedA.TreeMetrics, finalExpectedB.TreeMetrics);
+            Assert.Equal(finalExpectedA.ContentMetrics, finalExpectedB.ContentMetrics);
+        }
+        finally
+        {
+            await UiTestDriver.CloseWindowAsync(windowA);
+            await UiTestDriver.CloseWindowAsync(windowB);
+        }
+    }
+
+    [AvaloniaFact]
+    public async Task PendingEquivalentFinalSelections_LeaveAppliedMetricsStableAcrossDifferentMutationOrders()
+    {
+        using var project = UiTestProject.CreateWithProjectLoadWorkflowWorkspace();
+
+        var windowA = await UiTestDriver.CreateLoadedMainWindowAsync(project);
+        var windowB = await UiTestDriver.CreateLoadedMainWindowAsync(project);
+
+        try
+        {
+            var baselineA = await ComputeExpectedAppliedMetricsAsync(project.RootPath, windowA);
+            await UiTestDriver.WaitForStatusMetricsAsync(windowA, baselineA.TreeMetrics, baselineA.ContentMetrics);
+            var baselineB = await ComputeExpectedAppliedMetricsAsync(project.RootPath, windowB);
+            await UiTestDriver.WaitForStatusMetricsAsync(windowB, baselineB.TreeMetrics, baselineB.ContentMetrics);
+
+            await ApplyPendingCombinedScenarioAsync(windowA, [WorkflowUiMutationStep.Roots, WorkflowUiMutationStep.Extensions, WorkflowUiMutationStep.Ignore]);
+            await ApplyPendingCombinedScenarioAsync(windowB, [WorkflowUiMutationStep.Ignore, WorkflowUiMutationStep.Extensions, WorkflowUiMutationStep.Roots]);
+
+            await UiTestDriver.WaitForStatusMetricsAsync(windowA, baselineA.TreeMetrics, baselineA.ContentMetrics);
+            await UiTestDriver.WaitForStatusMetricsAsync(windowB, baselineB.TreeMetrics, baselineB.ContentMetrics);
+        }
+        finally
+        {
+            await UiTestDriver.CloseWindowAsync(windowA);
+            await UiTestDriver.CloseWindowAsync(windowB);
+        }
+    }
+
+    [AvaloniaFact]
+    public async Task ApplySettings_CombinedRoundTripAcrossAllSections_RestoresBaseline()
+    {
+        using var project = UiTestProject.CreateWithProjectLoadWorkflowWorkspace();
+        var window = await UiTestDriver.CreateLoadedMainWindowAsync(project);
+
+        try
+        {
+            var baseline = await ComputeExpectedAppliedMetricsAsync(project.RootPath, window);
+            await UiTestDriver.WaitForStatusMetricsAsync(window, baseline.TreeMetrics, baseline.ContentMetrics);
+
+            var changed = await ApplyCombinedScenarioAsync(
+                project.RootPath,
+                window,
+                [WorkflowUiMutationStep.Roots, WorkflowUiMutationStep.Extensions, WorkflowUiMutationStep.Ignore]);
+            AssertMetricsChanged(baseline, changed, "combined all-sections scenario");
+
+            await ApplyPendingCombinedScenarioAsync(window, [WorkflowUiMutationStep.Ignore, WorkflowUiMutationStep.Extensions, WorkflowUiMutationStep.Roots]);
+            var restored = await ComputeExpectedAppliedMetricsAsync(project.RootPath, window);
+            Assert.Equal(baseline.TreeMetrics, restored.TreeMetrics);
+            Assert.Equal(baseline.ContentMetrics, restored.ContentMetrics);
+
+            await UiTestDriver.ClickAsync(window, UiTestDriver.GetRequiredApplySettingsButton(window));
+            await UiTestDriver.WaitForStatusMetricsAsync(window, baseline.TreeMetrics, baseline.ContentMetrics);
+            AssertVisibleAdvancedIgnoreOptionsCarryPositiveCounts(UiTestDriver.GetViewModel(window).IgnoreOptions);
+        }
+        finally
+        {
+            await UiTestDriver.CloseWindowAsync(window);
+        }
+    }
+
+    [AvaloniaFact]
     public async Task ApplySettings_EachCheckedRootFolderToggle_RebuildsMetricsAndRestoresBaseline()
     {
         using var project = UiTestProject.CreateWithProjectLoadWorkflowWorkspace();
@@ -425,8 +514,13 @@ public sealed class MainWindowProjectLoadWorkflowUiTests
             await UiTestDriver.ClickAsync(window, UiTestDriver.GetRequiredExtensionCheckBox(window, extension));
 
             var reversibleIgnore = UiTestDriver.GetViewModel(window).IgnoreOptions
-                .First(option => option.IsChecked && option.Id is not IgnoreOptionId.UseGitIgnore and not IgnoreOptionId.SmartIgnore)
-                .Id;
+                .Where(option => option.IsChecked)
+                .Select(option => option.Id)
+                .First(id => id is IgnoreOptionId.EmptyFiles
+                    or IgnoreOptionId.EmptyFolders
+                    or IgnoreOptionId.ExtensionlessFiles
+                    or IgnoreOptionId.DotFiles
+                    or IgnoreOptionId.HiddenFiles);
             await UiTestDriver.ClickAsync(window, UiTestDriver.GetRequiredIgnoreOptionCheckBox(window, reversibleIgnore));
             await UiTestDriver.ClickAsync(window, UiTestDriver.GetRequiredIgnoreOptionCheckBox(window, reversibleIgnore));
 
@@ -485,6 +579,50 @@ public sealed class MainWindowProjectLoadWorkflowUiTests
         Assert.True(
             baseline.TreeMetrics != candidate.TreeMetrics || baseline.ContentMetrics != candidate.ContentMetrics,
             $"Mutation '{mutationName}' must change either tree or content metrics.");
+    }
+
+    private static async Task<ProjectLoadWorkflowRuntime.ProjectLoadWorkflowMetrics> ApplyCombinedScenarioAsync(
+        string rootPath,
+        MainWindow window,
+        IReadOnlyList<WorkflowUiMutationStep> order)
+    {
+        await ApplyPendingCombinedScenarioAsync(window, order);
+        var expected = await ComputeExpectedAppliedMetricsAsync(rootPath, window);
+        await UiTestDriver.ClickAsync(window, UiTestDriver.GetRequiredApplySettingsButton(window));
+        await UiTestDriver.WaitForStatusMetricsAsync(window, expected.TreeMetrics, expected.ContentMetrics);
+        return expected;
+    }
+
+    private static async Task ApplyPendingCombinedScenarioAsync(
+        MainWindow window,
+        IReadOnlyList<WorkflowUiMutationStep> order)
+    {
+        foreach (var step in order)
+        {
+            switch (step)
+            {
+                case WorkflowUiMutationStep.Roots:
+                    await UiTestDriver.ClickAsync(window, UiTestDriver.GetRequiredRootFolderCheckBox(window, "samples"));
+                    break;
+                case WorkflowUiMutationStep.Extensions:
+                    await UiTestDriver.ClickAsync(window, UiTestDriver.GetRequiredExtensionCheckBox(window, ".json"));
+                    break;
+                case WorkflowUiMutationStep.Ignore:
+                    await UiTestDriver.ClickAsync(window, UiTestDriver.GetRequiredIgnoreOptionCheckBox(window, IgnoreOptionId.EmptyFiles));
+                    break;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(step), step, null);
+            }
+
+            await UiTestDriver.WaitForSettledFramesAsync(frameCount: 8);
+        }
+    }
+
+    private enum WorkflowUiMutationStep
+    {
+        Roots,
+        Extensions,
+        Ignore
     }
 
     private static void AssertVisibleAdvancedIgnoreOptionsCarryPositiveCounts(
