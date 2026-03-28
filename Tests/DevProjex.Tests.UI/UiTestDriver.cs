@@ -465,7 +465,10 @@ internal static class UiTestDriver
         var tokens = new string[3];
         for (var index = 0; index < 3; index++)
         {
-            var match = Regex.Match(segments[index], @"([0-9][0-9 ]*(?:\.[0-9])?[KM]?)");
+            // CI runners can format status-bar numbers with culture-specific thousands
+            // separators (for example 4,698 on en-US Windows or 4 698 on other locales).
+            // The parser must accept the rendered token exactly as the user sees it.
+            var match = Regex.Match(segments[index], @"([0-9][0-9\s,\.\u00A0]*[KM]?)");
             if (!match.Success)
                 return false;
 
@@ -976,8 +979,8 @@ internal static class UiTestDriver
             return false;
 
         var normalized = text
-            .Replace(",", string.Empty, StringComparison.Ordinal)
-            .Replace(" ", string.Empty, StringComparison.Ordinal);
+            .Replace('\u00A0', ' ')
+            .Trim();
         var multiplier = 1.0;
         if (normalized.EndsWith('K'))
         {
@@ -990,8 +993,42 @@ internal static class UiTestDriver
             normalized = normalized[..^1];
         }
 
-        if (!double.TryParse(normalized, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed))
+        if (multiplier == 1.0)
+        {
+            // Integer status values use localized group separators only. We deliberately
+            // keep digits and drop every separator so 4,698 / 4 698 / 4.698 all become 4698.
+            normalized = string.Concat(normalized.Where(char.IsDigit));
+            if (normalized.Length == 0 || !int.TryParse(normalized, NumberStyles.None, CultureInfo.InvariantCulture, out value))
+                return false;
+
+            return true;
+        }
+
+        normalized = normalized.Replace(" ", string.Empty, StringComparison.Ordinal);
+
+        // Compact K/M labels can use either '.' or ',' as the decimal separator depending
+        // on the current culture. Normalizing to invariant form keeps the comparison stable.
+        var lastComma = normalized.LastIndexOf(',');
+        var lastDot = normalized.LastIndexOf('.');
+        var decimalSeparatorIndex = Math.Max(lastComma, lastDot);
+        if (decimalSeparatorIndex >= 0)
+        {
+            var integerPart = new string(normalized[..decimalSeparatorIndex].Where(char.IsDigit).ToArray());
+            var fractionalPart = new string(normalized[(decimalSeparatorIndex + 1)..].Where(char.IsDigit).ToArray());
+            normalized = fractionalPart.Length == 0
+                ? integerPart
+                : $"{integerPart}.{fractionalPart}";
+        }
+        else
+        {
+            normalized = string.Concat(normalized.Where(char.IsDigit));
+        }
+
+        if (normalized.Length == 0 ||
+            !double.TryParse(normalized, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed))
+        {
             return false;
+        }
 
         value = (int)Math.Round(parsed * multiplier, MidpointRounding.AwayFromZero);
         return true;
