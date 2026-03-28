@@ -48,6 +48,36 @@ internal sealed class UiTestProject : IDisposable
         });
     }
 
+    public static UiTestProject CreateWithGitIgnoredExtensionlessNoise()
+    {
+        return Create(static rootPath =>
+        {
+            WriteFile(rootPath, ".gitignore", "obj/\nbin/\n");
+            WriteFile(rootPath, "README", "visible extensionless");
+            WriteFile(rootPath, Path.Combine("src", "Program.cs"), BuildCSharpFile("UiProbe", "Program", 8));
+            WriteFile(rootPath, Path.Combine("obj", "Debug", "net10.0", "apphost"), "smart ignored apphost");
+            WriteFile(rootPath, Path.Combine("obj", "Debug", "net10.0", "singlefilehost"), "smart ignored host");
+            WriteFile(rootPath, Path.Combine("bin", "Debug", "net10.0", "createdump"), "smart ignored dump");
+        });
+    }
+
+    public static UiTestProject CreateWithDotFolderExtensionlessNoise()
+    {
+        return Create(static rootPath =>
+        {
+            WriteFile(rootPath, "README", "visible extensionless");
+            WriteFile(rootPath, Path.Combine("src", "Program.cs"), BuildCSharpFile("UiProbe", "Program", 8));
+
+            for (var index = 0; index < 128; index++)
+            {
+                WriteFile(
+                    rootPath,
+                    Path.Combine(".cache", "nested", $"artifact-{index:000}"),
+                    $"noise {index}");
+            }
+        });
+    }
+
     private static UiTestProject Create(Action<string> seedWorkspace)
     {
         var rootPath = Path.Combine(

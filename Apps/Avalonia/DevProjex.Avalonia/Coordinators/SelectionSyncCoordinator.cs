@@ -478,22 +478,7 @@ public sealed class SelectionSyncCoordinator(
 
         var selectedRoots = GetSelectedRootFolders();
         await PopulateIgnoreOptionsForRootSelectionAsync(selectedRoots, currentPath, cancellationToken);
-        var hadIgnoreCountsBefore = _hasIgnoreOptionCounts;
-        var ignoreCountsBefore = _ignoreOptionCounts;
-        var extensionlessBefore = _hasExtensionlessExtensionEntries;
-        var extensionlessCountBefore = _extensionlessExtensionEntriesCount;
-        await PopulateExtensionsForRootSelectionAsync(currentPath, selectedRoots, cancellationToken);
-
-        var ignoreAvailabilityChanged = hadIgnoreCountsBefore != _hasIgnoreOptionCounts ||
-                                        ignoreCountsBefore != _ignoreOptionCounts;
-
-        // Recompute ignore options only when visibility/count state changed after extension scan.
-        if (extensionlessBefore != _hasExtensionlessExtensionEntries ||
-            extensionlessCountBefore != _extensionlessExtensionEntriesCount ||
-            ignoreAvailabilityChanged)
-        {
-            await PopulateIgnoreOptionsForRootSelectionAsync(selectedRoots, currentPath, cancellationToken);
-        }
+        await SynchronizeExtensionAndIgnoreCountsAsync(currentPath, selectedRoots, cancellationToken);
     }
 
     public async Task RefreshRootAndDependentsAsync(string currentPath, CancellationToken cancellationToken = default)
@@ -531,22 +516,7 @@ public sealed class SelectionSyncCoordinator(
             cancellationToken.ThrowIfCancellationRequested();
             var selectedRoots = GetSelectedRootFolders();
             await PopulateIgnoreOptionsForRootSelectionAsync(selectedRoots, currentPath, cancellationToken);
-            var hadIgnoreCountsBefore = _hasIgnoreOptionCounts;
-            var ignoreCountsBefore = _ignoreOptionCounts;
-            var extensionlessBefore = _hasExtensionlessExtensionEntries;
-            var extensionlessCountBefore = _extensionlessExtensionEntriesCount;
-            await PopulateExtensionsForRootSelectionAsync(currentPath, selectedRoots, cancellationToken);
-
-            var ignoreAvailabilityChanged = hadIgnoreCountsBefore != _hasIgnoreOptionCounts ||
-                                            ignoreCountsBefore != _ignoreOptionCounts;
-
-            // Avoid duplicate ignore refresh when visibility/count state did not change.
-            if (extensionlessBefore != _hasExtensionlessExtensionEntries ||
-                extensionlessCountBefore != _extensionlessExtensionEntriesCount ||
-                ignoreAvailabilityChanged)
-            {
-                await PopulateIgnoreOptionsForRootSelectionAsync(selectedRoots, currentPath, cancellationToken);
-            }
+            await SynchronizeExtensionAndIgnoreCountsAsync(currentPath, selectedRoots, cancellationToken);
 
             // Consume prepared selection only after refresh for that exact path completes.
             if (HasPreparedSelectionForPath(currentPath))
@@ -645,11 +615,11 @@ public sealed class SelectionSyncCoordinator(
         IReadOnlyCollection<string> selectedRootFolders)
     {
         if (string.IsNullOrWhiteSpace(path))
-            return new IgnoreOptionsAvailability(IncludeGitIgnore: false, IncludeSmartIgnore: false);
+            return CreateCountDrivenIgnoreAvailability(includeGitIgnore: false, includeSmartIgnore: false);
 
         try
         {
-            var availability = getIgnoreOptionsAvailability(path, selectedRootFolders);
+            var availability = CreateCountDrivenIgnoreAvailability(getIgnoreOptionsAvailability(path, selectedRootFolders));
             if (_hasIgnoreOptionCounts)
             {
                 return availability with
@@ -684,8 +654,41 @@ public sealed class SelectionSyncCoordinator(
         }
         catch
         {
-            return new IgnoreOptionsAvailability(IncludeGitIgnore: false, IncludeSmartIgnore: false);
+            return CreateCountDrivenIgnoreAvailability(includeGitIgnore: false, includeSmartIgnore: false);
         }
+    }
+
+    private static IgnoreOptionsAvailability CreateCountDrivenIgnoreAvailability(
+        bool includeGitIgnore,
+        bool includeSmartIgnore)
+    {
+        return new IgnoreOptionsAvailability(
+            IncludeGitIgnore: includeGitIgnore,
+            IncludeSmartIgnore: includeSmartIgnore);
+    }
+
+    private static IgnoreOptionsAvailability CreateCountDrivenIgnoreAvailability(
+        IgnoreOptionsAvailability availability)
+    {
+        // Advanced ignore options are driven by live counts coming from the scan layer.
+        // Keep them hidden until the coordinator has computed those values.
+        return availability with
+        {
+            IncludeHiddenFolders = false,
+            HiddenFoldersCount = 0,
+            IncludeHiddenFiles = false,
+            HiddenFilesCount = 0,
+            IncludeDotFolders = false,
+            DotFoldersCount = 0,
+            IncludeDotFiles = false,
+            DotFilesCount = 0,
+            IncludeEmptyFolders = false,
+            EmptyFoldersCount = 0,
+            IncludeEmptyFiles = false,
+            EmptyFilesCount = 0,
+            IncludeExtensionlessFiles = false,
+            ExtensionlessFilesCount = 0
+        };
     }
 
     private void ApplyIgnoreOptions(
@@ -1004,27 +1007,24 @@ public sealed class SelectionSyncCoordinator(
         CancellationToken cancellationToken)
     {
         if (rootFolders.Count == 0)
-            return rawCounts with { EmptyFolders = 0 };
+            return scanOptions.GetEffectiveIgnoreOptionCountsForRootFolders(
+                path,
+                rootFolders,
+                BuildEffectiveSelectedExtensionSet(extensionOptions, forceAllExtensionsChecked),
+                ignoreRules,
+                rawCounts,
+                cancellationToken).Value;
 
         var allowedExtensions = BuildEffectiveSelectedExtensionSet(extensionOptions, forceAllExtensionsChecked);
-        var rulesWithoutEmptyFolderPruning = ignoreRules.IgnoreEmptyFolders
-            ? ignoreRules with { IgnoreEmptyFolders = false }
-            : ignoreRules;
-
-        // Empty-folder counts must track the actual tree contract.
-        // UseGitIgnore may remove descendants, but only EmptyFolders decides whether
-        // their now-empty parents disappear from the exported tree.
-        var effectiveEmptyFolderCount = scanOptions.GetEffectiveEmptyFolderCountForRootFolders(
+        var effectiveCounts = scanOptions.GetEffectiveIgnoreOptionCountsForRootFolders(
             path,
             rootFolders,
             allowedExtensions,
-            rulesWithoutEmptyFolderPruning,
+            ignoreRules,
+            rawCounts,
             cancellationToken);
 
-        return rawCounts with
-        {
-            EmptyFolders = Math.Max(0, effectiveEmptyFolderCount.Value)
-        };
+        return effectiveCounts.Value;
     }
 
     private static HashSet<string> BuildEffectiveSelectedExtensionSet(
@@ -1048,6 +1048,82 @@ public sealed class SelectionSyncCoordinator(
 
         var extension = Path.GetExtension(value);
         return string.IsNullOrEmpty(extension) || extension == ".";
+    }
+
+    private async Task SynchronizeExtensionAndIgnoreCountsAsync(
+        string currentPath,
+        IReadOnlyCollection<string> selectedRoots,
+        CancellationToken cancellationToken)
+    {
+        // Dynamic ignore options may appear only after the extension scan computes counts.
+        // When that happens, their default checked state changes the active ignore rules,
+        // so we must run one extra extension pass to make the displayed counts match the
+        // final selected ignore set instead of the pre-appearance state.
+        var ignoreSelectionBeforeScan = new HashSet<IgnoreOptionId>(GetSelectedIgnoreOptionIds());
+
+        var hadIgnoreCountsBefore = _hasIgnoreOptionCounts;
+        var ignoreCountsBefore = _ignoreOptionCounts;
+        var extensionlessBefore = _hasExtensionlessExtensionEntries;
+        var extensionlessCountBefore = _extensionlessExtensionEntriesCount;
+
+        await PopulateExtensionsForRootSelectionAsync(currentPath, selectedRoots, cancellationToken);
+        var ignoreOptionsRefreshed = await RefreshIgnoreOptionsAfterExtensionScanIfNeeded(
+            selectedRoots,
+            currentPath,
+            hadIgnoreCountsBefore,
+            ignoreCountsBefore,
+            extensionlessBefore,
+            extensionlessCountBefore,
+            cancellationToken);
+
+        if (!ignoreOptionsRefreshed)
+            return;
+
+        var ignoreSelectionAfterRefresh = new HashSet<IgnoreOptionId>(GetSelectedIgnoreOptionIds());
+        if (ignoreSelectionBeforeScan.SetEquals(ignoreSelectionAfterRefresh))
+            return;
+
+        // Dynamic directory toggles such as DotFolders/HiddenFolders can invalidate the
+        // root-folder list itself. Rebuild roots before the second extension pass so the
+        // refreshed counts are based on the final selected roots instead of the pre-toggle set.
+        await PopulateRootFoldersAsync(currentPath, cancellationToken);
+        selectedRoots = GetSelectedRootFolders();
+
+        hadIgnoreCountsBefore = _hasIgnoreOptionCounts;
+        ignoreCountsBefore = _ignoreOptionCounts;
+        extensionlessBefore = _hasExtensionlessExtensionEntries;
+        extensionlessCountBefore = _extensionlessExtensionEntriesCount;
+
+        await PopulateExtensionsForRootSelectionAsync(currentPath, selectedRoots, cancellationToken);
+        await RefreshIgnoreOptionsAfterExtensionScanIfNeeded(
+            selectedRoots,
+            currentPath,
+            hadIgnoreCountsBefore,
+            ignoreCountsBefore,
+            extensionlessBefore,
+            extensionlessCountBefore,
+            cancellationToken);
+    }
+
+    private async Task<bool> RefreshIgnoreOptionsAfterExtensionScanIfNeeded(
+        IReadOnlyCollection<string> selectedRoots,
+        string currentPath,
+        bool hadIgnoreCountsBefore,
+        IgnoreOptionCounts ignoreCountsBefore,
+        bool extensionlessBefore,
+        int extensionlessCountBefore,
+        CancellationToken cancellationToken)
+    {
+        var ignoreAvailabilityChanged = hadIgnoreCountsBefore != _hasIgnoreOptionCounts ||
+                                        ignoreCountsBefore != _ignoreOptionCounts;
+        var extensionlessChanged = extensionlessBefore != _hasExtensionlessExtensionEntries ||
+                                   extensionlessCountBefore != _extensionlessExtensionEntriesCount;
+
+        if (!ignoreAvailabilityChanged && !extensionlessChanged)
+            return false;
+
+        await PopulateIgnoreOptionsForRootSelectionAsync(selectedRoots, currentPath, cancellationToken);
+        return true;
     }
 
     private IgnoreRules GetOrBuildIgnoreRules(
@@ -1163,13 +1239,22 @@ public sealed class SelectionSyncCoordinator(
 
     private static IgnoreRules BuildExtensionAvailabilityScanRules(IgnoreRules rules)
     {
-        // Availability of "extensionless files" must not depend on the option itself.
-        // Otherwise the option can disappear right after user enables it.
-        if (!rules.IgnoreExtensionlessFiles)
+        // Extension availability must not depend on file-level toggles that can hide the
+        // very extensions required to keep those toggles visible. Otherwise options such as
+        // EmptyFiles or ExtensionlessFiles can disappear immediately after becoming checked.
+        if (!rules.IgnoreHiddenFiles &&
+            !rules.IgnoreDotFiles &&
+            !rules.IgnoreEmptyFiles &&
+            !rules.IgnoreExtensionlessFiles)
+        {
             return rules;
+        }
 
         return rules with
         {
+            IgnoreHiddenFiles = false,
+            IgnoreDotFiles = false,
+            IgnoreEmptyFiles = false,
             IgnoreExtensionlessFiles = false
         };
     }

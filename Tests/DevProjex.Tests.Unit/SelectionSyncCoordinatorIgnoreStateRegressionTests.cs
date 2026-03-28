@@ -1,3 +1,6 @@
+using DevProjex.Application.Models;
+using System.Reflection;
+
 namespace DevProjex.Tests.Unit;
 
 public sealed class SelectionSyncCoordinatorIgnoreStateRegressionTests
@@ -12,12 +15,12 @@ public sealed class SelectionSyncCoordinatorIgnoreStateRegressionTests
 		using var coordinator = CreateCoordinator(viewModel);
 		coordinator.HookIgnoreListeners(viewModel.IgnoreOptions);
 
-		coordinator.ApplyExtensionScan([".cs", ".json"]);
+		ApplyIgnoreCounts(coordinator, new IgnoreOptionCounts(HiddenFolders: 1, HiddenFiles: 1));
 		coordinator.PopulateIgnoreOptionsForRootSelection([], ProjectPath);
 
 		GetIgnoreOption(viewModel, IgnoreOptionId.HiddenFolders).IsChecked = false;
 
-		coordinator.ApplyExtensionScan(["Dockerfile", ".cs"]);
+		ApplyIgnoreCounts(coordinator, new IgnoreOptionCounts(HiddenFolders: 1, HiddenFiles: 1, ExtensionlessFiles: 2));
 		coordinator.PopulateIgnoreOptionsForRootSelection([], ProjectPath);
 
 		Assert.False(GetIgnoreOption(viewModel, IgnoreOptionId.HiddenFolders).IsChecked);
@@ -33,18 +36,18 @@ public sealed class SelectionSyncCoordinatorIgnoreStateRegressionTests
 		using var coordinator = CreateCoordinator(viewModel);
 		coordinator.HookIgnoreListeners(viewModel.IgnoreOptions);
 
-		coordinator.ApplyExtensionScan(["Dockerfile", ".cs"]);
+		ApplyIgnoreCounts(coordinator, new IgnoreOptionCounts(HiddenFiles: 1, ExtensionlessFiles: 2));
 		coordinator.PopulateIgnoreOptionsForRootSelection([], ProjectPath);
 
 		GetIgnoreOption(viewModel, IgnoreOptionId.ExtensionlessFiles).IsChecked = false;
 
-		coordinator.ApplyExtensionScan([".cs", ".json"]);
+		ApplyIgnoreCounts(coordinator, new IgnoreOptionCounts(HiddenFiles: 1));
 		coordinator.PopulateIgnoreOptionsForRootSelection([], ProjectPath);
 		Assert.DoesNotContain(viewModel.IgnoreOptions, option => option.Id == IgnoreOptionId.ExtensionlessFiles);
 
 		GetIgnoreOption(viewModel, IgnoreOptionId.HiddenFiles).IsChecked = false;
 
-		coordinator.ApplyExtensionScan(["Dockerfile", ".cs"]);
+		ApplyIgnoreCounts(coordinator, new IgnoreOptionCounts(HiddenFiles: 1, ExtensionlessFiles: 2));
 		coordinator.PopulateIgnoreOptionsForRootSelection([], ProjectPath);
 
 		Assert.False(GetIgnoreOption(viewModel, IgnoreOptionId.ExtensionlessFiles).IsChecked);
@@ -59,13 +62,13 @@ public sealed class SelectionSyncCoordinatorIgnoreStateRegressionTests
 		using var coordinator = CreateCoordinator(viewModel);
 		coordinator.HookIgnoreListeners(viewModel.IgnoreOptions);
 
-		coordinator.ApplyExtensionScan(["Dockerfile", ".cs"]);
+		ApplyIgnoreCounts(coordinator, new IgnoreOptionCounts(HiddenFolders: 1, ExtensionlessFiles: 2));
 		coordinator.PopulateIgnoreOptionsForRootSelection([], ProjectPath);
 
 		GetIgnoreOption(viewModel, IgnoreOptionId.ExtensionlessFiles).IsChecked = false;
 
 		coordinator.ResetProjectProfileSelections(NextProjectPath);
-		coordinator.ApplyExtensionScan(["Dockerfile", ".cs"]);
+		ApplyIgnoreCounts(coordinator, new IgnoreOptionCounts(HiddenFolders: 1, ExtensionlessFiles: 2));
 		coordinator.PopulateIgnoreOptionsForRootSelection([], NextProjectPath);
 
 		Assert.True(GetIgnoreOption(viewModel, IgnoreOptionId.ExtensionlessFiles).IsChecked);
@@ -80,12 +83,12 @@ public sealed class SelectionSyncCoordinatorIgnoreStateRegressionTests
 		using var coordinator = CreateCoordinator(viewModel);
 		coordinator.HookIgnoreListeners(viewModel.IgnoreOptions);
 
-		coordinator.ApplyExtensionScan([".cs", ".json"]);
+		ApplyIgnoreCounts(coordinator, new IgnoreOptionCounts(HiddenFolders: 1));
 		coordinator.PopulateIgnoreOptionsForRootSelection([], ProjectPath);
 
 		coordinator.HandleIgnoreAllChanged(false, currentPath: null);
 
-		coordinator.ApplyExtensionScan(["Dockerfile", ".cs"]);
+		ApplyIgnoreCounts(coordinator, new IgnoreOptionCounts(HiddenFolders: 1, ExtensionlessFiles: 2));
 		coordinator.PopulateIgnoreOptionsForRootSelection([], ProjectPath);
 
 		Assert.False(GetIgnoreOption(viewModel, IgnoreOptionId.HiddenFolders).IsChecked);
@@ -96,6 +99,15 @@ public sealed class SelectionSyncCoordinatorIgnoreStateRegressionTests
 	private static IgnoreOptionViewModel GetIgnoreOption(MainWindowViewModel viewModel, IgnoreOptionId id)
 	{
 		return Assert.Single(viewModel.IgnoreOptions.Where(option => option.Id == id));
+	}
+
+	private static void ApplyIgnoreCounts(SelectionSyncCoordinator coordinator, IgnoreOptionCounts ignoreCounts)
+	{
+		var method = typeof(SelectionSyncCoordinator).GetMethod(
+			"ApplyExtensionOptions",
+			BindingFlags.Instance | BindingFlags.NonPublic);
+		Assert.NotNull(method);
+		method!.Invoke(coordinator, [Array.Empty<SelectionOption>(), 0, ignoreCounts, true]);
 	}
 
 	private static SelectionSyncCoordinator CreateCoordinator(MainWindowViewModel viewModel)
