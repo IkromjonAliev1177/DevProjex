@@ -8,11 +8,9 @@ using Avalonia.Animation.Easings;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform.Storage;
 using DevProjex.Application;
-using DevProjex.Application.Preview;
 using DevProjex.Avalonia.Controls;
 using DevProjex.Avalonia.Coordinators;
 using DevProjex.Avalonia.Services;
-using DevProjex.Avalonia.ViewModels;
 using DevProjex.Avalonia.Views;
 using DevProjex.Kernel;
 using UserSettingsStore = DevProjex.Infrastructure.ThemePresets.UserSettingsStore;
@@ -6422,6 +6420,10 @@ public partial class MainWindow : Window
         _previewMemoryCleanupCts?.Dispose();
         _previewMemoryCleanupCts = null;
 
+        // Background metrics become stale as soon as the visible tree is about to change.
+        // Cancel them before tearing down the current project state to avoid wasted I/O.
+        CancelBackgroundMetricsCalculation();
+
         // Clear search state first (holds references to TreeNodeViewModel)
         _searchCoordinator.ClearSearchState();
 
@@ -6762,7 +6764,12 @@ public partial class MainWindow : Window
             NameFilter: nameFilter);
 
         if (!interactiveFilter)
+        {
+            // Full-tree refresh invalidates the active metrics baseline.
+            // Cancel early so obsolete file reads stop before we start the next build.
+            CancelBackgroundMetricsCalculation();
             _viewModel.StatusMetricsVisible = false;
+        }
 
         try
         {
@@ -6797,12 +6804,16 @@ public partial class MainWindow : Window
                 ? _currentProjectDisplayName
                 : GetDirectoryNameSafe(_currentPath!);
 
-            var root = await Task.Run(() =>
+            TreeNodeViewModel root;
+            using (PerformanceMetrics.Measure("BuildTreeViewModel"))
             {
-                var node = BuildTreeViewModel(result.Root, null);
-                node.DisplayName = displayName;
-                return node;
-            }, linkedToken);
+                root = await Task.Run(() =>
+                {
+                    var node = BuildTreeViewModel(result.Root, null);
+                    node.DisplayName = displayName;
+                    return node;
+                }, linkedToken);
+            }
 
             linkedToken.ThrowIfCancellationRequested();
 
@@ -6844,17 +6855,7 @@ public partial class MainWindow : Window
             // Only do full scan on initial load, not on interactive filter changes
             if (!interactiveFilter)
             {
-                // Animate settings panel BEFORE metrics calculation starts
-                // so user sees the panel immediately after tree renders
-                if (_viewModel.SettingsVisible && !_settingsAnimating)
-                {
-                    await WaitForTreeRenderStabilizationAsync(linkedToken);
-                    if (_viewModel.SettingsVisible && !_settingsAnimating)
-                        AnimateSettingsPanel(true);
-                }
-
-                UpdateStatusOperationText(_viewModel.StatusOperationCalculatingData);
-                await InitializeFileMetricsCacheAsync(linkedToken);
+                StartPostLoadBackgroundWork(result.Root, cancellationToken);
             }
             else
             {
@@ -6877,50 +6878,136 @@ public partial class MainWindow : Window
 
     private TreeNodeViewModel BuildTreeViewModel(TreeNodeDescriptor descriptor, TreeNodeViewModel? parent)
     {
-        return BuildTreeViewModelCore(descriptor, parent, allowParallelAtThisLevel: parent is null);
+        return BuildTreeViewModelCore(
+            descriptor,
+            parent,
+            materializeChildrenNow: parent is null,
+            allowParallelAtThisLevel: parent is null);
     }
 
     private TreeNodeViewModel BuildTreeViewModelCore(
         TreeNodeDescriptor descriptor,
         TreeNodeViewModel? parent,
+        bool materializeChildrenNow,
         bool allowParallelAtThisLevel)
     {
         var icon = _iconCache.GetIcon(descriptor.IconKey);
-        var node = new TreeNodeViewModel(descriptor, parent, icon);
+        // Eagerly building the entire view-model graph was one of the biggest remaining
+        // startup costs on large projects. We now materialize only the root-visible level
+        // during load and defer deeper branches until the UI actually needs them.
+        var node = materializeChildrenNow || descriptor.Children.Count == 0
+            ? new TreeNodeViewModel(descriptor, parent, icon)
+            : new TreeNodeViewModel(descriptor, parent, icon, BuildDeferredChildViewModels);
 
-        if (descriptor.Children.Count == 0)
+        if (!materializeChildrenNow || descriptor.Children.Count == 0)
             return node;
 
-        if (allowParallelAtThisLevel && descriptor.Children.Count >= TreeViewModelParallelChildrenThreshold)
+        foreach (var child in BuildImmediateChildViewModels(node, descriptor.Children, allowParallelAtThisLevel))
+            node.Children.Add(child);
+
+        return node;
+    }
+
+    private IReadOnlyList<TreeNodeViewModel> BuildDeferredChildViewModels(TreeNodeViewModel parent)
+    {
+        if (parent.Descriptor.Children.Count == 0)
+            return [];
+
+        return BuildImmediateChildViewModels(
+            parent,
+            parent.Descriptor.Children,
+            allowParallelAtThisLevel: false);
+    }
+
+    private List<TreeNodeViewModel> BuildImmediateChildViewModels(
+        TreeNodeViewModel parent,
+        IReadOnlyList<TreeNodeDescriptor> children,
+        bool allowParallelAtThisLevel)
+    {
+        if (children.Count == 0)
+            return [];
+
+        if (allowParallelAtThisLevel && children.Count >= TreeViewModelParallelChildrenThreshold)
         {
-            // Build first-level branches in parallel on background threads, preserving original order.
-            var childNodes = new TreeNodeViewModel[descriptor.Children.Count];
+            // Only the first visible level is built eagerly. Deeper subtrees stay lazy until the
+            // user expands them or a tree-wide operation explicitly traverses that branch.
+            var childNodes = new TreeNodeViewModel[children.Count];
             var parallelOptions = new ParallelOptions
             {
-                MaxDegreeOfParallelism = Math.Min(TreeViewModelBuildParallelism, descriptor.Children.Count)
+                MaxDegreeOfParallelism = Math.Min(TreeViewModelBuildParallelism, children.Count)
             };
 
-            Parallel.For(0, descriptor.Children.Count, parallelOptions, index =>
+            Parallel.For(0, children.Count, parallelOptions, index =>
             {
                 childNodes[index] = BuildTreeViewModelCore(
-                    descriptor.Children[index],
-                    node,
+                    children[index],
+                    parent,
+                    materializeChildrenNow: false,
                     allowParallelAtThisLevel: false);
             });
 
-            for (var i = 0; i < childNodes.Length; i++)
-                node.Children.Add(childNodes[i]);
-
-            return node;
+            return [.. childNodes];
         }
 
-        foreach (var child in descriptor.Children)
+        var realizedChildren = new List<TreeNodeViewModel>(children.Count);
+        foreach (var child in children)
         {
-            var childViewModel = BuildTreeViewModelCore(child, node, allowParallelAtThisLevel: false);
-            node.Children.Add(childViewModel);
+            var childViewModel = BuildTreeViewModelCore(
+                child,
+                parent,
+                materializeChildrenNow: false,
+                allowParallelAtThisLevel: false);
+            realizedChildren.Add(childViewModel);
         }
 
-        return node;
+        return realizedChildren;
+    }
+
+    private void StartPostLoadBackgroundWork(TreeNodeDescriptor treeRoot, CancellationToken cancellationToken)
+    {
+        // The tree is already visible at this point. Keep any non-critical post-load work detached
+        // so opening a project is no longer blocked by metrics warmup or cosmetic panel animation.
+        StartDeferredSettingsPanelAnimation(cancellationToken);
+        ObserveDetachedTask(
+            InitializeFileMetricsCacheAsync(treeRoot, cancellationToken),
+            "InitializeFileMetricsCache");
+    }
+
+    private void StartDeferredSettingsPanelAnimation(CancellationToken cancellationToken)
+    {
+        if (!_viewModel.SettingsVisible || _settingsAnimating)
+            return;
+
+        ObserveDetachedTask(
+            AnimateSettingsPanelWhenTreeReadyAsync(cancellationToken),
+            "AnimateSettingsPanelWhenTreeReady");
+    }
+
+    private async Task AnimateSettingsPanelWhenTreeReadyAsync(CancellationToken cancellationToken)
+    {
+        await WaitForTreeRenderStabilizationAsync(cancellationToken);
+        if (_viewModel.SettingsVisible && !_settingsAnimating)
+            AnimateSettingsPanel(true);
+    }
+
+    private static async void ObserveDetachedTask(Task task, string operationName)
+    {
+        try
+        {
+            await task;
+        }
+        catch (OperationCanceledException)
+        {
+            // Detached post-load tasks are routinely canceled by refresh/reload operations.
+        }
+        catch (ObjectDisposedException)
+        {
+            // Cancellation source disposal during shutdown/reload is expected.
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"[WARN] Background task '{operationName}' failed: {ex}");
+        }
     }
 
     /// <summary>
@@ -7601,8 +7688,10 @@ public partial class MainWindow : Window
     /// Scans all files in parallel using IFileContentAnalyzer as single source of truth.
     /// Binary files are skipped via extension check (fast) or null-byte detection.
     /// </summary>
-    private async Task InitializeFileMetricsCacheAsync(CancellationToken cancellationToken)
+    private async Task InitializeFileMetricsCacheAsync(TreeNodeDescriptor treeRoot, CancellationToken cancellationToken)
     {
+        using var _ = PerformanceMetrics.Measure("InitializeFileMetricsCacheAsync");
+
         // Cancel any previous calculation
         var metricsCts = ReplaceCancellationSource(ref _metricsCalculationCts);
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, metricsCts.Token);
@@ -7621,13 +7710,16 @@ public partial class MainWindow : Window
             if (IsStatusOperationActive(statusOperationId))
                 _viewModel.StatusProgressValue = 0;
 
-            // Collect all file paths from tree
-            var filePaths = new List<string>();
-            TreeNodeViewModel.ForEachDescendant(_viewModel.TreeNodes, node =>
+            IReadOnlyList<string> filePaths;
+            using (PerformanceMetrics.Measure("CollectMetricsWarmupFilePaths"))
             {
-                if (!node.Descriptor.IsDirectory && !node.Descriptor.IsAccessDenied)
-                    filePaths.Add(node.FullPath);
-            });
+                // Warmup must read from the descriptor tree instead of TreeNodeViewModel instances.
+                // That keeps the UI tree out of the hot path and reuses the ordered-file cache
+                // shared with preview/export metrics.
+                filePaths = await Task.Run(
+                    () => GetOrBuildAllOrderedFilePaths(treeRoot),
+                    linkedCts.Token);
+            }
 
             // Clear cache before scanning
             ClearFileMetricsCache(trimCapacity: true);
@@ -7644,7 +7736,7 @@ public partial class MainWindow : Window
             }
 
             // Skip warmup scan for obvious binary-only datasets (e.g. screenshot folders).
-            if (filePaths.TrueForAll(IsDefinitelyBinaryByExtensionForMetricsWarmup))
+            if (AreAllFilesDefinitelyBinaryForMetricsWarmup(filePaths))
             {
                 _isBackgroundMetricsActive = false;
                 _hasCompleteMetricsBaseline = true;
@@ -7756,6 +7848,17 @@ public partial class MainWindow : Window
         {
             DisposeIfCurrent(ref _metricsCalculationCts, metricsCts);
         }
+    }
+
+    private static bool AreAllFilesDefinitelyBinaryForMetricsWarmup(IReadOnlyList<string> filePaths)
+    {
+        for (var index = 0; index < filePaths.Count; index++)
+        {
+            if (!IsDefinitelyBinaryByExtensionForMetricsWarmup(filePaths[index]))
+                return false;
+        }
+
+        return true;
     }
 
     private void MergeStagedMetricsIntoCache(ConcurrentDictionary<string, FileMetricsData> stagedMetrics)
@@ -8033,13 +8136,7 @@ public partial class MainWindow : Window
             }
         }
 
-        var uniquePaths = new HashSet<string>(PathComparer.Default);
-        foreach (var path in PreviewFileCollectionPolicy.EnumerateFilePaths(treeRoot))
-            uniquePaths.Add(path);
-
-        var orderedPaths = new List<string>(uniquePaths.Count);
-        orderedPaths.AddRange(uniquePaths);
-        orderedPaths.Sort(PathComparer.Default);
+        var orderedPaths = PreviewFileCollectionPolicy.BuildOrderedAllFilePaths(treeRoot);
 
         lock (_metricsComputationCacheLock)
         {

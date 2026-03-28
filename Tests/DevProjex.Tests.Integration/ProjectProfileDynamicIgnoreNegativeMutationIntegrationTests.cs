@@ -1,3 +1,4 @@
+using DevProjex.Application.Models;
 using DevProjex.Avalonia.Coordinators;
 using DevProjex.Avalonia.ViewModels;
 
@@ -18,19 +19,21 @@ public sealed class ProjectProfileDynamicIgnoreNegativeMutationIntegrationTests
 
 		ApplyMutation(store, canonicalPath, dynamicOptionId, mutationMode);
 
-		var availability = BuildAvailability(dynamicOptionId, dynamicVisible: false);
 		var viewModel = CreateViewModel();
-		using var coordinator = CreateCoordinator(viewModel, () => availability);
+		using var coordinator = CreateCoordinator(
+			viewModel,
+			includeGitIgnore: mutationMode == NegativeMutationMode.UnavailableOnly);
 
 		if (store.TryLoadProfile(canonicalPath, out var profile))
 			coordinator.ApplyProjectProfileSelections(canonicalPath, profile);
 		else
 			coordinator.ResetProjectProfileSelections(canonicalPath);
 
+		ApplyIgnoreCounts(coordinator, BuildCounts(dynamicOptionId, dynamicVisible: false));
 		coordinator.PopulateIgnoreOptionsForRootSelection([], canonicalPath);
 		Assert.DoesNotContain(viewModel.IgnoreOptions, option => option.Id == dynamicOptionId);
 
-		availability = BuildAvailability(dynamicOptionId, dynamicVisible: true);
+		ApplyIgnoreCounts(coordinator, BuildCounts(dynamicOptionId, dynamicVisible: true));
 		coordinator.PopulateIgnoreOptionsForRootSelection([], canonicalPath);
 
 		switch (mutationMode)
@@ -67,10 +70,8 @@ public sealed class ProjectProfileDynamicIgnoreNegativeMutationIntegrationTests
 		};
 
 		foreach (var dynamicOptionId in dynamicOptionIds)
-		{
-			foreach (var mutationMode in Enum.GetValues<NegativeMutationMode>())
-				yield return [dynamicOptionId, mutationMode];
-		}
+		foreach (var mutationMode in Enum.GetValues<NegativeMutationMode>())
+			yield return [dynamicOptionId, mutationMode];
 	}
 
 	private static void ApplyMutation(
@@ -84,21 +85,17 @@ public sealed class ProjectProfileDynamicIgnoreNegativeMutationIntegrationTests
 			case NegativeMutationMode.EmptySelection:
 				store.SaveProfile(canonicalPath, CreateProfile([]));
 				break;
-
 			case NegativeMutationMode.UnavailableOnly:
 				store.SaveProfile(canonicalPath, CreateProfile([IgnoreOptionId.UseGitIgnore]));
 				break;
-
 			case NegativeMutationMode.ManualFileRemoval:
 				store.SaveProfile(canonicalPath, CreateProfile([dynamicOptionId]));
 				File.Delete(store.GetPath());
 				break;
-
 			case NegativeMutationMode.CorruptedStorage:
 				store.SaveProfile(canonicalPath, CreateProfile([dynamicOptionId]));
 				File.WriteAllText(store.GetPath(), "{ broken-json");
 				break;
-
 			default:
 				throw new ArgumentOutOfRangeException(nameof(mutationMode), mutationMode, null);
 		}
@@ -109,30 +106,27 @@ public sealed class ProjectProfileDynamicIgnoreNegativeMutationIntegrationTests
 		return Assert.Single(viewModel.IgnoreOptions.Where(option => option.Id == id));
 	}
 
-	private static IgnoreOptionsAvailability BuildAvailability(IgnoreOptionId dynamicOptionId, bool dynamicVisible)
+	private static IgnoreOptionCounts BuildCounts(IgnoreOptionId dynamicOptionId, bool dynamicVisible)
 	{
+		if (!dynamicVisible)
+			return IgnoreOptionCounts.Empty;
+
 		return dynamicOptionId switch
 		{
-			IgnoreOptionId.EmptyFolders => new IgnoreOptionsAvailability(
-				IncludeGitIgnore: false,
-				IncludeSmartIgnore: false,
-				IncludeEmptyFolders: dynamicVisible,
-				EmptyFoldersCount: dynamicVisible ? 2 : 0,
-				ShowAdvancedCounts: true),
-			IgnoreOptionId.EmptyFiles => new IgnoreOptionsAvailability(
-				IncludeGitIgnore: false,
-				IncludeSmartIgnore: false,
-				IncludeEmptyFiles: dynamicVisible,
-				EmptyFilesCount: dynamicVisible ? 3 : 0,
-				ShowAdvancedCounts: true),
-			IgnoreOptionId.ExtensionlessFiles => new IgnoreOptionsAvailability(
-				IncludeGitIgnore: false,
-				IncludeSmartIgnore: false,
-				IncludeExtensionlessFiles: dynamicVisible,
-				ExtensionlessFilesCount: dynamicVisible ? 4 : 0,
-				ShowAdvancedCounts: true),
+			IgnoreOptionId.EmptyFolders => new IgnoreOptionCounts(EmptyFolders: 2),
+			IgnoreOptionId.EmptyFiles => new IgnoreOptionCounts(EmptyFiles: 3),
+			IgnoreOptionId.ExtensionlessFiles => new IgnoreOptionCounts(ExtensionlessFiles: 4),
 			_ => throw new ArgumentOutOfRangeException(nameof(dynamicOptionId), dynamicOptionId, null)
 		};
+	}
+
+	private static void ApplyIgnoreCounts(SelectionSyncCoordinator coordinator, IgnoreOptionCounts ignoreCounts)
+	{
+		var method = typeof(SelectionSyncCoordinator).GetMethod(
+			"ApplyExtensionOptions",
+			BindingFlags.Instance | BindingFlags.NonPublic);
+		Assert.NotNull(method);
+		method!.Invoke(coordinator, [Array.Empty<SelectionOption>(), 0, ignoreCounts, true]);
 	}
 
 	private static ProjectSelectionProfile CreateProfile(IReadOnlyCollection<IgnoreOptionId> selectedIgnoreOptions)
@@ -145,7 +139,7 @@ public sealed class ProjectProfileDynamicIgnoreNegativeMutationIntegrationTests
 
 	private static SelectionSyncCoordinator CreateCoordinator(
 		MainWindowViewModel viewModel,
-		Func<IgnoreOptionsAvailability> availabilityProvider)
+		bool includeGitIgnore)
 	{
 		var localization = new LocalizationService(new TestLocalizationCatalog(), AppLanguage.En);
 		var scanOptions = new ScanOptionsUseCase(new FileSystemScanner());
@@ -163,8 +157,14 @@ public sealed class ProjectProfileDynamicIgnoreNegativeMutationIntegrationTests
 				IgnoreDotFolders: false,
 				IgnoreDotFiles: false,
 				SmartIgnoredFolders: new HashSet<string>(),
-				SmartIgnoredFiles: new HashSet<string>()),
-			(_, _) => availabilityProvider(),
+				SmartIgnoredFiles: new HashSet<string>())
+			{
+				UseGitIgnore = includeGitIgnore
+			},
+			(_, _) => new IgnoreOptionsAvailability(
+				IncludeGitIgnore: includeGitIgnore,
+				IncludeSmartIgnore: false,
+				ShowAdvancedCounts: true),
 			_ => false,
 			() => null);
 	}

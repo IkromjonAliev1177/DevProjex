@@ -1,3 +1,5 @@
+using DevProjex.Application.Models;
+
 namespace DevProjex.Tests.Unit;
 
 public sealed class SelectionSyncCoordinatorDynamicIgnoreNegativeMatrixTests
@@ -10,16 +12,17 @@ public sealed class SelectionSyncCoordinatorDynamicIgnoreNegativeMatrixTests
 	public void DynamicIgnoreNegativeMatrix_UnavailableOption_DoesNotAppearAfterVisibleOptionChanges(
 		IgnoreOptionId dynamicOptionId)
 	{
-		var availability = BuildAvailability(dynamicOptionId, dynamicVisible: false);
 		var viewModel = CreateViewModel();
-		using var coordinator = CreateCoordinator(viewModel, () => availability);
+		using var coordinator = CreateCoordinator(viewModel);
 		coordinator.HookIgnoreListeners(viewModel.IgnoreOptions);
 
+		ApplyIgnoreCounts(coordinator, new IgnoreOptionCounts(HiddenFolders: 1, DotFiles: 1));
 		coordinator.PopulateIgnoreOptionsForRootSelection([], ProjectPath);
 		GetIgnoreOption(viewModel, IgnoreOptionId.HiddenFolders).IsChecked = false;
 		GetIgnoreOption(viewModel, IgnoreOptionId.HiddenFolders).IsChecked = true;
 		GetIgnoreOption(viewModel, IgnoreOptionId.DotFiles).IsChecked = false;
 
+		ApplyIgnoreCounts(coordinator, new IgnoreOptionCounts(HiddenFolders: 1, DotFiles: 1));
 		coordinator.PopulateIgnoreOptionsForRootSelection([], ProjectPath);
 
 		Assert.DoesNotContain(viewModel.IgnoreOptions, option => option.Id == dynamicOptionId);
@@ -31,21 +34,21 @@ public sealed class SelectionSyncCoordinatorDynamicIgnoreNegativeMatrixTests
 	public void DynamicIgnoreNegativeMatrix_HiddenUncheckedOption_DoesNotFlipToCheckedWhenVisibleOptionsAreAllChecked(
 		IgnoreOptionId dynamicOptionId)
 	{
-		var availability = BuildAvailability(dynamicOptionId, dynamicVisible: true);
 		var viewModel = CreateViewModel();
-		using var coordinator = CreateCoordinator(viewModel, () => availability);
+		using var coordinator = CreateCoordinator(viewModel);
 		coordinator.HookIgnoreListeners(viewModel.IgnoreOptions);
 
+		ApplyIgnoreCounts(coordinator, BuildCounts(dynamicOptionId, dynamicVisible: true));
 		coordinator.PopulateIgnoreOptionsForRootSelection([], ProjectPath);
 		GetIgnoreOption(viewModel, dynamicOptionId).IsChecked = false;
 
-		availability = BuildAvailability(dynamicOptionId, dynamicVisible: false);
+		ApplyIgnoreCounts(coordinator, IgnoreOptionCounts.Empty);
 		coordinator.PopulateIgnoreOptionsForRootSelection([], ProjectPath);
 
 		Assert.DoesNotContain(viewModel.IgnoreOptions, option => option.Id == dynamicOptionId);
 		Assert.True(viewModel.AllIgnoreChecked);
 
-		availability = BuildAvailability(dynamicOptionId, dynamicVisible: true);
+		ApplyIgnoreCounts(coordinator, BuildCounts(dynamicOptionId, dynamicVisible: true));
 		coordinator.PopulateIgnoreOptionsForRootSelection([], ProjectPath);
 
 		Assert.False(GetIgnoreOption(viewModel, dynamicOptionId).IsChecked);
@@ -57,9 +60,8 @@ public sealed class SelectionSyncCoordinatorDynamicIgnoreNegativeMatrixTests
 	public void DynamicIgnoreNegativeMatrix_EmptyProfile_DoesNotAutoCheckDynamicOptionWhenItAppears(
 		IgnoreOptionId dynamicOptionId)
 	{
-		var availability = BuildAvailability(dynamicOptionId, dynamicVisible: false);
 		var viewModel = CreateViewModel();
-		using var coordinator = CreateCoordinator(viewModel, () => availability);
+		using var coordinator = CreateCoordinator(viewModel);
 
 		var profile = new ProjectSelectionProfile(
 			SelectedRootFolders: [],
@@ -67,10 +69,11 @@ public sealed class SelectionSyncCoordinatorDynamicIgnoreNegativeMatrixTests
 			SelectedIgnoreOptions: []);
 
 		coordinator.ApplyProjectProfileSelections(ProjectPath, profile);
+		ApplyIgnoreCounts(coordinator, IgnoreOptionCounts.Empty);
 		coordinator.PopulateIgnoreOptionsForRootSelection([], ProjectPath);
 		Assert.DoesNotContain(viewModel.IgnoreOptions, option => option.Id == dynamicOptionId);
 
-		availability = BuildAvailability(dynamicOptionId, dynamicVisible: true);
+		ApplyIgnoreCounts(coordinator, BuildCounts(dynamicOptionId, dynamicVisible: true));
 		coordinator.PopulateIgnoreOptionsForRootSelection([], ProjectPath);
 
 		Assert.False(GetIgnoreOption(viewModel, dynamicOptionId).IsChecked);
@@ -82,9 +85,8 @@ public sealed class SelectionSyncCoordinatorDynamicIgnoreNegativeMatrixTests
 	public void DynamicIgnoreNegativeMatrix_UnavailableOnlyProfile_DoesNotPromoteDynamicOptionToChecked(
 		IgnoreOptionId dynamicOptionId)
 	{
-		var availability = BuildAvailability(dynamicOptionId, dynamicVisible: false);
 		var viewModel = CreateViewModel();
-		using var coordinator = CreateCoordinator(viewModel, () => availability);
+		using var coordinator = CreateCoordinator(viewModel);
 
 		var profile = new ProjectSelectionProfile(
 			SelectedRootFolders: [],
@@ -92,10 +94,11 @@ public sealed class SelectionSyncCoordinatorDynamicIgnoreNegativeMatrixTests
 			SelectedIgnoreOptions: [IgnoreOptionId.UseGitIgnore]);
 
 		coordinator.ApplyProjectProfileSelections(ProjectPath, profile);
+		ApplyIgnoreCounts(coordinator, IgnoreOptionCounts.Empty);
 		coordinator.PopulateIgnoreOptionsForRootSelection([], ProjectPath);
 		Assert.DoesNotContain(viewModel.IgnoreOptions, option => option.Id == dynamicOptionId);
 
-		availability = BuildAvailability(dynamicOptionId, dynamicVisible: true);
+		ApplyIgnoreCounts(coordinator, BuildCounts(dynamicOptionId, dynamicVisible: true));
 		coordinator.PopulateIgnoreOptionsForRootSelection([], ProjectPath);
 
 		Assert.False(GetIgnoreOption(viewModel, dynamicOptionId).IsChecked);
@@ -108,19 +111,21 @@ public sealed class SelectionSyncCoordinatorDynamicIgnoreNegativeMatrixTests
 	public void DynamicIgnoreNegativeMatrix_NewProjectWithoutProfile_DoesNotReusePreviousProjectUncheckedDynamicState(
 		IgnoreOptionId dynamicOptionId)
 	{
-		var availability = BuildAvailability(dynamicOptionId, dynamicVisible: true);
 		var viewModel = CreateViewModel();
-		using var coordinator = CreateCoordinator(viewModel, () => availability);
+		using var coordinator = CreateCoordinator(viewModel);
 		coordinator.HookIgnoreListeners(viewModel.IgnoreOptions);
 
+		ApplyIgnoreCounts(coordinator, BuildCounts(dynamicOptionId, dynamicVisible: true));
 		coordinator.PopulateIgnoreOptionsForRootSelection([], ProjectPath);
 		GetIgnoreOption(viewModel, dynamicOptionId).IsChecked = false;
 
 		coordinator.ResetProjectProfileSelections(NextProjectPath);
+		ApplyIgnoreCounts(coordinator, BuildCounts(dynamicOptionId, dynamicVisible: true));
 		coordinator.PopulateIgnoreOptionsForRootSelection([], NextProjectPath);
 
 		Assert.True(GetIgnoreOption(viewModel, dynamicOptionId).IsChecked);
-		Assert.DoesNotContain(coordinator.GetSelectedIgnoreOptionIds(), id => id == IgnoreOptionId.UseGitIgnore);
+		Assert.Contains(dynamicOptionId, coordinator.GetSelectedIgnoreOptionIds());
+		Assert.True(viewModel.AllIgnoreChecked);
 	}
 
 	public static IEnumerable<object[]> DynamicOptionIds()
@@ -135,35 +140,30 @@ public sealed class SelectionSyncCoordinatorDynamicIgnoreNegativeMatrixTests
 		return Assert.Single(viewModel.IgnoreOptions.Where(option => option.Id == id));
 	}
 
-	private static IgnoreOptionsAvailability BuildAvailability(IgnoreOptionId dynamicOptionId, bool dynamicVisible)
+	private static IgnoreOptionCounts BuildCounts(IgnoreOptionId dynamicOptionId, bool dynamicVisible)
 	{
+		if (!dynamicVisible)
+			return IgnoreOptionCounts.Empty;
+
 		return dynamicOptionId switch
 		{
-			IgnoreOptionId.EmptyFolders => new IgnoreOptionsAvailability(
-				IncludeGitIgnore: false,
-				IncludeSmartIgnore: false,
-				IncludeEmptyFolders: dynamicVisible,
-				EmptyFoldersCount: dynamicVisible ? 2 : 0,
-				ShowAdvancedCounts: true),
-			IgnoreOptionId.EmptyFiles => new IgnoreOptionsAvailability(
-				IncludeGitIgnore: false,
-				IncludeSmartIgnore: false,
-				IncludeEmptyFiles: dynamicVisible,
-				EmptyFilesCount: dynamicVisible ? 3 : 0,
-				ShowAdvancedCounts: true),
-			IgnoreOptionId.ExtensionlessFiles => new IgnoreOptionsAvailability(
-				IncludeGitIgnore: false,
-				IncludeSmartIgnore: false,
-				IncludeExtensionlessFiles: dynamicVisible,
-				ExtensionlessFilesCount: dynamicVisible ? 4 : 0,
-				ShowAdvancedCounts: true),
+			IgnoreOptionId.EmptyFolders => new IgnoreOptionCounts(EmptyFolders: 2),
+			IgnoreOptionId.EmptyFiles => new IgnoreOptionCounts(EmptyFiles: 3),
+			IgnoreOptionId.ExtensionlessFiles => new IgnoreOptionCounts(ExtensionlessFiles: 4),
 			_ => throw new ArgumentOutOfRangeException(nameof(dynamicOptionId), dynamicOptionId, null)
 		};
 	}
 
-	private static SelectionSyncCoordinator CreateCoordinator(
-		MainWindowViewModel viewModel,
-		Func<IgnoreOptionsAvailability> availabilityProvider)
+	private static void ApplyIgnoreCounts(SelectionSyncCoordinator coordinator, IgnoreOptionCounts ignoreCounts)
+	{
+		var method = typeof(SelectionSyncCoordinator).GetMethod(
+			"ApplyExtensionOptions",
+			BindingFlags.Instance | BindingFlags.NonPublic);
+		Assert.NotNull(method);
+		method!.Invoke(coordinator, [Array.Empty<SelectionOption>(), 0, ignoreCounts, true]);
+	}
+
+	private static SelectionSyncCoordinator CreateCoordinator(MainWindowViewModel viewModel)
 	{
 		var localization = new LocalizationService(CreateCatalog(), AppLanguage.En);
 		var scanner = new StubFileSystemScanner();
@@ -182,8 +182,14 @@ public sealed class SelectionSyncCoordinatorDynamicIgnoreNegativeMatrixTests
 				IgnoreDotFolders: false,
 				IgnoreDotFiles: false,
 				SmartIgnoredFolders: new HashSet<string>(),
-				SmartIgnoredFiles: new HashSet<string>()),
-			(_, _) => availabilityProvider(),
+				SmartIgnoredFiles: new HashSet<string>())
+			{
+				UseGitIgnore = true
+			},
+			(_, _) => new IgnoreOptionsAvailability(
+				IncludeGitIgnore: true,
+				IncludeSmartIgnore: false,
+				ShowAdvancedCounts: true),
 			_ => false,
 			() => null);
 	}

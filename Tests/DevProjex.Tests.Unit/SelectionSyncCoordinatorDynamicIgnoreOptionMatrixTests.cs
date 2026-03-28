@@ -1,3 +1,5 @@
+using DevProjex.Application.Models;
+
 namespace DevProjex.Tests.Unit;
 
 public sealed class SelectionSyncCoordinatorDynamicIgnoreOptionMatrixTests
@@ -11,15 +13,15 @@ public sealed class SelectionSyncCoordinatorDynamicIgnoreOptionMatrixTests
 		IgnoreOptionId dynamicOptionId,
 		IgnoreOptionId manuallyUncheckedOptionId)
 	{
-		var availability = BuildAvailability(dynamicOptionId, dynamicVisible: false);
 		var viewModel = CreateViewModel();
-		using var coordinator = CreateCoordinator(viewModel, () => availability);
+		using var coordinator = CreateCoordinator(viewModel);
 		coordinator.HookIgnoreListeners(viewModel.IgnoreOptions);
 
+		ApplyIgnoreCounts(coordinator, BuildCounts(dynamicOptionId, dynamicVisible: false, manuallyUncheckedOptionId));
 		coordinator.PopulateIgnoreOptionsForRootSelection([], ProjectPath);
 		GetIgnoreOption(viewModel, manuallyUncheckedOptionId).IsChecked = false;
 
-		availability = BuildAvailability(dynamicOptionId, dynamicVisible: true);
+		ApplyIgnoreCounts(coordinator, BuildCounts(dynamicOptionId, dynamicVisible: true, manuallyUncheckedOptionId));
 		coordinator.PopulateIgnoreOptionsForRootSelection([], ProjectPath);
 
 		Assert.False(GetIgnoreOption(viewModel, manuallyUncheckedOptionId).IsChecked);
@@ -33,21 +35,21 @@ public sealed class SelectionSyncCoordinatorDynamicIgnoreOptionMatrixTests
 		IgnoreOptionId dynamicOptionId,
 		IgnoreOptionId otherOptionId)
 	{
-		var availability = BuildAvailability(dynamicOptionId, dynamicVisible: true);
 		var viewModel = CreateViewModel();
-		using var coordinator = CreateCoordinator(viewModel, () => availability);
+		using var coordinator = CreateCoordinator(viewModel);
 		coordinator.HookIgnoreListeners(viewModel.IgnoreOptions);
 
+		ApplyIgnoreCounts(coordinator, BuildCounts(dynamicOptionId, dynamicVisible: true, otherOptionId));
 		coordinator.PopulateIgnoreOptionsForRootSelection([], ProjectPath);
 		GetIgnoreOption(viewModel, dynamicOptionId).IsChecked = false;
 
-		availability = BuildAvailability(dynamicOptionId, dynamicVisible: false);
+		ApplyIgnoreCounts(coordinator, BuildCounts(dynamicOptionId, dynamicVisible: false, otherOptionId));
 		coordinator.PopulateIgnoreOptionsForRootSelection([], ProjectPath);
 		Assert.DoesNotContain(viewModel.IgnoreOptions, option => option.Id == dynamicOptionId);
 
 		GetIgnoreOption(viewModel, otherOptionId).IsChecked = false;
 
-		availability = BuildAvailability(dynamicOptionId, dynamicVisible: true);
+		ApplyIgnoreCounts(coordinator, BuildCounts(dynamicOptionId, dynamicVisible: true, otherOptionId));
 		coordinator.PopulateIgnoreOptionsForRootSelection([], ProjectPath);
 
 		Assert.False(GetIgnoreOption(viewModel, dynamicOptionId).IsChecked);
@@ -60,15 +62,16 @@ public sealed class SelectionSyncCoordinatorDynamicIgnoreOptionMatrixTests
 	public void DynamicIgnoreOptionMatrix_ResetProjectSelections_RestoresDefaultsForNewProject(
 		IgnoreOptionId dynamicOptionId)
 	{
-		var availability = BuildAvailability(dynamicOptionId, dynamicVisible: true);
 		var viewModel = CreateViewModel();
-		using var coordinator = CreateCoordinator(viewModel, () => availability);
+		using var coordinator = CreateCoordinator(viewModel);
 		coordinator.HookIgnoreListeners(viewModel.IgnoreOptions);
 
+		ApplyIgnoreCounts(coordinator, BuildCounts(dynamicOptionId, dynamicVisible: true));
 		coordinator.PopulateIgnoreOptionsForRootSelection([], ProjectPath);
 		GetIgnoreOption(viewModel, dynamicOptionId).IsChecked = false;
 
 		coordinator.ResetProjectProfileSelections(NextProjectPath);
+		ApplyIgnoreCounts(coordinator, BuildCounts(dynamicOptionId, dynamicVisible: true));
 		coordinator.PopulateIgnoreOptionsForRootSelection([], NextProjectPath);
 
 		Assert.True(GetIgnoreOption(viewModel, dynamicOptionId).IsChecked);
@@ -80,15 +83,15 @@ public sealed class SelectionSyncCoordinatorDynamicIgnoreOptionMatrixTests
 	public void DynamicIgnoreOptionMatrix_AllIgnoreIntent_AppliesToOptionsThatAppearLater(
 		IgnoreOptionId dynamicOptionId)
 	{
-		var availability = BuildAvailability(dynamicOptionId, dynamicVisible: false);
 		var viewModel = CreateViewModel();
-		using var coordinator = CreateCoordinator(viewModel, () => availability);
+		using var coordinator = CreateCoordinator(viewModel);
 		coordinator.HookIgnoreListeners(viewModel.IgnoreOptions);
 
+		ApplyIgnoreCounts(coordinator, BuildCounts(dynamicOptionId, dynamicVisible: false, IgnoreOptionId.HiddenFolders));
 		coordinator.PopulateIgnoreOptionsForRootSelection([], ProjectPath);
 		coordinator.HandleIgnoreAllChanged(false, currentPath: null);
 
-		availability = BuildAvailability(dynamicOptionId, dynamicVisible: true);
+		ApplyIgnoreCounts(coordinator, BuildCounts(dynamicOptionId, dynamicVisible: true, IgnoreOptionId.HiddenFolders));
 		coordinator.PopulateIgnoreOptionsForRootSelection([], ProjectPath);
 
 		Assert.False(GetIgnoreOption(viewModel, dynamicOptionId).IsChecked);
@@ -101,9 +104,8 @@ public sealed class SelectionSyncCoordinatorDynamicIgnoreOptionMatrixTests
 	public void DynamicIgnoreOptionMatrix_ProfileSelection_RestoresDynamicOptionWhenItBecomesAvailable(
 		IgnoreOptionId dynamicOptionId)
 	{
-		var availability = BuildAvailability(dynamicOptionId, dynamicVisible: false);
 		var viewModel = CreateViewModel();
-		using var coordinator = CreateCoordinator(viewModel, () => availability);
+		using var coordinator = CreateCoordinator(viewModel);
 
 		var profile = new ProjectSelectionProfile(
 			SelectedRootFolders: [],
@@ -111,10 +113,11 @@ public sealed class SelectionSyncCoordinatorDynamicIgnoreOptionMatrixTests
 			SelectedIgnoreOptions: [dynamicOptionId]);
 
 		coordinator.ApplyProjectProfileSelections(ProjectPath, profile);
+		ApplyIgnoreCounts(coordinator, BuildCounts(dynamicOptionId, dynamicVisible: false));
 		coordinator.PopulateIgnoreOptionsForRootSelection([], ProjectPath);
 		Assert.DoesNotContain(viewModel.IgnoreOptions, option => option.Id == dynamicOptionId);
 
-		availability = BuildAvailability(dynamicOptionId, dynamicVisible: true);
+		ApplyIgnoreCounts(coordinator, BuildCounts(dynamicOptionId, dynamicVisible: true));
 		coordinator.PopulateIgnoreOptionsForRootSelection([], ProjectPath);
 
 		Assert.True(GetIgnoreOption(viewModel, dynamicOptionId).IsChecked);
@@ -154,35 +157,52 @@ public sealed class SelectionSyncCoordinatorDynamicIgnoreOptionMatrixTests
 		return Assert.Single(viewModel.IgnoreOptions.Where(option => option.Id == id));
 	}
 
-	private static IgnoreOptionsAvailability BuildAvailability(IgnoreOptionId dynamicOptionId, bool dynamicVisible)
+	private static IgnoreOptionCounts BuildCounts(
+		IgnoreOptionId dynamicOptionId,
+		bool dynamicVisible,
+		IgnoreOptionId? additionalVisibleOptionId = null)
 	{
-		return dynamicOptionId switch
+		var counts = IgnoreOptionCounts.Empty;
+		if (additionalVisibleOptionId is not null)
+			counts = counts.Add(BuildSingleCount(additionalVisibleOptionId.Value, 1));
+
+		if (!dynamicVisible)
+			return counts;
+
+		return counts.Add(dynamicOptionId switch
 		{
-			IgnoreOptionId.EmptyFolders => new IgnoreOptionsAvailability(
-				IncludeGitIgnore: false,
-				IncludeSmartIgnore: false,
-				IncludeEmptyFolders: dynamicVisible,
-				EmptyFoldersCount: dynamicVisible ? 2 : 0,
-				ShowAdvancedCounts: true),
-			IgnoreOptionId.EmptyFiles => new IgnoreOptionsAvailability(
-				IncludeGitIgnore: false,
-				IncludeSmartIgnore: false,
-				IncludeEmptyFiles: dynamicVisible,
-				EmptyFilesCount: dynamicVisible ? 3 : 0,
-				ShowAdvancedCounts: true),
-			IgnoreOptionId.ExtensionlessFiles => new IgnoreOptionsAvailability(
-				IncludeGitIgnore: false,
-				IncludeSmartIgnore: false,
-				IncludeExtensionlessFiles: dynamicVisible,
-				ExtensionlessFilesCount: dynamicVisible ? 4 : 0,
-				ShowAdvancedCounts: true),
+			IgnoreOptionId.EmptyFolders => new IgnoreOptionCounts(EmptyFolders: 2),
+			IgnoreOptionId.EmptyFiles => new IgnoreOptionCounts(EmptyFiles: 3),
+			IgnoreOptionId.ExtensionlessFiles => new IgnoreOptionCounts(ExtensionlessFiles: 4),
 			_ => throw new ArgumentOutOfRangeException(nameof(dynamicOptionId), dynamicOptionId, null)
+		});
+	}
+
+	private static IgnoreOptionCounts BuildSingleCount(IgnoreOptionId optionId, int count)
+	{
+		return optionId switch
+		{
+			IgnoreOptionId.HiddenFolders => new IgnoreOptionCounts(HiddenFolders: count),
+			IgnoreOptionId.HiddenFiles => new IgnoreOptionCounts(HiddenFiles: count),
+			IgnoreOptionId.DotFolders => new IgnoreOptionCounts(DotFolders: count),
+			IgnoreOptionId.DotFiles => new IgnoreOptionCounts(DotFiles: count),
+			IgnoreOptionId.EmptyFolders => new IgnoreOptionCounts(EmptyFolders: count),
+			IgnoreOptionId.EmptyFiles => new IgnoreOptionCounts(EmptyFiles: count),
+			IgnoreOptionId.ExtensionlessFiles => new IgnoreOptionCounts(ExtensionlessFiles: count),
+			_ => throw new ArgumentOutOfRangeException(nameof(optionId), optionId, null)
 		};
 	}
 
-	private static SelectionSyncCoordinator CreateCoordinator(
-		MainWindowViewModel viewModel,
-		Func<IgnoreOptionsAvailability> availabilityProvider)
+	private static void ApplyIgnoreCounts(SelectionSyncCoordinator coordinator, IgnoreOptionCounts ignoreCounts)
+	{
+		var method = typeof(SelectionSyncCoordinator).GetMethod(
+			"ApplyExtensionOptions",
+			BindingFlags.Instance | BindingFlags.NonPublic);
+		Assert.NotNull(method);
+		method!.Invoke(coordinator, [Array.Empty<SelectionOption>(), 0, ignoreCounts, true]);
+	}
+
+	private static SelectionSyncCoordinator CreateCoordinator(MainWindowViewModel viewModel)
 	{
 		var localization = new LocalizationService(CreateCatalog(), AppLanguage.En);
 		var scanner = new StubFileSystemScanner();
@@ -202,7 +222,10 @@ public sealed class SelectionSyncCoordinatorDynamicIgnoreOptionMatrixTests
 				IgnoreDotFiles: false,
 				SmartIgnoredFolders: new HashSet<string>(),
 				SmartIgnoredFiles: new HashSet<string>()),
-			(_, _) => availabilityProvider(),
+			(_, _) => new IgnoreOptionsAvailability(
+				IncludeGitIgnore: false,
+				IncludeSmartIgnore: false,
+				ShowAdvancedCounts: true),
 			_ => false,
 			() => null);
 	}

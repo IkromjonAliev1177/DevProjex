@@ -6,27 +6,18 @@ public sealed class SelectionSyncCoordinatorEffectiveEmptyFolderCountsTests
 {
 	[Theory]
 	[MemberData(nameof(ExtensionSelectionCases))]
-	public void ResolveEffectiveIgnoreOptionCounts_ReplacesRawEmptyFoldersWithEffectiveCount(
+	public void BuildEffectiveAllowedExtensionsForLiveCounts_UsesSelectionAwareAllowedExtensions(
 		string scenario,
 		IReadOnlyList<SelectionOption> extensionOptions,
 		int expectedEmptyFolders)
 	{
-		using var temp = new TemporaryDirectory();
-		temp.CreateFolder("src");
-
 		var viewModel = CreateViewModel();
-		var scanner = new EffectiveCountAwareScanner();
-		using var coordinator = CreateCoordinator(viewModel, scanner, temp.Path);
+		using var coordinator = CreateCoordinator(viewModel, currentPath: "/workspace");
+		Assert.True(expectedEmptyFolders >= 0);
 
-		var resolvedCounts = ResolveEffectiveCounts(
-			coordinator,
-			temp.Path,
-			extensionOptions,
-			rawCounts: new IgnoreOptionCounts(EmptyFolders: 99));
+		ApplyPreviousExtensionSelection(viewModel, coordinator, extensionOptions);
+		var allowedExtensions = ResolveAllowedExtensions(coordinator, forceAllExtensionsChecked: false);
 
-		Assert.Equal(expectedEmptyFolders, resolvedCounts.EmptyFolders);
-		Assert.Equal(99, resolvedCounts.HiddenFolders);
-		Assert.Equal(expectedEmptyFolders, scanner.LastEffectiveCount);
 		var expectedAllowedExtensions = scenario switch
 		{
 			"all-visible" => [".cs", ".md"],
@@ -34,7 +25,27 @@ public sealed class SelectionSyncCoordinatorEffectiveEmptyFolderCountsTests
 			"all-unchecked" => Array.Empty<string>(),
 			_ => throw new ArgumentOutOfRangeException(nameof(scenario), scenario, null)
 		};
-		Assert.True(scanner.LastAllowedExtensions.SequenceEqual(expectedAllowedExtensions));
+
+		Assert.NotNull(allowedExtensions);
+		Assert.True(allowedExtensions!.SequenceEqual(expectedAllowedExtensions));
+	}
+
+	[Fact]
+	public void BuildEffectiveAllowedExtensionsForLiveCounts_WhenAllExtensionsToggleIsForced_ReturnsNull()
+	{
+		var viewModel = CreateViewModel();
+		using var coordinator = CreateCoordinator(viewModel, currentPath: "/workspace");
+		ApplyPreviousExtensionSelection(
+			viewModel,
+			coordinator,
+			[
+				new SelectionOption(".cs", true),
+				new SelectionOption(".md", false)
+			]);
+
+		var allowedExtensions = ResolveAllowedExtensions(coordinator, forceAllExtensionsChecked: true);
+
+		Assert.Null(allowedExtensions);
 	}
 
 	[Theory]
@@ -48,17 +59,19 @@ public sealed class SelectionSyncCoordinatorEffectiveEmptyFolderCountsTests
 		temp.CreateFolder("src");
 
 		var viewModel = CreateViewModel();
-		var scanner = new EffectiveCountAwareScanner();
-		using var coordinator = CreateCoordinator(viewModel, scanner, temp.Path);
+		using var coordinator = CreateCoordinator(viewModel, temp.Path);
 		Assert.False(string.IsNullOrWhiteSpace(scenario));
 
-		var resolvedCounts = ResolveEffectiveCounts(
+		ApplyPreviousExtensionSelection(viewModel, coordinator, extensionOptions);
+		ApplyExtensionScanState(
 			coordinator,
-			temp.Path,
 			extensionOptions,
-			rawCounts: new IgnoreOptionCounts(EmptyFolders: 99));
-		ApplyScanState(coordinator, extensionOptions, resolvedCounts, hasIgnoreCounts: true);
+			new IgnoreOptionCounts(HiddenFolders: 99, EmptyFolders: expectedEmptyFolders),
+			hasIgnoreCounts: true);
 		coordinator.PopulateIgnoreOptionsForRootSelection(["src"], temp.Path);
+
+		var hiddenFolders = viewModel.IgnoreOptions.Single(item => item.Id == IgnoreOptionId.HiddenFolders);
+		Assert.Equal("Hidden folders (99)", hiddenFolders.Label);
 
 		var option = viewModel.IgnoreOptions.SingleOrDefault(item => item.Id == IgnoreOptionId.EmptyFolders);
 		if (expectedEmptyFolders == 0)
@@ -108,33 +121,38 @@ public sealed class SelectionSyncCoordinatorEffectiveEmptyFolderCountsTests
 		];
 	}
 
-	private static IgnoreOptionCounts ResolveEffectiveCounts(
+	private static void ApplyPreviousExtensionSelection(
+		MainWindowViewModel viewModel,
 		SelectionSyncCoordinator coordinator,
-		string currentPath,
-		IReadOnlyList<SelectionOption> extensionOptions,
-		IgnoreOptionCounts rawCounts)
+		IReadOnlyCollection<SelectionOption> options)
+	{
+		viewModel.Extensions.Clear();
+		foreach (var option in options)
+			viewModel.Extensions.Add(new SelectionOptionViewModel(option.Name, option.IsChecked));
+
+		coordinator.UpdateExtensionsSelectionCache();
+		viewModel.AllExtensionsChecked = options.All(option => option.IsChecked);
+	}
+
+	private static string[]? ResolveAllowedExtensions(
+		SelectionSyncCoordinator coordinator,
+		bool forceAllExtensionsChecked)
 	{
 		var method = typeof(SelectionSyncCoordinator).GetMethod(
-			"ResolveEffectiveIgnoreOptionCounts",
+			"BuildEffectiveAllowedExtensionsForLiveCounts",
 			BindingFlags.Instance | BindingFlags.NonPublic);
 		Assert.NotNull(method);
 
-		var result = method!.Invoke(
-			coordinator,
-			[
-				currentPath,
-				new List<string> { "src" },
-				extensionOptions,
-				CreateRules(),
-				new IgnoreOptionCounts(HiddenFolders: 99, EmptyFolders: rawCounts.EmptyFolders),
-				false,
-				CancellationToken.None
-			]);
+		var result = method!.Invoke(coordinator, [forceAllExtensionsChecked]);
+		if (result is null)
+			return null;
 
-		return Assert.IsType<IgnoreOptionCounts>(result);
+		return Assert.IsType<HashSet<string>>(result)
+			.OrderBy(x => x, StringComparer.OrdinalIgnoreCase)
+			.ToArray();
 	}
 
-	private static void ApplyScanState(
+	private static void ApplyExtensionScanState(
 		SelectionSyncCoordinator coordinator,
 		IReadOnlyCollection<SelectionOption> options,
 		IgnoreOptionCounts ignoreCounts,
@@ -163,7 +181,6 @@ public sealed class SelectionSyncCoordinatorEffectiveEmptyFolderCountsTests
 
 	private static SelectionSyncCoordinator CreateCoordinator(
 		MainWindowViewModel viewModel,
-		EffectiveCountAwareScanner scanner,
 		string currentPath)
 	{
 		var localization = new LocalizationService(CreateCatalog(), AppLanguage.En);
@@ -172,7 +189,7 @@ public sealed class SelectionSyncCoordinatorEffectiveEmptyFolderCountsTests
 
 		return new SelectionSyncCoordinator(
 			viewModel,
-			new ScanOptionsUseCase(scanner),
+			new ScanOptionsUseCase(new MinimalScanner()),
 			filterSelectionService,
 			ignoreOptionsService,
 			(_, _, _) => CreateRules(),
@@ -205,14 +222,8 @@ public sealed class SelectionSyncCoordinatorEffectiveEmptyFolderCountsTests
 		return new StubLocalizationCatalog(data);
 	}
 
-	private sealed class EffectiveCountAwareScanner
-		: IFileSystemScanner,
-			IFileSystemScannerAdvanced,
-			IFileSystemScannerEffectiveEmptyFolderCounter
+	private sealed class MinimalScanner : IFileSystemScanner
 	{
-		public string[] LastAllowedExtensions { get; private set; } = [];
-		public int LastEffectiveCount { get; private set; }
-
 		public bool CanReadRoot(string rootPath) => true;
 
 		public ScanResult<HashSet<string>> GetExtensions(string rootPath, IgnoreRules rules, CancellationToken cancellationToken = default)
@@ -223,60 +234,5 @@ public sealed class SelectionSyncCoordinatorEffectiveEmptyFolderCountsTests
 
 		public ScanResult<List<string>> GetRootFolderNames(string rootPath, IgnoreRules rules, CancellationToken cancellationToken = default)
 			=> new(["src"], false, false);
-
-		public ScanResult<ExtensionsScanData> GetExtensionsWithIgnoreOptionCounts(
-			string rootPath,
-			IgnoreRules rules,
-			CancellationToken cancellationToken = default)
-		{
-			cancellationToken.ThrowIfCancellationRequested();
-
-			return new ScanResult<ExtensionsScanData>(
-				new ExtensionsScanData(
-					new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-					{
-						".cs",
-						".md"
-					},
-					new IgnoreOptionCounts(EmptyFolders: 99)),
-				RootAccessDenied: false,
-				HadAccessDenied: false);
-		}
-
-		public ScanResult<ExtensionsScanData> GetRootFileExtensionsWithIgnoreOptionCounts(
-			string rootPath,
-			IgnoreRules rules,
-			CancellationToken cancellationToken = default)
-		{
-			cancellationToken.ThrowIfCancellationRequested();
-
-			return new ScanResult<ExtensionsScanData>(
-				new ExtensionsScanData(
-					new HashSet<string>(StringComparer.OrdinalIgnoreCase),
-					IgnoreOptionCounts.Empty),
-				RootAccessDenied: false,
-				HadAccessDenied: false);
-		}
-
-		public ScanResult<int> GetEffectiveEmptyFolderCount(
-			string rootPath,
-			IReadOnlySet<string> allowedExtensions,
-			IgnoreRules rules,
-			CancellationToken cancellationToken = default)
-		{
-			cancellationToken.ThrowIfCancellationRequested();
-
-			LastAllowedExtensions = allowedExtensions
-				.OrderBy(x => x, StringComparer.OrdinalIgnoreCase)
-				.ToArray();
-			LastEffectiveCount = allowedExtensions.Count switch
-			{
-				0 => 3,
-				1 when allowedExtensions.Contains(".cs") => 2,
-				_ => 0
-			};
-
-			return new ScanResult<int>(LastEffectiveCount, RootAccessDenied: false, HadAccessDenied: false);
-		}
 	}
 }

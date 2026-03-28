@@ -1,6 +1,6 @@
 namespace DevProjex.Infrastructure.ThemePresets;
 
-public sealed class UserSettingsStore
+public sealed class UserSettingsStore(Func<string>? appDataPathProvider = null)
 {
     private const int CurrentSchemaVersion = 2;
     private const string FolderName = "DevProjex";
@@ -20,6 +20,8 @@ public sealed class UserSettingsStore
         IsAdvancedIgnoreCountsEnabled = true,
         PreferredLanguage = null
     };
+    private readonly Func<string> _appDataPathProvider =
+        appDataPathProvider ?? (() => Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData));
 
     public UserSettingsDb Load()
     {
@@ -76,7 +78,7 @@ public sealed class UserSettingsStore
 
     public string GetPath()
     {
-        var root = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+        var root = _appDataPathProvider();
         return Path.Combine(root, FolderName, FileName);
     }
 

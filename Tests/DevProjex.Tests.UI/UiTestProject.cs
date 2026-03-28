@@ -1,15 +1,22 @@
+using DevProjex.Tests.Shared.ProjectLoadWorkflow;
+
 namespace DevProjex.Tests.UI;
 
 internal sealed class UiTestProject : IDisposable
 {
     private readonly string _rootPath;
+    private readonly string _appDataPath;
+    private readonly bool _ownsWorkspaceRoot;
 
-    private UiTestProject(string rootPath)
+    private UiTestProject(string rootPath, string appDataPath, bool ownsWorkspaceRoot)
     {
         _rootPath = rootPath;
+        _appDataPath = appDataPath;
+        _ownsWorkspaceRoot = ownsWorkspaceRoot;
     }
 
     public string RootPath => _rootPath;
+    public string AppDataPath => _appDataPath;
 
     public static UiTestProject CreateDefault()
     {
@@ -48,26 +55,99 @@ internal sealed class UiTestProject : IDisposable
         });
     }
 
+    public static UiTestProject CreateWithGitIgnoredExtensionlessNoise()
+    {
+        return Create(static rootPath =>
+        {
+            WriteFile(rootPath, ".gitignore", "obj/\nbin/\n");
+            WriteFile(rootPath, "README", "visible extensionless");
+            WriteFile(rootPath, Path.Combine("src", "Program.cs"), BuildCSharpFile("UiProbe", "Program", 8));
+            WriteFile(rootPath, Path.Combine("obj", "Debug", "net10.0", "apphost"), "smart ignored apphost");
+            WriteFile(rootPath, Path.Combine("obj", "Debug", "net10.0", "singlefilehost"), "smart ignored host");
+            WriteFile(rootPath, Path.Combine("bin", "Debug", "net10.0", "createdump"), "smart ignored dump");
+        });
+    }
+
+    public static UiTestProject CreateWithDotFolderExtensionlessNoise()
+    {
+        return Create(static rootPath =>
+        {
+            WriteFile(rootPath, "README", "visible extensionless");
+            WriteFile(rootPath, Path.Combine("src", "Program.cs"), BuildCSharpFile("UiProbe", "Program", 8));
+
+            for (var index = 0; index < 128; index++)
+            {
+                WriteFile(
+                    rootPath,
+                    Path.Combine(".cache", "nested", $"artifact-{index:000}"),
+                    $"noise {index}");
+            }
+        });
+    }
+
+    public static UiTestProject CreateWithProjectLoadWorkflowWorkspace()
+    {
+        return CreateForSharedWorkspace(ProjectLoadWorkflowSharedWorkspace.RootPath);
+    }
+
     private static UiTestProject Create(Action<string> seedWorkspace)
     {
-        var rootPath = Path.Combine(
+        var testRoot = Path.Combine(
+            Path.GetTempPath(),
+            "DevProjex",
+            "DevProjex.Tests.UI");
+        var instanceId = Guid.NewGuid().ToString("N");
+        var rootPath = Path.Combine(testRoot, instanceId, "workspace");
+        var appDataPath = Path.Combine(testRoot, instanceId, "appdata");
+
+        Directory.CreateDirectory(rootPath);
+        Directory.CreateDirectory(appDataPath);
+        seedWorkspace(rootPath);
+
+        return new UiTestProject(rootPath, appDataPath, ownsWorkspaceRoot: true);
+    }
+
+    private static UiTestProject CreateForSharedWorkspace(string sharedRootPath)
+    {
+        var appDataPath = Path.Combine(
             Path.GetTempPath(),
             "DevProjex",
             "DevProjex.Tests.UI",
-            Guid.NewGuid().ToString("N"));
+            Guid.NewGuid().ToString("N"),
+            "appdata");
+        Directory.CreateDirectory(appDataPath);
 
-        Directory.CreateDirectory(rootPath);
-        seedWorkspace(rootPath);
-
-        return new UiTestProject(rootPath);
+        // The workflow workspace is intentionally shared across heavy UI tests because the
+        // application never mutates opened projects. Each window still receives an isolated
+        // app-data sandbox, so persisted selection/profile state cannot bleed between tests.
+        return new UiTestProject(sharedRootPath, appDataPath, ownsWorkspaceRoot: false);
     }
 
     public void Dispose()
     {
         try
         {
-            if (Directory.Exists(_rootPath))
-                Directory.Delete(_rootPath, recursive: true);
+            if (_ownsWorkspaceRoot)
+            {
+                var instanceRoot = Directory.GetParent(_rootPath)?.FullName;
+                if (!string.IsNullOrWhiteSpace(instanceRoot) && Directory.Exists(instanceRoot))
+                {
+                    Directory.Delete(instanceRoot, recursive: true);
+                    return;
+                }
+
+                if (Directory.Exists(_rootPath))
+                    Directory.Delete(_rootPath, recursive: true);
+            }
+
+            if (Directory.Exists(_appDataPath))
+            {
+                var appDataInstanceRoot = Directory.GetParent(_appDataPath)?.FullName;
+                if (!string.IsNullOrWhiteSpace(appDataInstanceRoot) && Directory.Exists(appDataInstanceRoot))
+                    Directory.Delete(appDataInstanceRoot, recursive: true);
+                else
+                    Directory.Delete(_appDataPath, recursive: true);
+            }
         }
         catch
         {

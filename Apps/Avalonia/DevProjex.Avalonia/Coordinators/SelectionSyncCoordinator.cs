@@ -1,6 +1,5 @@
 using DevProjex.Application.Models;
 using DevProjex.Kernel;
-using System.Text;
 
 namespace DevProjex.Avalonia.Coordinators;
 
@@ -59,10 +58,18 @@ public sealed class SelectionSyncCoordinator(
     private readonly object _backgroundRefreshSync = new();
     private CancellationTokenSource? _liveOptionsRefreshCts;
     private CancellationTokenSource? _fullRefreshRequestCts;
+    private Task _latestLiveOptionsRefreshTask = Task.CompletedTask;
+    private Task _latestFullRefreshTask = Task.CompletedTask;
     private int _liveOptionsRequestVersion;
     private int _fullRefreshRequestVersion;
     private readonly object _ignoreRulesBuildCacheSync = new();
     private IgnoreRulesBuildCacheEntry? _ignoreRulesBuildCache;
+    private readonly SelectionRefreshEngine _selectionRefreshEngine = new(
+        scanOptions,
+        filterSelectionService,
+        ignoreOptionsService,
+        buildIgnoreRules,
+        getIgnoreOptionsAvailability);
 
     public SelectionSyncCoordinator(
         MainWindowViewModel viewModel,
@@ -251,16 +258,21 @@ public sealed class SelectionSyncCoordinator(
         var ignoreRules = GetOrBuildIgnoreRules(path, selectedIgnoreOptions, rootFolders);
         var extensionScanRules = BuildExtensionAvailabilityScanRules(ignoreRules);
         var forceAllExtensionsChecked = !ShouldSuppressAllTogglesOverride() && viewModel.AllExtensionsChecked;
+        var effectiveAllowedExtensions = BuildEffectiveAllowedExtensionsForLiveCounts(forceAllExtensionsChecked);
         return Task.Run(async () =>
         {
             cancellationToken.ThrowIfCancellationRequested();
             if (IsStalePathRequest(path)) return;
 
-            // Scan extensions and ignore-option counts in one pass to avoid extra IO on large trees.
-            var scan = scanOptions.GetExtensionsAndIgnoreCountsForRootFolders(
+            // The live ignore section needs extension availability and effective counts to come
+            // from the same snapshot. Keeping them coupled removes a whole extra filesystem pass
+            // and prevents the coordinator from stitching together mismatched intermediate states.
+            var scan = scanOptions.GetIgnoreSectionSnapshotForRootFolders(
                 path,
                 rootFolders,
                 extensionScanRules,
+                ignoreRules,
+                effectiveAllowedExtensions,
                 cancellationToken);
             if (scan.RootAccessDenied)
             {
@@ -274,14 +286,6 @@ public sealed class SelectionSyncCoordinator(
             var extensionlessEntriesCount = SplitExtensions(scan.Value.Extensions, visibleExtensions);
             var options = filterSelectionService.BuildExtensionOptions(visibleExtensions, prev);
             options = ApplyMissingProfileSelectionsFallbackToExtensions(options);
-            var effectiveIgnoreCounts = ResolveEffectiveIgnoreOptionCounts(
-                path,
-                rootFolders,
-                options,
-                ignoreRules,
-                scan.Value.IgnoreOptionCounts,
-                forceAllExtensionsChecked,
-                cancellationToken);
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -290,7 +294,7 @@ public sealed class SelectionSyncCoordinator(
                 ApplyExtensionOptions(
                     options,
                     extensionlessEntriesCount,
-                    effectiveIgnoreCounts,
+                    scan.Value.EffectiveIgnoreOptionCounts,
                     hasIgnoreOptionCounts: true);
             });
         }, cancellationToken);
@@ -477,23 +481,26 @@ public sealed class SelectionSyncCoordinator(
         cancellationToken.ThrowIfCancellationRequested();
 
         var selectedRoots = GetSelectedRootFolders();
-        await PopulateIgnoreOptionsForRootSelectionAsync(selectedRoots, currentPath, cancellationToken);
-        var hadIgnoreCountsBefore = _hasIgnoreOptionCounts;
-        var ignoreCountsBefore = _ignoreOptionCounts;
-        var extensionlessBefore = _hasExtensionlessExtensionEntries;
-        var extensionlessCountBefore = _extensionlessExtensionEntriesCount;
-        await PopulateExtensionsForRootSelectionAsync(currentPath, selectedRoots, cancellationToken);
-
-        var ignoreAvailabilityChanged = hadIgnoreCountsBefore != _hasIgnoreOptionCounts ||
-                                        ignoreCountsBefore != _ignoreOptionCounts;
-
-        // Recompute ignore options only when visibility/count state changed after extension scan.
-        if (extensionlessBefore != _hasExtensionlessExtensionEntries ||
-            extensionlessCountBefore != _extensionlessExtensionEntriesCount ||
-            ignoreAvailabilityChanged)
+        var context = CreateSelectionRefreshContext(currentPath);
+        var snapshot = await Task.Run(
+            () => _selectionRefreshEngine.ComputeLiveRefreshSnapshot(context, selectedRoots, cancellationToken),
+            cancellationToken);
+        if (snapshot.RootAccessDenied)
         {
-            await PopulateIgnoreOptionsForRootSelectionAsync(selectedRoots, currentPath, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            var elevated = await Dispatcher.UIThread.InvokeAsync(() => tryElevateAndRestart(currentPath));
+            if (elevated)
+                return;
         }
+
+        await Dispatcher.UIThread.InvokeAsync(() =>
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (IsStalePathRequest(currentPath))
+                return;
+
+            ApplySelectionRefreshSnapshot(snapshot);
+        });
     }
 
     public async Task RefreshRootAndDependentsAsync(string currentPath, CancellationToken cancellationToken = default)
@@ -521,32 +528,28 @@ public sealed class SelectionSyncCoordinator(
             }
 
             _lastLoadedPath = currentPath;
-
-            // Warm ignore options first so root/extension scans use the latest ignore selection
-            // without blocking UI on initial availability discovery.
-            await PopulateIgnoreOptionsForRootSelectionAsync([], currentPath, cancellationToken);
-
-            // Run in order so root folders are ready before extensions/ignore lists refresh.
-            await PopulateRootFoldersAsync(currentPath, cancellationToken);
-            cancellationToken.ThrowIfCancellationRequested();
-            var selectedRoots = GetSelectedRootFolders();
-            await PopulateIgnoreOptionsForRootSelectionAsync(selectedRoots, currentPath, cancellationToken);
-            var hadIgnoreCountsBefore = _hasIgnoreOptionCounts;
-            var ignoreCountsBefore = _ignoreOptionCounts;
-            var extensionlessBefore = _hasExtensionlessExtensionEntries;
-            var extensionlessCountBefore = _extensionlessExtensionEntriesCount;
-            await PopulateExtensionsForRootSelectionAsync(currentPath, selectedRoots, cancellationToken);
-
-            var ignoreAvailabilityChanged = hadIgnoreCountsBefore != _hasIgnoreOptionCounts ||
-                                            ignoreCountsBefore != _ignoreOptionCounts;
-
-            // Avoid duplicate ignore refresh when visibility/count state did not change.
-            if (extensionlessBefore != _hasExtensionlessExtensionEntries ||
-                extensionlessCountBefore != _extensionlessExtensionEntriesCount ||
-                ignoreAvailabilityChanged)
+            var context = CreateSelectionRefreshContext(currentPath);
+            var snapshot = await Task.Run(
+                () => _selectionRefreshEngine.ComputeFullRefreshSnapshot(context, cancellationToken),
+                cancellationToken);
+            if (snapshot.RootAccessDenied)
             {
-                await PopulateIgnoreOptionsForRootSelectionAsync(selectedRoots, currentPath, cancellationToken);
+                cancellationToken.ThrowIfCancellationRequested();
+                var elevated = await Dispatcher.UIThread.InvokeAsync(() => tryElevateAndRestart(currentPath));
+                if (elevated)
+                    return;
             }
+
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (IsStalePathRequest(currentPath) && !HasPreparedSelectionForPath(currentPath))
+                    return;
+                if (ShouldSkipRefreshForPreparedPath(currentPath))
+                    return;
+
+                ApplySelectionRefreshSnapshot(snapshot);
+            });
 
             // Consume prepared selection only after refresh for that exact path completes.
             if (HasPreparedSelectionForPath(currentPath))
@@ -563,8 +566,37 @@ public sealed class SelectionSyncCoordinator(
 
     public async Task WaitForPendingRefreshesAsync(CancellationToken cancellationToken = default)
     {
-        await _refreshLock.WaitAsync(cancellationToken).ConfigureAwait(false);
-        _refreshLock.Release();
+        while (true)
+        {
+            await _refreshLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+            _refreshLock.Release();
+
+            Task liveTask;
+            Task fullTask;
+            lock (_backgroundRefreshSync)
+            {
+                liveTask = _latestLiveOptionsRefreshTask;
+                fullTask = _latestFullRefreshTask;
+            }
+
+            // The UI can queue a live-options refresh and a full refresh back-to-back.
+            // Waiting only on the refresh lock is not sufficient because the coalesced
+            // background tasks run outside that lock. Tests and Apply must observe the
+            // fully converged snapshot, not an intermediate state between these phases.
+            await AwaitBackgroundRefreshTaskAsync(liveTask, cancellationToken).ConfigureAwait(false);
+            await AwaitBackgroundRefreshTaskAsync(fullTask, cancellationToken).ConfigureAwait(false);
+
+            lock (_backgroundRefreshSync)
+            {
+                if (ReferenceEquals(liveTask, _latestLiveOptionsRefreshTask) &&
+                    ReferenceEquals(fullTask, _latestFullRefreshTask) &&
+                    liveTask.IsCompleted &&
+                    fullTask.IsCompleted)
+                {
+                    return;
+                }
+            }
+        }
     }
 
     /// <summary>
@@ -645,11 +677,11 @@ public sealed class SelectionSyncCoordinator(
         IReadOnlyCollection<string> selectedRootFolders)
     {
         if (string.IsNullOrWhiteSpace(path))
-            return new IgnoreOptionsAvailability(IncludeGitIgnore: false, IncludeSmartIgnore: false);
+            return CreateCountDrivenIgnoreAvailability(includeGitIgnore: false, includeSmartIgnore: false);
 
         try
         {
-            var availability = getIgnoreOptionsAvailability(path, selectedRootFolders);
+            var availability = CreateCountDrivenIgnoreAvailability(getIgnoreOptionsAvailability(path, selectedRootFolders));
             if (_hasIgnoreOptionCounts)
             {
                 return availability with
@@ -684,8 +716,41 @@ public sealed class SelectionSyncCoordinator(
         }
         catch
         {
-            return new IgnoreOptionsAvailability(IncludeGitIgnore: false, IncludeSmartIgnore: false);
+            return CreateCountDrivenIgnoreAvailability(includeGitIgnore: false, includeSmartIgnore: false);
         }
+    }
+
+    private static IgnoreOptionsAvailability CreateCountDrivenIgnoreAvailability(
+        bool includeGitIgnore,
+        bool includeSmartIgnore)
+    {
+        return new IgnoreOptionsAvailability(
+            IncludeGitIgnore: includeGitIgnore,
+            IncludeSmartIgnore: includeSmartIgnore);
+    }
+
+    private static IgnoreOptionsAvailability CreateCountDrivenIgnoreAvailability(
+        IgnoreOptionsAvailability availability)
+    {
+        // Advanced ignore options are driven by live counts coming from the scan layer.
+        // Keep them hidden until the coordinator has computed those values.
+        return availability with
+        {
+            IncludeHiddenFolders = false,
+            HiddenFoldersCount = 0,
+            IncludeHiddenFiles = false,
+            HiddenFilesCount = 0,
+            IncludeDotFolders = false,
+            DotFoldersCount = 0,
+            IncludeDotFiles = false,
+            DotFilesCount = 0,
+            IncludeEmptyFolders = false,
+            EmptyFoldersCount = 0,
+            IncludeEmptyFiles = false,
+            EmptyFilesCount = 0,
+            IncludeExtensionlessFiles = false,
+            ExtensionlessFilesCount = 0
+        };
     }
 
     private void ApplyIgnoreOptions(
@@ -839,12 +904,13 @@ public sealed class SelectionSyncCoordinator(
         {
             _liveOptionsRefreshCts?.Cancel();
             _liveOptionsRefreshCts?.Dispose();
-            _liveOptionsRefreshCts = new CancellationTokenSource();
-            token = _liveOptionsRefreshCts.Token;
-            version = unchecked(++_liveOptionsRequestVersion);
-        }
+              _liveOptionsRefreshCts = new CancellationTokenSource();
+              token = _liveOptionsRefreshCts.Token;
+              version = unchecked(++_liveOptionsRequestVersion);
+              _latestLiveOptionsRefreshTask = RunQueuedLiveOptionsRefreshAsync(currentPath, version, token);
+          }
 
-        FireAndForgetSafe(RunQueuedLiveOptionsRefreshAsync(currentPath, version, token));
+        FireAndForgetSafe(_latestLiveOptionsRefreshTask);
     }
 
     /// <summary>
@@ -861,12 +927,13 @@ public sealed class SelectionSyncCoordinator(
         {
             _fullRefreshRequestCts?.Cancel();
             _fullRefreshRequestCts?.Dispose();
-            _fullRefreshRequestCts = new CancellationTokenSource();
-            token = _fullRefreshRequestCts.Token;
-            version = unchecked(++_fullRefreshRequestVersion);
-        }
+              _fullRefreshRequestCts = new CancellationTokenSource();
+              token = _fullRefreshRequestCts.Token;
+              version = unchecked(++_fullRefreshRequestVersion);
+              _latestFullRefreshTask = RunQueuedFullRefreshAsync(currentPath, version, token);
+          }
 
-        FireAndForgetSafe(RunQueuedFullRefreshAsync(currentPath, version, token));
+        FireAndForgetSafe(_latestFullRefreshTask);
     }
 
     private async Task RunQueuedLiveOptionsRefreshAsync(
@@ -963,6 +1030,66 @@ public sealed class SelectionSyncCoordinator(
         }
     }
 
+    private void ApplyRootOptions(IReadOnlyList<SelectionOption> options)
+    {
+        viewModel.RootFolders.Clear();
+
+        _suppressRootItemCheck = true;
+        foreach (var option in options)
+            viewModel.RootFolders.Add(new SelectionOptionViewModel(option.Name, option.IsChecked));
+        _suppressRootItemCheck = false;
+
+        if (!ShouldSuppressAllTogglesOverride() && viewModel.AllRootFoldersChecked)
+            SetAllChecked(viewModel.RootFolders, true, ref _suppressRootItemCheck);
+
+        SyncAllCheckbox(viewModel.RootFolders, ref _suppressRootAllCheck,
+            value => viewModel.AllRootFoldersChecked = value);
+        UpdateRootSelectionCache();
+        _rootSelectionInitialized = true;
+    }
+
+    private void ApplyResolvedIgnoreOptions(
+        IReadOnlyList<ResolvedIgnoreOptionState> options,
+        IReadOnlyDictionary<IgnoreOptionId, bool> stateCache)
+    {
+        _suppressIgnoreItemCheck = true;
+        try
+        {
+            viewModel.IgnoreOptions.Clear();
+            var descriptors = new List<IgnoreOptionDescriptor>(options.Count);
+            foreach (var option in options)
+            {
+                descriptors.Add(new IgnoreOptionDescriptor(option.Id, option.Label, option.DefaultChecked));
+                viewModel.IgnoreOptions.Add(new IgnoreOptionViewModel(option.Id, option.Label, option.IsChecked));
+            }
+
+            _ignoreOptions = descriptors;
+        }
+        finally
+        {
+            _suppressIgnoreItemCheck = false;
+        }
+
+        _ignoreOptionStateCache = new Dictionary<IgnoreOptionId, bool>(stateCache);
+        _ignoreSelectionCache = BuildSelectedIgnoreOptionSet();
+        _ignoreSelectionInitialized = true;
+        SyncIgnoreAllCheckbox();
+    }
+
+    private void ApplySelectionRefreshSnapshot(SelectionRefreshSnapshot snapshot)
+    {
+        if (snapshot.RootOptions is not null)
+            ApplyRootOptions(snapshot.RootOptions);
+
+        ApplyExtensionOptions(
+            snapshot.ExtensionOptions,
+            snapshot.ExtensionlessEntriesCount,
+            snapshot.IgnoreOptionCounts,
+            snapshot.HasIgnoreOptionCounts);
+
+        ApplyResolvedIgnoreOptions(snapshot.IgnoreOptions, snapshot.IgnoreOptionStateCache);
+    }
+
     private static HashSet<string> CollectCheckedSelectionNames(
         IEnumerable<SelectionOptionViewModel> options,
         StringComparer comparer)
@@ -994,51 +1121,35 @@ public sealed class SelectionSyncCoordinator(
         return extensionlessEntriesCount;
     }
 
-    private IgnoreOptionCounts ResolveEffectiveIgnoreOptionCounts(
-        string path,
-        IReadOnlyCollection<string> rootFolders,
-        IReadOnlyList<SelectionOption> extensionOptions,
-        IgnoreRules ignoreRules,
-        IgnoreOptionCounts rawCounts,
-        bool forceAllExtensionsChecked,
-        CancellationToken cancellationToken)
-    {
-        if (rootFolders.Count == 0)
-            return rawCounts with { EmptyFolders = 0 };
+    private SelectionRefreshContext CreateSelectionRefreshContext(string path) =>
+        new(
+            Path: path,
+            PreparedSelectionMode: _preparedSelectionMode,
+            AllRootFoldersChecked: viewModel.AllRootFoldersChecked,
+            AllExtensionsChecked: viewModel.AllExtensionsChecked,
+            RootSelectionInitialized: _rootSelectionInitialized,
+            RootSelectionCache: new HashSet<string>(_rootSelectionCache, PathComparer.Default),
+            ExtensionsSelectionInitialized: _extensionsSelectionInitialized,
+            ExtensionsSelectionCache: new HashSet<string>(_extensionsSelectionCache, StringComparer.OrdinalIgnoreCase),
+            IgnoreSelectionInitialized: _ignoreSelectionInitialized,
+            IgnoreSelectionCache: new HashSet<IgnoreOptionId>(_ignoreSelectionCache),
+            IgnoreOptionStateCache: new Dictionary<IgnoreOptionId, bool>(_ignoreOptionStateCache),
+            IgnoreAllPreference: _ignoreAllPreference,
+            CurrentSnapshotState: CaptureIgnoreSectionSnapshotState());
 
-        var allowedExtensions = BuildEffectiveSelectedExtensionSet(extensionOptions, forceAllExtensionsChecked);
-        var rulesWithoutEmptyFolderPruning = ignoreRules.IgnoreEmptyFolders
-            ? ignoreRules with { IgnoreEmptyFolders = false }
-            : ignoreRules;
-
-        // Empty-folder counts must track the actual tree contract.
-        // UseGitIgnore may remove descendants, but only EmptyFolders decides whether
-        // their now-empty parents disappear from the exported tree.
-        var effectiveEmptyFolderCount = scanOptions.GetEffectiveEmptyFolderCountForRootFolders(
-            path,
-            rootFolders,
-            allowedExtensions,
-            rulesWithoutEmptyFolderPruning,
-            cancellationToken);
-
-        return rawCounts with
-        {
-            EmptyFolders = Math.Max(0, effectiveEmptyFolderCount.Value)
-        };
-    }
-
-    private static HashSet<string> BuildEffectiveSelectedExtensionSet(
-        IReadOnlyList<SelectionOption> extensionOptions,
+    private HashSet<string>? BuildEffectiveAllowedExtensionsForLiveCounts(
         bool forceAllExtensionsChecked)
     {
-        var selected = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var option in extensionOptions)
-        {
-            if (forceAllExtensionsChecked || option.IsChecked)
-                selected.Add(option.Name);
-        }
+        if (forceAllExtensionsChecked)
+            return null;
 
-        return selected;
+        if (_extensionsSelectionInitialized)
+            return new HashSet<string>(_extensionsSelectionCache, StringComparer.OrdinalIgnoreCase);
+
+        if (viewModel.Extensions.Count == 0)
+            return null;
+
+        return CollectCheckedSelectionNames(viewModel.Extensions, StringComparer.OrdinalIgnoreCase);
     }
 
     private static bool IsExtensionlessEntry(string value)
@@ -1049,6 +1160,13 @@ public sealed class SelectionSyncCoordinator(
         var extension = Path.GetExtension(value);
         return string.IsNullOrEmpty(extension) || extension == ".";
     }
+
+    private IgnoreSectionSnapshotState CaptureIgnoreSectionSnapshotState() =>
+        new(
+            _hasIgnoreOptionCounts,
+            _ignoreOptionCounts,
+            _hasExtensionlessExtensionEntries,
+            _extensionlessExtensionEntriesCount);
 
     private IgnoreRules GetOrBuildIgnoreRules(
         string path,
@@ -1163,13 +1281,22 @@ public sealed class SelectionSyncCoordinator(
 
     private static IgnoreRules BuildExtensionAvailabilityScanRules(IgnoreRules rules)
     {
-        // Availability of "extensionless files" must not depend on the option itself.
-        // Otherwise the option can disappear right after user enables it.
-        if (!rules.IgnoreExtensionlessFiles)
+        // Extension availability must not depend on file-level toggles that can hide the
+        // very extensions required to keep those toggles visible. Otherwise options such as
+        // EmptyFiles or ExtensionlessFiles can disappear immediately after becoming checked.
+        if (!rules.IgnoreHiddenFiles &&
+            !rules.IgnoreDotFiles &&
+            !rules.IgnoreEmptyFiles &&
+            !rules.IgnoreExtensionlessFiles)
+        {
             return rules;
+        }
 
         return rules with
         {
+            IgnoreHiddenFiles = false,
+            IgnoreDotFiles = false,
+            IgnoreEmptyFiles = false,
             IgnoreExtensionlessFiles = false
         };
     }
@@ -1219,6 +1346,19 @@ public sealed class SelectionSyncCoordinator(
         catch
         {
             // Log or handle if needed; suppressed to not crash UI
+        }
+    }
+
+    private static async Task AwaitBackgroundRefreshTaskAsync(Task task, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await task.WaitAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            // Coalesced refreshes cancel superseded tasks on purpose. Waiting for idleness
+            // should ignore those expected cancellations and continue with the latest task.
         }
     }
 

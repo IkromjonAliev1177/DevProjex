@@ -210,7 +210,9 @@ public sealed class ScanOptionsUseCaseEffectiveEmptyFolderAggregationMatrixTests
 		bool folderHadDenied)
 		: IFileSystemScanner, IFileSystemScannerEffectiveEmptyFolderCounter
 	{
-		public int CounterCalls { get; private set; }
+		private int _counterCalls;
+
+		public int CounterCalls => Volatile.Read(ref _counterCalls);
 		public HashSet<string> LastAllowedExtensions { get; private set; } = new(StringComparer.OrdinalIgnoreCase);
 
 		public bool CanReadRoot(string rootPath) => true;
@@ -231,7 +233,7 @@ public sealed class ScanOptionsUseCaseEffectiveEmptyFolderAggregationMatrixTests
 			CancellationToken cancellationToken = default)
 		{
 			cancellationToken.ThrowIfCancellationRequested();
-			CounterCalls++;
+			Interlocked.Increment(ref _counterCalls);
 			LastAllowedExtensions = new HashSet<string>(allowedExtensions, StringComparer.OrdinalIgnoreCase);
 			return new ScanResult<int>(perFolderCount, folderRootDenied, folderHadDenied);
 		}

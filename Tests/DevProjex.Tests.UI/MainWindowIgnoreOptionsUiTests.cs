@@ -165,6 +165,70 @@ public sealed class MainWindowIgnoreOptionsUiTests
         }
     }
 
+    [AvaloniaFact]
+    public async Task GitIgnoredExtensionlessNoise_DoesNotInflateExtensionlessCounter()
+    {
+        using var project = UiTestProject.CreateWithGitIgnoredExtensionlessNoise();
+        var window = await UiTestDriver.CreateLoadedMainWindowAsync(project);
+
+        try
+        {
+            await UiTestDriver.WaitForIgnoreOptionStateAsync(
+                window,
+                IgnoreOptionId.UseGitIgnore,
+                visible: true,
+                isChecked: true);
+
+            await UiTestDriver.WaitForIgnoreOptionStateAsync(
+                window,
+                IgnoreOptionId.ExtensionlessFiles,
+                visible: true,
+                isChecked: true);
+            await UiTestDriver.WaitForIgnoreOptionLabelAsync(
+                window,
+                IgnoreOptionId.ExtensionlessFiles,
+                "Files without extension (1)");
+        }
+        finally
+        {
+            await UiTestDriver.CloseWindowAsync(window);
+        }
+    }
+
+    [AvaloniaFact]
+    public async Task DotFolderExtensionlessNoise_RecomputesExtensionlessCounterAfterDynamicIgnoreOptionsAppear()
+    {
+        using var project = UiTestProject.CreateWithDotFolderExtensionlessNoise();
+        var window = await UiTestDriver.CreateLoadedMainWindowAsync(project);
+
+        try
+        {
+            await UiTestDriver.WaitForIgnoreOptionStateAsync(
+                window,
+                IgnoreOptionId.ExtensionlessFiles,
+                visible: true,
+                isChecked: true);
+            await UiTestDriver.WaitForIgnoreOptionLabelAsync(
+                window,
+                IgnoreOptionId.ExtensionlessFiles,
+                "Files without extension (1)");
+
+            await UiTestDriver.WaitForIgnoreOptionStateAsync(
+                window,
+                IgnoreOptionId.DotFolders,
+                visible: false);
+
+            var viewModel = UiTestDriver.GetViewModel(window);
+            Assert.DoesNotContain(
+                viewModel.RootFolders,
+                option => string.Equals(option.Name, ".cache", StringComparison.Ordinal));
+        }
+        finally
+        {
+            await UiTestDriver.CloseWindowAsync(window);
+        }
+    }
+
     private static async Task AssertDynamicIgnoreOptionStateIsPreservedWhenRootSelectionRestoresIt(
         IgnoreOptionId optionId)
     {
