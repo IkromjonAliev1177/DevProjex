@@ -1143,10 +1143,13 @@
     </Style>
 
     <Style Selector="Button.preview-copy-button">
+        <Setter Property="Padding" Value="0" />
         <Setter Property="Background" Value="{DynamicResource AppBackgroundBrush}" />
         <Setter Property="BorderBrush" Value="{DynamicResource AppBorderBrush}" />
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="CornerRadius" Value="6" />
+        <Setter Property="HorizontalContentAlignment" Value="Center" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
     </Style>
 
     <Style Selector="Button.preview-copy-button:pointerover">
@@ -1157,7 +1160,7 @@
         <Setter Property="Width" Value="24" />
         <Setter Property="Height" Value="24" />
         <Setter Property="Padding" Value="0" />
-        <Setter Property="Margin" Value="0,0,6,0" />
+        <Setter Property="Margin" Value="0" />
         <Setter Property="Background" Value="Transparent" />
         <Setter Property="BorderThickness" Value="0" />
         <Setter Property="CornerRadius" Value="5" />

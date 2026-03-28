@@ -1,3 +1,6 @@
+using Avalonia.Controls.Primitives;
+using Avalonia.Layout;
+
 namespace DevProjex.Tests.UI;
 
 [Collection(UiWorkspaceCollection.Name)]
@@ -129,6 +132,12 @@ public sealed class MainWindowPreviewUiTests(UiWorkspaceFixture workspace)
             Assert.InRange(segmentedBounds.Left - copyBounds.Right, 0, 12);
             Assert.InRange(Math.Abs(copyBounds.Width - closeBounds.Width), 0, 1.5);
             Assert.InRange(Math.Abs(copyBounds.Height - closeBounds.Height), 0, 1.5);
+            Assert.Equal(0, copyButton.Padding.Left);
+            Assert.Equal(0, copyButton.Padding.Right);
+            Assert.Equal(0, copyButton.Padding.Top);
+            Assert.Equal(0, copyButton.Padding.Bottom);
+            Assert.Equal(HorizontalAlignment.Center, copyButton.HorizontalContentAlignment);
+            Assert.Equal(VerticalAlignment.Center, copyButton.VerticalContentAlignment);
         }
         finally
         {
@@ -357,7 +366,7 @@ public sealed class MainWindowPreviewUiTests(UiWorkspaceFixture workspace)
     }
 
     [AvaloniaFact]
-    public async Task StickyPathCopyButton_IsVisibleOnHeaderRightEdge_AndUsesCompactSize()
+    public async Task StickyPathCopyButton_IsVisibleInsideLineNumberCap_AndUsesCompactSize()
     {
         var window = await UiTestDriver.CreateLoadedMainWindowAsync(workspace.Project);
 
@@ -367,19 +376,25 @@ public sealed class MainWindowPreviewUiTests(UiWorkspaceFixture workspace)
             await UiTestDriver.SwitchPreviewModeAsync(window, PreviewContentMode.TreeAndContent);
             await UiTestDriver.ScrollPreviewUntilStickyHeaderVisibleAsync(window);
 
+            var stickyHeaderCap = UiTestDriver.GetRequiredControl<Border>(window, "PreviewStickyHeaderCap");
             var stickyHeaderContainer = UiTestDriver.GetRequiredControl<Border>(window, "PreviewStickyHeaderContainer");
             var stickyHeaderCopyButton = UiTestDriver.GetRequiredControl<Button>(window, "PreviewStickyHeaderCopyButton");
             var stickyHeaderText = UiTestDriver.GetRequiredControl<TextBlock>(window, "PreviewStickyHeaderText");
 
+            var capBounds = UiTestDriver.GetBoundsInWindow(stickyHeaderCap, window);
             var headerBounds = UiTestDriver.GetBoundsInWindow(stickyHeaderContainer, window);
             var buttonBounds = UiTestDriver.GetBoundsInWindow(stickyHeaderCopyButton, window);
             var textBounds = UiTestDriver.GetBoundsInWindow(stickyHeaderText, window);
 
+            Assert.True(stickyHeaderCap.IsVisible);
             Assert.True(stickyHeaderContainer.IsVisible);
             Assert.InRange(Math.Abs(buttonBounds.Width - 24), 0, 1.5);
             Assert.InRange(Math.Abs(buttonBounds.Height - 24), 0, 1.5);
-            Assert.True(buttonBounds.Left >= textBounds.Right - 2);
-            Assert.InRange(headerBounds.Right - buttonBounds.Right, 0, 10);
+            Assert.True(buttonBounds.Left >= capBounds.Left - 1);
+            Assert.True(buttonBounds.Right <= capBounds.Right + 1);
+            Assert.True(buttonBounds.Right <= headerBounds.Left + 2);
+            Assert.True(capBounds.Right <= textBounds.Left + 2);
+            Assert.Equal(PlacementMode.Right, ToolTip.GetPlacement(stickyHeaderCopyButton));
         }
         finally
         {
