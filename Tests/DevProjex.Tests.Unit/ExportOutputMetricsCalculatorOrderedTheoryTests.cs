@@ -1,5 +1,3 @@
-using System.Text;
-
 namespace DevProjex.Tests.Unit;
 
 public sealed class ExportOutputMetricsCalculatorOrderedTheoryTests

@@ -1,7 +1,6 @@
 using DevProjex.Application.Models;
 using DevProjex.Avalonia.Coordinators;
 using DevProjex.Avalonia.ViewModels;
-using System.Reflection;
 
 namespace DevProjex.Tests.Integration;
 

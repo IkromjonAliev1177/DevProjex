@@ -1,5 +1,4 @@
 using DevProjex.Avalonia.Services;
-using System.Text;
 
 namespace DevProjex.Tests.Unit.Avalonia;
 

@@ -1,5 +1,4 @@
 using System.Collections.Concurrent;
-using System.Globalization;
 
 namespace DevProjex.Tests.Unit;
 
