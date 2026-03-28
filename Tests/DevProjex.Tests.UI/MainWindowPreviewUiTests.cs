@@ -168,6 +168,52 @@ public sealed class MainWindowPreviewUiTests(UiWorkspaceFixture workspace)
     }
 
     [AvaloniaFact]
+    public async Task PreviewCopyButton_DoesNotReplacePreviewDocument_OrTogglePreviewLoading()
+    {
+        var window = await UiTestDriver.CreateLoadedMainWindowAsync(workspace.Project);
+
+        try
+        {
+            await UiTestDriver.OpenPreviewAsync(window);
+
+            foreach (var mode in new[]
+                     {
+                         PreviewContentMode.Tree,
+                         PreviewContentMode.Content,
+                         PreviewContentMode.TreeAndContent
+                     })
+            {
+                await UiTestDriver.SwitchPreviewModeAsync(window, mode);
+
+                var viewModel = UiTestDriver.GetViewModel(window);
+                var previewDocumentBeforeCopy = viewModel.PreviewDocument;
+                var previewLineCountBeforeCopy = viewModel.PreviewLineCount;
+                var selectedModeBeforeCopy = viewModel.SelectedPreviewContentMode;
+
+                Assert.NotNull(previewDocumentBeforeCopy);
+                Assert.False(viewModel.IsPreviewLoading);
+
+                await UiTestDriver.SetClipboardTextAsync(window, $"preview-copy-stability-{mode}-{Guid.NewGuid():N}");
+                await UiTestDriver.ClickPreviewCopyButtonAsync(window);
+                await UiTestDriver.WaitForClipboardTextAsync(
+                    window,
+                    await UiTestDriver.ComputeAppliedPreviewCopyPayloadAsync(window, mode));
+
+                await UiTestDriver.WaitForSettledFramesAsync(frameCount: 10);
+
+                Assert.Same(previewDocumentBeforeCopy, viewModel.PreviewDocument);
+                Assert.Equal(previewLineCountBeforeCopy, viewModel.PreviewLineCount);
+                Assert.Equal(selectedModeBeforeCopy, viewModel.SelectedPreviewContentMode);
+                Assert.False(viewModel.IsPreviewLoading);
+            }
+        }
+        finally
+        {
+            await UiTestDriver.CloseWindowAsync(window);
+        }
+    }
+
+    [AvaloniaFact]
     public async Task TreeHideButton_SwitchesPreviewToPreviewOnly()
     {
         var window = await UiTestDriver.CreateLoadedMainWindowAsync(workspace.Project);
@@ -361,6 +407,46 @@ public sealed class MainWindowPreviewUiTests(UiWorkspaceFixture workspace)
             await UiTestDriver.SetClipboardTextAsync(window, $"sticky-header-sentinel-{Guid.NewGuid():N}");
             await UiTestDriver.ClickPreviewStickyHeaderCopyButtonAsync(window);
             await UiTestDriver.WaitForClipboardTextAsync(window, expectedPayload);
+        }
+        finally
+        {
+            await UiTestDriver.CloseWindowAsync(window);
+        }
+    }
+
+    [AvaloniaFact]
+    public async Task StickyPathCopyButton_DoesNotReplacePreviewDocument_OrChangeVisibleSection()
+    {
+        var window = await UiTestDriver.CreateLoadedMainWindowAsync(workspace.Project);
+
+        try
+        {
+            await UiTestDriver.OpenPreviewAsync(window);
+            await UiTestDriver.SwitchPreviewModeAsync(window, PreviewContentMode.TreeAndContent);
+            await UiTestDriver.ScrollPreviewUntilStickyHeaderVisibleAsync(window);
+
+            var viewModel = UiTestDriver.GetViewModel(window);
+            var stickyHeaderText = UiTestDriver.GetRequiredControl<TextBlock>(window, "PreviewStickyHeaderText");
+            var stickyHeaderTextBeforeCopy = stickyHeaderText.Text;
+            var previewDocumentBeforeCopy = viewModel.PreviewDocument;
+            var previewLineCountBeforeCopy = viewModel.PreviewLineCount;
+            var expectedPayload = UiTestDriver.ComputeVisibleStickyHeaderCopyPayload(window);
+
+            Assert.NotNull(previewDocumentBeforeCopy);
+            Assert.False(string.IsNullOrWhiteSpace(stickyHeaderTextBeforeCopy));
+            Assert.False(viewModel.IsPreviewLoading);
+            Assert.False(viewModel.StatusBusy);
+
+            await UiTestDriver.SetClipboardTextAsync(window, $"sticky-copy-stability-{Guid.NewGuid():N}");
+            await UiTestDriver.ClickPreviewStickyHeaderCopyButtonAsync(window);
+            await UiTestDriver.WaitForClipboardTextAsync(window, expectedPayload);
+            await UiTestDriver.WaitForSettledFramesAsync(frameCount: 8);
+
+            Assert.Same(previewDocumentBeforeCopy, viewModel.PreviewDocument);
+            Assert.Equal(previewLineCountBeforeCopy, viewModel.PreviewLineCount);
+            Assert.Equal(stickyHeaderTextBeforeCopy, stickyHeaderText.Text);
+            Assert.False(viewModel.IsPreviewLoading);
+            Assert.False(viewModel.StatusBusy);
         }
         finally
         {
