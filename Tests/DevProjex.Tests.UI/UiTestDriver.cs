@@ -1,5 +1,9 @@
 using Avalonia.VisualTree;
 using DevProjex.Application.Services;
+using DevProjex.Kernel;
+using DevProjex.Kernel.Contracts;
+using DevProjex.Kernel.Models;
+using DevProjex.Tests.Shared.ProjectLoadWorkflow;
 using System.Globalization;
 using System.Reflection;
 using System.Text.RegularExpressions;
@@ -384,10 +388,56 @@ internal static class UiTestDriver
                        actualTreeMetrics == expectedTreeMetrics &&
                        actualContentMetrics == expectedContentMetrics;
             },
-            "status metrics to match the expected applied export snapshot",
+            $"status metrics to match the expected applied export snapshot (expected tree={expectedTreeMetrics}, expected content={expectedContentMetrics})",
             timeout: TimeSpan.FromSeconds(30));
 
         await WaitForSettledFramesAsync(frameCount: 12);
+    }
+
+    public static async Task<ProjectLoadWorkflowRuntime.ProjectLoadWorkflowMetrics> ComputeAppliedExportMetricsAsync(
+        MainWindow window,
+        CancellationToken cancellationToken = default)
+    {
+        await WaitForSelectionRefreshIdleAsync(window);
+
+        var currentTree = GetRequiredPrivateField<BuildTreeResult>(window, "_currentTree");
+        var currentPath = GetRequiredPrivateField<string>(window, "_currentPath");
+        var treeExport = GetRequiredPrivateField<TreeExportService>(window, "_treeExport");
+        var contentExport = GetRequiredPrivateField<SelectedContentExportService>(window, "_contentExport");
+        var selectedPaths = CollectCheckedPaths(GetViewModel(window));
+        var hasSelection = selectedPaths.Count > 0;
+        var treeFormat = InvokePrivateMethod<TreeTextFormat>(window, "GetCurrentTreeTextFormat");
+        var pathPresentation = InvokePrivateMethodAllowNull<ExportPathPresentation>(window, "CreateExportPathPresentation");
+
+        // UI workflow assertions must compare the status bar against the already-applied
+        // tree/export pipeline of the open window. Rebuilding a second tree from settings
+        // state looked cheaper, but it let CI drift away from the actual MainWindow state.
+        var treeText = hasSelection
+            ? treeExport.BuildSelectedTree(
+                currentPath,
+                currentTree.Root,
+                selectedPaths,
+                treeFormat,
+                pathPresentation?.DisplayRootPath,
+                pathPresentation?.DisplayRootName)
+            : treeExport.BuildFullTree(
+                currentPath,
+                currentTree.Root,
+                treeFormat,
+                pathPresentation?.DisplayRootPath,
+                pathPresentation?.DisplayRootName);
+        var treeMetrics = ExportOutputMetricsCalculator.FromText(treeText);
+
+        var orderedFilePaths = hasSelection
+            ? BuildOrderedSelectedFilePaths(selectedPaths)
+            : BuildOrderedAllFilePaths(currentTree.Root);
+        var contentText = await contentExport.BuildAsync(
+            orderedFilePaths,
+            cancellationToken,
+            pathPresentation?.MapFilePath);
+        var contentMetrics = ExportOutputMetricsCalculator.FromText(contentText);
+
+        return new ProjectLoadWorkflowRuntime.ProjectLoadWorkflowMetrics(treeMetrics, contentMetrics);
     }
 
     public static async Task WaitForStatusMetricsReadyAsync(MainWindow window, TimeSpan? timeout = null)
@@ -826,6 +876,81 @@ internal static class UiTestDriver
     {
         var field = typeof(MainWindow).GetField("_selectionCoordinator", BindingFlags.Instance | BindingFlags.NonPublic);
         return Assert.IsType<DevProjex.Avalonia.Coordinators.SelectionSyncCoordinator>(field?.GetValue(window));
+    }
+
+    private static T GetRequiredPrivateField<T>(MainWindow window, string fieldName)
+    {
+        var field = typeof(MainWindow).GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
+        return Assert.IsType<T>(field?.GetValue(window));
+    }
+
+    private static T InvokePrivateMethod<T>(MainWindow window, string methodName)
+    {
+        var method = typeof(MainWindow).GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic);
+        return Assert.IsType<T>(method?.Invoke(window, null));
+    }
+
+    private static T? InvokePrivateMethodAllowNull<T>(MainWindow window, string methodName)
+        where T : class
+    {
+        var method = typeof(MainWindow).GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic);
+        return method?.Invoke(window, null) as T;
+    }
+
+    private static HashSet<string> CollectCheckedPaths(MainWindowViewModel viewModel)
+    {
+        var selected = new HashSet<string>(PathComparer.Default);
+        foreach (var node in viewModel.TreeNodes)
+            CollectChecked(node, selected);
+
+        return selected;
+    }
+
+    private static void CollectChecked(TreeNodeViewModel node, HashSet<string> selected)
+    {
+        if (node.IsChecked == true)
+            selected.Add(node.FullPath);
+
+        foreach (var child in node.Children)
+            CollectChecked(child, selected);
+    }
+
+    private static List<string> BuildOrderedSelectedFilePaths(IReadOnlySet<string> selectedPaths)
+    {
+        var ordered = new List<string>(selectedPaths.Count);
+        foreach (var path in selectedPaths)
+        {
+            if (File.Exists(path))
+                ordered.Add(path);
+        }
+
+        ordered.Sort(PathComparer.Default);
+        return ordered;
+    }
+
+    private static List<string> BuildOrderedAllFilePaths(TreeNodeDescriptor root)
+    {
+        var uniquePaths = new HashSet<string>(PathComparer.Default);
+        var stack = new Stack<TreeNodeDescriptor>();
+        stack.Push(root);
+
+        while (stack.Count > 0)
+        {
+            var current = stack.Pop();
+            if (!current.IsDirectory)
+            {
+                uniquePaths.Add(current.FullPath);
+                continue;
+            }
+
+            for (var index = current.Children.Count - 1; index >= 0; index--)
+                stack.Push(current.Children[index]);
+        }
+
+        var ordered = new List<string>(uniquePaths.Count);
+        ordered.AddRange(uniquePaths);
+        ordered.Sort(PathComparer.Default);
+        return ordered;
     }
 
     private static void CleanupWindowAppData(MainWindow window)

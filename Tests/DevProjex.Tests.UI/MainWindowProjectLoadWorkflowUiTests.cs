@@ -16,7 +16,7 @@ public sealed class MainWindowProjectLoadWorkflowUiTests
 
         try
         {
-            var expected = await ComputeExpectedAppliedMetricsAsync(project.RootPath, window);
+            var expected = await ComputeExpectedAppliedMetricsAsync(window);
             await UiTestDriver.WaitForStatusMetricsAsync(window, expected.TreeMetrics, expected.ContentMetrics);
 
             var viewModel = UiTestDriver.GetViewModel(window);
@@ -40,7 +40,7 @@ public sealed class MainWindowProjectLoadWorkflowUiTests
 
         try
         {
-            var initialExpected = await ComputeExpectedAppliedMetricsAsync(project.RootPath, window);
+            var initialExpected = await ComputeExpectedAppliedMetricsAsync(window);
             await UiTestDriver.WaitForStatusMetricsAsync(window, initialExpected.TreeMetrics, initialExpected.ContentMetrics);
 
             await UiTestDriver.ClickRootFolderCheckBoxAsync(window, "docs");
@@ -48,7 +48,7 @@ public sealed class MainWindowProjectLoadWorkflowUiTests
             await UiTestDriver.ClickIgnoreOptionCheckBoxAsync(window, IgnoreOptionId.EmptyFiles);
             await UiTestDriver.WaitForSettledFramesAsync(frameCount: 10);
 
-            var pendingExpected = await ComputeExpectedAppliedMetricsAsync(project.RootPath, window);
+            var pendingExpected = await ComputeProjectedMetricsFromSettingsAsync(project.RootPath, window);
             Assert.NotEqual(initialExpected.TreeMetrics, pendingExpected.TreeMetrics);
 
             await UiTestDriver.WaitForConditionAsync(
@@ -63,7 +63,7 @@ public sealed class MainWindowProjectLoadWorkflowUiTests
                 },
                 "pending settings to leave the applied status metrics unchanged");
 
-            var appliedExpected = await ApplySettingsAndWaitForExpectedMetricsAsync(project.RootPath, window);
+            var appliedExpected = await ApplySettingsAndWaitForExpectedMetricsAsync(window);
             Assert.Equal(pendingExpected.TreeMetrics, appliedExpected.TreeMetrics);
             Assert.Equal(pendingExpected.ContentMetrics, appliedExpected.ContentMetrics);
             AssertVisibleAdvancedIgnoreOptionsCarryPositiveCounts(UiTestDriver.GetViewModel(window).IgnoreOptions);
@@ -97,7 +97,7 @@ public sealed class MainWindowProjectLoadWorkflowUiTests
                 },
                 "all root folders hidden by ignore rules to reappear after disabling all ignore rules");
 
-            await ApplySettingsAndWaitForExpectedMetricsAsync(project.RootPath, window);
+            await ApplySettingsAndWaitForExpectedMetricsAsync(window);
 
             var viewModel = UiTestDriver.GetViewModel(window);
             Assert.Contains(viewModel.Extensions, option => string.Equals(option.Name, ".js", StringComparison.OrdinalIgnoreCase));
@@ -122,7 +122,7 @@ public sealed class MainWindowProjectLoadWorkflowUiTests
             await UiTestDriver.ClickExtensionCheckBoxAsync(window, ".md");
             await UiTestDriver.ClickIgnoreOptionCheckBoxAsync(window, IgnoreOptionId.EmptyFiles);
             await UiTestDriver.WaitForSettledFramesAsync(frameCount: 6);
-            var intermediateExpected = await ComputeExpectedAppliedMetricsAsync(project.RootPath, window);
+            var intermediateExpected = await ComputeProjectedMetricsFromSettingsAsync(project.RootPath, window);
 
             await UiTestDriver.ClickRootFolderCheckBoxAsync(window, "docs");
             await UiTestDriver.ClickRootFolderCheckBoxAsync(window, "samples");
@@ -130,10 +130,12 @@ public sealed class MainWindowProjectLoadWorkflowUiTests
             await UiTestDriver.ClickIgnoreOptionCheckBoxAsync(window, IgnoreOptionId.ExtensionlessFiles);
             await UiTestDriver.WaitForSettledFramesAsync(frameCount: 10);
 
-            var pendingFinalExpected = await ComputeExpectedAppliedMetricsAsync(project.RootPath, window);
+            var pendingFinalExpected = await ComputeProjectedMetricsFromSettingsAsync(project.RootPath, window);
             Assert.NotEqual(intermediateExpected.TreeMetrics, pendingFinalExpected.TreeMetrics);
 
-            var finalExpected = await ApplySettingsAndWaitForExpectedMetricsAsync(project.RootPath, window);
+            var finalExpected = await ApplySettingsAndWaitForExpectedMetricsAsync(window);
+            Assert.Equal(pendingFinalExpected.TreeMetrics, finalExpected.TreeMetrics);
+            Assert.Equal(pendingFinalExpected.ContentMetrics, finalExpected.ContentMetrics);
 
             var viewModel = UiTestDriver.GetViewModel(window);
             Assert.True(UiTestDriver.TryParseStatusMetrics(viewModel.StatusTreeStatsText, out var finalTreeMetrics));
@@ -182,7 +184,7 @@ public sealed class MainWindowProjectLoadWorkflowUiTests
 
         try
         {
-            var baseline = await ComputeExpectedAppliedMetricsAsync(project.RootPath, window);
+            var baseline = await ComputeExpectedAppliedMetricsAsync(window);
             await UiTestDriver.WaitForStatusMetricsAsync(window, baseline.TreeMetrics, baseline.ContentMetrics);
 
             await UiTestDriver.ClickIgnoreOptionCheckBoxAsync(window, IgnoreOptionId.UseGitIgnore);
@@ -208,7 +210,7 @@ public sealed class MainWindowProjectLoadWorkflowUiTests
                 },
                 "pending gitignore change to leave the applied status bar unchanged");
 
-            await ApplySettingsAndWaitForExpectedMetricsAsync(project.RootPath, window);
+            await ApplySettingsAndWaitForExpectedMetricsAsync(window);
         }
         finally
         {
@@ -224,17 +226,17 @@ public sealed class MainWindowProjectLoadWorkflowUiTests
 
         try
         {
-            var baseline = await ComputeExpectedAppliedMetricsAsync(project.RootPath, window);
+            var baseline = await ComputeExpectedAppliedMetricsAsync(window);
             await UiTestDriver.WaitForStatusMetricsAsync(window, baseline.TreeMetrics, baseline.ContentMetrics);
 
             await UiTestDriver.ClickIgnoreOptionCheckBoxAsync(window, IgnoreOptionId.UseGitIgnore);
             await UiTestDriver.WaitForSettledFramesAsync(frameCount: 10);
-            var disabledExpected = await ApplySettingsAndWaitForExpectedMetricsAsync(project.RootPath, window);
+            var disabledExpected = await ApplySettingsAndWaitForExpectedMetricsAsync(window);
             AssertMetricsChanged(baseline, disabledExpected, "gitignore round-trip disable");
 
             await UiTestDriver.ClickIgnoreOptionCheckBoxAsync(window, IgnoreOptionId.UseGitIgnore);
             await UiTestDriver.WaitForSettledFramesAsync(frameCount: 10);
-            var restoredExpected = await ApplySettingsAndWaitForExpectedMetricsAsync(project.RootPath, window);
+            var restoredExpected = await ApplySettingsAndWaitForExpectedMetricsAsync(window);
             Assert.Equal(baseline.TreeMetrics, restoredExpected.TreeMetrics);
             Assert.Equal(baseline.ContentMetrics, restoredExpected.ContentMetrics);
         }
@@ -255,11 +257,9 @@ public sealed class MainWindowProjectLoadWorkflowUiTests
         try
         {
             var finalExpectedA = await ApplyCombinedScenarioAsync(
-                project.RootPath,
                 windowA,
                 [WorkflowUiMutationStep.Roots, WorkflowUiMutationStep.Extensions, WorkflowUiMutationStep.Ignore]);
             var finalExpectedB = await ApplyCombinedScenarioAsync(
-                project.RootPath,
                 windowB,
                 [WorkflowUiMutationStep.Ignore, WorkflowUiMutationStep.Extensions, WorkflowUiMutationStep.Roots]);
 
@@ -283,9 +283,9 @@ public sealed class MainWindowProjectLoadWorkflowUiTests
 
         try
         {
-            var baselineA = await ComputeExpectedAppliedMetricsAsync(project.RootPath, windowA);
+            var baselineA = await ComputeExpectedAppliedMetricsAsync(windowA);
             await UiTestDriver.WaitForStatusMetricsAsync(windowA, baselineA.TreeMetrics, baselineA.ContentMetrics);
-            var baselineB = await ComputeExpectedAppliedMetricsAsync(project.RootPath, windowB);
+            var baselineB = await ComputeExpectedAppliedMetricsAsync(windowB);
             await UiTestDriver.WaitForStatusMetricsAsync(windowB, baselineB.TreeMetrics, baselineB.ContentMetrics);
 
             await ApplyPendingCombinedScenarioAsync(windowA, [WorkflowUiMutationStep.Roots, WorkflowUiMutationStep.Extensions, WorkflowUiMutationStep.Ignore]);
@@ -309,17 +309,16 @@ public sealed class MainWindowProjectLoadWorkflowUiTests
 
         try
         {
-            var baseline = await ComputeExpectedAppliedMetricsAsync(project.RootPath, window);
+            var baseline = await ComputeExpectedAppliedMetricsAsync(window);
             await UiTestDriver.WaitForStatusMetricsAsync(window, baseline.TreeMetrics, baseline.ContentMetrics);
 
             var changed = await ApplyCombinedScenarioAsync(
-                project.RootPath,
                 window,
                 [WorkflowUiMutationStep.Roots, WorkflowUiMutationStep.Extensions, WorkflowUiMutationStep.Ignore]);
             AssertMetricsChanged(baseline, changed, "combined all-sections scenario");
 
             await ApplyPendingCombinedScenarioAsync(window, [WorkflowUiMutationStep.Ignore, WorkflowUiMutationStep.Extensions, WorkflowUiMutationStep.Roots]);
-            var restored = await ApplySettingsAndWaitForExpectedMetricsAsync(project.RootPath, window);
+            var restored = await ApplySettingsAndWaitForExpectedMetricsAsync(window);
             Assert.Equal(baseline.TreeMetrics, restored.TreeMetrics);
             Assert.Equal(baseline.ContentMetrics, restored.ContentMetrics);
             AssertVisibleAdvancedIgnoreOptionsCarryPositiveCounts(UiTestDriver.GetViewModel(window).IgnoreOptions);
@@ -338,7 +337,7 @@ public sealed class MainWindowProjectLoadWorkflowUiTests
 
         try
         {
-            var baseline = await ComputeExpectedAppliedMetricsAsync(project.RootPath, window);
+            var baseline = await ComputeExpectedAppliedMetricsAsync(window);
             await UiTestDriver.WaitForStatusMetricsAsync(window, baseline.TreeMetrics, baseline.ContentMetrics);
 
             var checkedRoots = UiTestDriver.GetViewModel(window).RootFolders
@@ -352,10 +351,10 @@ public sealed class MainWindowProjectLoadWorkflowUiTests
                 await UiTestDriver.ClickRootFolderCheckBoxAsync(window, rootName);
                 await UiTestDriver.WaitForSettledFramesAsync(frameCount: 8);
 
-                var expectedWithoutRoot = await ComputeExpectedAppliedMetricsAsync(project.RootPath, window);
+                var expectedWithoutRoot = await ComputeProjectedMetricsFromSettingsAsync(project.RootPath, window);
                 AssertMetricsChanged(baseline, expectedWithoutRoot, $"root folder '{rootName}'");
 
-                var appliedWithoutRoot = await ApplySettingsAndWaitForExpectedMetricsAsync(project.RootPath, window);
+                var appliedWithoutRoot = await ApplySettingsAndWaitForExpectedMetricsAsync(window);
                 Assert.False(UiTestDriver.GetViewModel(window).RootFolders.First(option => option.Name == rootName).IsChecked);
                 Assert.Equal(expectedWithoutRoot.TreeMetrics, appliedWithoutRoot.TreeMetrics);
                 Assert.Equal(expectedWithoutRoot.ContentMetrics, appliedWithoutRoot.ContentMetrics);
@@ -363,11 +362,11 @@ public sealed class MainWindowProjectLoadWorkflowUiTests
                 await UiTestDriver.ClickRootFolderCheckBoxAsync(window, rootName);
                 await UiTestDriver.WaitForSettledFramesAsync(frameCount: 8);
 
-                var restoredExpected = await ComputeExpectedAppliedMetricsAsync(project.RootPath, window);
+                var restoredExpected = await ComputeProjectedMetricsFromSettingsAsync(project.RootPath, window);
                 Assert.Equal(baseline.TreeMetrics, restoredExpected.TreeMetrics);
                 Assert.Equal(baseline.ContentMetrics, restoredExpected.ContentMetrics);
 
-                var appliedRestored = await ApplySettingsAndWaitForExpectedMetricsAsync(project.RootPath, window);
+                var appliedRestored = await ApplySettingsAndWaitForExpectedMetricsAsync(window);
                 Assert.True(UiTestDriver.GetViewModel(window).RootFolders.First(option => option.Name == rootName).IsChecked);
                 Assert.Equal(baseline.TreeMetrics, appliedRestored.TreeMetrics);
                 Assert.Equal(baseline.ContentMetrics, appliedRestored.ContentMetrics);
@@ -387,7 +386,7 @@ public sealed class MainWindowProjectLoadWorkflowUiTests
 
         try
         {
-            var baseline = await ComputeExpectedAppliedMetricsAsync(project.RootPath, window);
+            var baseline = await ComputeExpectedAppliedMetricsAsync(window);
             await UiTestDriver.WaitForStatusMetricsAsync(window, baseline.TreeMetrics, baseline.ContentMetrics);
 
             var checkedExtensions = UiTestDriver.GetViewModel(window).Extensions
@@ -406,10 +405,10 @@ public sealed class MainWindowProjectLoadWorkflowUiTests
                 await UiTestDriver.ClickExtensionCheckBoxAsync(window, extension);
                 await UiTestDriver.WaitForSettledFramesAsync(frameCount: 8);
 
-                var expectedWithoutExtension = await ComputeExpectedAppliedMetricsAsync(project.RootPath, window);
+                var expectedWithoutExtension = await ComputeProjectedMetricsFromSettingsAsync(project.RootPath, window);
                 AssertMetricsChanged(baseline, expectedWithoutExtension, $"extension '{extension}'");
 
-                var appliedWithoutExtension = await ApplySettingsAndWaitForExpectedMetricsAsync(project.RootPath, window);
+                var appliedWithoutExtension = await ApplySettingsAndWaitForExpectedMetricsAsync(window);
                 Assert.False(UiTestDriver.GetViewModel(window).Extensions.First(option => option.Name == extension).IsChecked);
                 Assert.Equal(expectedWithoutExtension.TreeMetrics, appliedWithoutExtension.TreeMetrics);
                 Assert.Equal(expectedWithoutExtension.ContentMetrics, appliedWithoutExtension.ContentMetrics);
@@ -417,11 +416,11 @@ public sealed class MainWindowProjectLoadWorkflowUiTests
                 await UiTestDriver.ClickExtensionCheckBoxAsync(window, extension);
                 await UiTestDriver.WaitForSettledFramesAsync(frameCount: 8);
 
-                var restoredExpected = await ComputeExpectedAppliedMetricsAsync(project.RootPath, window);
+                var restoredExpected = await ComputeProjectedMetricsFromSettingsAsync(project.RootPath, window);
                 Assert.Equal(baseline.TreeMetrics, restoredExpected.TreeMetrics);
                 Assert.Equal(baseline.ContentMetrics, restoredExpected.ContentMetrics);
 
-                var appliedRestored = await ApplySettingsAndWaitForExpectedMetricsAsync(project.RootPath, window);
+                var appliedRestored = await ApplySettingsAndWaitForExpectedMetricsAsync(window);
                 Assert.True(UiTestDriver.GetViewModel(window).Extensions.First(option => option.Name == extension).IsChecked);
                 Assert.Equal(baseline.TreeMetrics, appliedRestored.TreeMetrics);
                 Assert.Equal(baseline.ContentMetrics, appliedRestored.ContentMetrics);
@@ -468,16 +467,16 @@ public sealed class MainWindowProjectLoadWorkflowUiTests
 
             try
             {
-                var baseline = await ComputeExpectedAppliedMetricsAsync(project.RootPath, window);
+                var baseline = await ComputeExpectedAppliedMetricsAsync(window);
                 await UiTestDriver.WaitForStatusMetricsAsync(window, baseline.TreeMetrics, baseline.ContentMetrics);
 
                 await UiTestDriver.ClickIgnoreOptionCheckBoxAsync(window, optionId);
                 await UiTestDriver.WaitForSettledFramesAsync(frameCount: 10);
 
-                var expectedWithoutOption = await ComputeExpectedAppliedMetricsAsync(project.RootPath, window);
+                var expectedWithoutOption = await ComputeProjectedMetricsFromSettingsAsync(project.RootPath, window);
                 AssertMetricsChanged(baseline, expectedWithoutOption, $"ignore option '{optionId}'");
 
-                var appliedWithoutOption = await ApplySettingsAndWaitForExpectedMetricsAsync(project.RootPath, window);
+                var appliedWithoutOption = await ApplySettingsAndWaitForExpectedMetricsAsync(window);
                 Assert.False(UiTestDriver.GetViewModel(window).IgnoreOptions.First(option => option.Id == optionId).IsChecked);
                 Assert.Equal(expectedWithoutOption.TreeMetrics, appliedWithoutOption.TreeMetrics);
                 Assert.Equal(expectedWithoutOption.ContentMetrics, appliedWithoutOption.ContentMetrics);
@@ -498,7 +497,7 @@ public sealed class MainWindowProjectLoadWorkflowUiTests
 
         try
         {
-            var baseline = await ComputeExpectedAppliedMetricsAsync(project.RootPath, window);
+            var baseline = await ComputeExpectedAppliedMetricsAsync(window);
             await UiTestDriver.WaitForStatusMetricsAsync(window, baseline.TreeMetrics, baseline.ContentMetrics);
 
             await UiTestDriver.ClickRootFolderCheckBoxAsync(window, "docs");
@@ -521,11 +520,11 @@ public sealed class MainWindowProjectLoadWorkflowUiTests
 
             await UiTestDriver.WaitForSettledFramesAsync(frameCount: 10);
 
-            var revertedExpected = await ComputeExpectedAppliedMetricsAsync(project.RootPath, window);
+            var revertedExpected = await ComputeProjectedMetricsFromSettingsAsync(project.RootPath, window);
             Assert.Equal(baseline.TreeMetrics, revertedExpected.TreeMetrics);
             Assert.Equal(baseline.ContentMetrics, revertedExpected.ContentMetrics);
 
-            var appliedRestored = await ApplySettingsAndWaitForExpectedMetricsAsync(project.RootPath, window);
+            var appliedRestored = await ApplySettingsAndWaitForExpectedMetricsAsync(window);
             Assert.Equal(baseline.TreeMetrics, appliedRestored.TreeMetrics);
             Assert.Equal(baseline.ContentMetrics, appliedRestored.ContentMetrics);
             AssertVisibleAdvancedIgnoreOptionsCarryPositiveCounts(UiTestDriver.GetViewModel(window).IgnoreOptions);
@@ -537,6 +536,12 @@ public sealed class MainWindowProjectLoadWorkflowUiTests
     }
 
     private static async Task<ProjectLoadWorkflowRuntime.ProjectLoadWorkflowMetrics> ComputeExpectedAppliedMetricsAsync(
+        MainWindow window)
+    {
+        return await UiTestDriver.ComputeAppliedExportMetricsAsync(window, CancellationToken.None);
+    }
+
+    private static async Task<ProjectLoadWorkflowRuntime.ProjectLoadWorkflowMetrics> ComputeProjectedMetricsFromSettingsAsync(
         string rootPath,
         MainWindow window)
     {
@@ -580,21 +585,19 @@ public sealed class MainWindowProjectLoadWorkflowUiTests
     }
 
     private static async Task<ProjectLoadWorkflowRuntime.ProjectLoadWorkflowMetrics> ApplyCombinedScenarioAsync(
-        string rootPath,
         MainWindow window,
         IReadOnlyList<WorkflowUiMutationStep> order)
     {
         await ApplyPendingCombinedScenarioAsync(window, order);
-        return await ApplySettingsAndWaitForExpectedMetricsAsync(rootPath, window);
+        return await ApplySettingsAndWaitForExpectedMetricsAsync(window);
     }
 
     private static async Task<ProjectLoadWorkflowRuntime.ProjectLoadWorkflowMetrics> ApplySettingsAndWaitForExpectedMetricsAsync(
-        string rootPath,
         MainWindow window)
     {
         await UiTestDriver.ClickApplySettingsAsync(window);
 
-        var expected = await ComputeExpectedAppliedMetricsAsync(rootPath, window);
+        var expected = await ComputeExpectedAppliedMetricsAsync(window);
         await UiTestDriver.WaitForStatusMetricsAsync(
             window,
             expected.TreeMetrics,
