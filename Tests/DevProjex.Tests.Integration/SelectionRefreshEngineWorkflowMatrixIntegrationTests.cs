@@ -15,21 +15,20 @@ public sealed class SelectionRefreshEngineWorkflowMatrixIntegrationTests
         string workflowCaseName)
     {
         var workflowCase = GetWorkflowCase(workflowCaseName);
-        using var temp = new TemporaryDirectory();
-        ProjectLoadWorkflowWorkspaceSeeder.Seed(temp.Path);
+        var rootPath = ProjectLoadWorkflowSharedWorkspace.RootPath;
 
         var services = CreateServices();
         var firstSnapshot = services.Engine.ComputeFullRefreshSnapshot(
-            workflowCase.CreateContext(temp.Path),
+            workflowCase.CreateContext(rootPath),
             CancellationToken.None);
 
         workflowCase.AssertSnapshot(firstSnapshot);
         AssertVisibleAdvancedIgnoreOptionsCarryPositiveCounts(firstSnapshot);
 
-        var firstMetrics = await ComputeMetricsFromSnapshotAsync(temp.Path, firstSnapshot, services);
+        var firstMetrics = await ComputeMetricsFromSnapshotAsync(rootPath, firstSnapshot, services);
 
         var secondSnapshot = services.Engine.ComputeFullRefreshSnapshot(
-            BuildConvergedContext(temp.Path, firstSnapshot, workflowCase.PreparedSelectionMode),
+            BuildConvergedContext(rootPath, firstSnapshot, workflowCase.PreparedSelectionMode),
             CancellationToken.None);
 
         if (RequiresDeferredProfileReconciliation(workflowCaseName))
@@ -38,7 +37,7 @@ public sealed class SelectionRefreshEngineWorkflowMatrixIntegrationTests
             AssertDeferredProfileReconciliation(firstSnapshot, secondSnapshot, workflowCaseName);
             AssertVisibleAdvancedIgnoreOptionsCarryPositiveCounts(secondSnapshot);
 
-            var reconciledMetrics = await ComputeMetricsFromSnapshotAsync(temp.Path, secondSnapshot, services);
+            var reconciledMetrics = await ComputeMetricsFromSnapshotAsync(rootPath, secondSnapshot, services);
             Assert.Equal(firstMetrics.TreeMetrics, reconciledMetrics.TreeMetrics);
             Assert.Equal(firstMetrics.ContentMetrics, reconciledMetrics.ContentMetrics);
             return;
@@ -47,7 +46,7 @@ public sealed class SelectionRefreshEngineWorkflowMatrixIntegrationTests
         AssertEquivalentSnapshots(firstSnapshot, secondSnapshot);
         AssertVisibleAdvancedIgnoreOptionsCarryPositiveCounts(secondSnapshot);
 
-        var secondMetrics = await ComputeMetricsFromSnapshotAsync(temp.Path, secondSnapshot, services);
+        var secondMetrics = await ComputeMetricsFromSnapshotAsync(rootPath, secondSnapshot, services);
         Assert.Equal(firstMetrics.TreeMetrics, secondMetrics.TreeMetrics);
         Assert.Equal(firstMetrics.ContentMetrics, secondMetrics.ContentMetrics);
     }

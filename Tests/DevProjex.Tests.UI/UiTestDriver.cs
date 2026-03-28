@@ -103,40 +103,45 @@ internal static class UiTestDriver
 
     public static CheckBox GetRequiredIgnoreOptionCheckBox(MainWindow window, IgnoreOptionId optionId)
     {
-        var checkBox = window
-            .GetVisualDescendants()
-            .OfType<CheckBox>()
-            .FirstOrDefault(control => control.DataContext is IgnoreOptionViewModel option &&
-                                       option.Id == optionId &&
-                                       IsInteractableWithinWindow(control, window));
+        var checkBox = FindIgnoreOptionCheckBox(window, optionId);
 
         return Assert.IsType<CheckBox>(checkBox);
     }
 
     public static CheckBox GetRequiredRootFolderCheckBox(MainWindow window, string rootFolderName)
     {
-        var checkBox = window
-            .GetVisualDescendants()
-            .OfType<CheckBox>()
-            .FirstOrDefault(control => control.DataContext is SelectionOptionViewModel option &&
-                                       string.Equals(option.Name, rootFolderName, StringComparison.Ordinal) &&
-                                       IsInteractableWithinWindow(control, window));
+        var checkBox = FindRootFolderCheckBox(window, rootFolderName);
 
         return Assert.IsType<CheckBox>(checkBox);
     }
 
     public static CheckBox GetRequiredExtensionCheckBox(MainWindow window, string extensionName)
     {
-        var checkBox = window
-            .GetVisualDescendants()
-            .OfType<CheckBox>()
-            .FirstOrDefault(control => control.DataContext is SelectionOptionViewModel option &&
-                                       string.Equals(option.Name, extensionName, StringComparison.Ordinal) &&
-                                       GetViewModel(window).Extensions.Contains(option) &&
-                                       IsInteractableWithinWindow(control, window));
+        var checkBox = FindExtensionCheckBox(window, extensionName);
 
         return Assert.IsType<CheckBox>(checkBox);
     }
+
+    public static async Task ClickRootFolderCheckBoxAsync(MainWindow window, string rootFolderName)
+    {
+        var checkBox = await WaitForRootFolderCheckBoxAsync(window, rootFolderName);
+        await ClickAsync(window, checkBox);
+    }
+
+    public static async Task ClickExtensionCheckBoxAsync(MainWindow window, string extensionName)
+    {
+        var checkBox = await WaitForExtensionCheckBoxAsync(window, extensionName);
+        await ClickAsync(window, checkBox);
+    }
+
+    public static async Task ClickIgnoreOptionCheckBoxAsync(MainWindow window, IgnoreOptionId optionId)
+    {
+        var checkBox = await WaitForIgnoreOptionCheckBoxAsync(window, optionId);
+        await ClickAsync(window, checkBox);
+    }
+
+    public static async Task ClickApplySettingsAsync(MainWindow window)
+        => await ClickAsync(window, GetRequiredApplySettingsButton(window));
 
     public static Button GetRequiredApplySettingsButton(MainWindow window)
     {
@@ -354,9 +359,13 @@ internal static class UiTestDriver
     public static async Task WaitForStatusMetricsAsync(
         MainWindow window,
         ExportOutputMetrics expectedTreeMetrics,
-        ExportOutputMetrics expectedContentMetrics)
+        ExportOutputMetrics expectedContentMetrics,
+        bool waitForSelectionRefreshIdle = true)
     {
-        await WaitForSelectionRefreshIdleAsync(window, TimeSpan.FromSeconds(30));
+        if (waitForSelectionRefreshIdle)
+            await WaitForSelectionRefreshIdleAsync(window, TimeSpan.FromSeconds(30));
+
+        await WaitForStatusMetricsReadyAsync(window);
 
         await WaitForConditionAsync(
             window,
@@ -379,6 +388,17 @@ internal static class UiTestDriver
             timeout: TimeSpan.FromSeconds(30));
 
         await WaitForSettledFramesAsync(frameCount: 12);
+    }
+
+    public static async Task WaitForStatusMetricsReadyAsync(MainWindow window, TimeSpan? timeout = null)
+    {
+        await WaitForConditionAsync(
+            window,
+            () => TryGetCurrentStatusMetrics(window, out _, out _),
+            "status metrics to become visible and parsable",
+            timeout ?? TimeSpan.FromSeconds(30));
+
+        await WaitForSettledFramesAsync(frameCount: 6);
     }
 
     public static bool TryParseStatusMetrics(string text, out ExportOutputMetrics metrics)
@@ -435,6 +455,26 @@ internal static class UiTestDriver
             effectiveTimeout);
 
         await WaitForSettledFramesAsync(frameCount: 6);
+    }
+
+    public static bool TryGetCurrentStatusMetrics(
+        MainWindow window,
+        out ExportOutputMetrics treeMetrics,
+        out ExportOutputMetrics contentMetrics)
+    {
+        treeMetrics = ExportOutputMetrics.Empty;
+        contentMetrics = ExportOutputMetrics.Empty;
+
+        var viewModel = GetViewModel(window);
+        if (!viewModel.StatusMetricsVisible ||
+            string.IsNullOrWhiteSpace(viewModel.StatusTreeStatsText) ||
+            string.IsNullOrWhiteSpace(viewModel.StatusContentStatsText))
+        {
+            return false;
+        }
+
+        return TryParseStatusMetrics(viewModel.StatusTreeStatsText, out treeMetrics) &&
+               TryParseStatusMetrics(viewModel.StatusContentStatsText, out contentMetrics);
     }
 
     public static async Task SwitchPreviewModeAsync(MainWindow window, PreviewContentMode mode)
@@ -720,6 +760,67 @@ internal static class UiTestDriver
 
     private static bool IsInteractableWithinWindow(Control control, MainWindow window)
         => control.IsVisible && control.TranslatePoint(default, window).HasValue;
+
+    private static CheckBox? FindIgnoreOptionCheckBox(MainWindow window, IgnoreOptionId optionId)
+    {
+        return window
+            .GetVisualDescendants()
+            .OfType<CheckBox>()
+            .FirstOrDefault(control => control.DataContext is IgnoreOptionViewModel option &&
+                                       option.Id == optionId &&
+                                       IsInteractableWithinWindow(control, window));
+    }
+
+    private static CheckBox? FindRootFolderCheckBox(MainWindow window, string rootFolderName)
+    {
+        return window
+            .GetVisualDescendants()
+            .OfType<CheckBox>()
+            .FirstOrDefault(control => control.DataContext is SelectionOptionViewModel option &&
+                                       string.Equals(option.Name, rootFolderName, StringComparison.Ordinal) &&
+                                       IsInteractableWithinWindow(control, window));
+    }
+
+    private static CheckBox? FindExtensionCheckBox(MainWindow window, string extensionName)
+    {
+        return window
+            .GetVisualDescendants()
+            .OfType<CheckBox>()
+            .FirstOrDefault(control => control.DataContext is SelectionOptionViewModel option &&
+                                       string.Equals(option.Name, extensionName, StringComparison.Ordinal) &&
+                                       GetViewModel(window).Extensions.Contains(option) &&
+                                       IsInteractableWithinWindow(control, window));
+    }
+
+    private static async Task<CheckBox> WaitForRootFolderCheckBoxAsync(MainWindow window, string rootFolderName)
+    {
+        await WaitForConditionAsync(
+            window,
+            () => FindRootFolderCheckBox(window, rootFolderName) is not null,
+            $"root folder checkbox '{rootFolderName}' to become interactable");
+
+        return GetRequiredRootFolderCheckBox(window, rootFolderName);
+    }
+
+    private static async Task<CheckBox> WaitForExtensionCheckBoxAsync(MainWindow window, string extensionName)
+    {
+        await WaitForConditionAsync(
+            window,
+            () => FindExtensionCheckBox(window, extensionName) is not null,
+            $"extension checkbox '{extensionName}' to become interactable");
+
+        return GetRequiredExtensionCheckBox(window, extensionName);
+    }
+
+    private static async Task<CheckBox> WaitForIgnoreOptionCheckBoxAsync(MainWindow window, IgnoreOptionId optionId)
+    {
+        await WaitForConditionAsync(
+            window,
+            () => FindIgnoreOptionCheckBox(window, optionId) is not null,
+            $"ignore checkbox '{optionId}' to become interactable");
+
+        return GetRequiredIgnoreOptionCheckBox(window, optionId);
+    }
 
     private static DevProjex.Avalonia.Coordinators.SelectionSyncCoordinator GetSelectionCoordinator(MainWindow window)
     {

@@ -6,11 +6,13 @@ internal sealed class UiTestProject : IDisposable
 {
     private readonly string _rootPath;
     private readonly string _appDataPath;
+    private readonly bool _ownsWorkspaceRoot;
 
-    private UiTestProject(string rootPath, string appDataPath)
+    private UiTestProject(string rootPath, string appDataPath, bool ownsWorkspaceRoot)
     {
         _rootPath = rootPath;
         _appDataPath = appDataPath;
+        _ownsWorkspaceRoot = ownsWorkspaceRoot;
     }
 
     public string RootPath => _rootPath;
@@ -85,10 +87,7 @@ internal sealed class UiTestProject : IDisposable
 
     public static UiTestProject CreateWithProjectLoadWorkflowWorkspace()
     {
-        return Create(static rootPath =>
-        {
-            ProjectLoadWorkflowWorkspaceSeeder.Seed(rootPath);
-        });
+        return CreateForSharedWorkspace(ProjectLoadWorkflowSharedWorkspace.RootPath);
     }
 
     private static UiTestProject Create(Action<string> seedWorkspace)
@@ -105,25 +104,50 @@ internal sealed class UiTestProject : IDisposable
         Directory.CreateDirectory(appDataPath);
         seedWorkspace(rootPath);
 
-        return new UiTestProject(rootPath, appDataPath);
+        return new UiTestProject(rootPath, appDataPath, ownsWorkspaceRoot: true);
+    }
+
+    private static UiTestProject CreateForSharedWorkspace(string sharedRootPath)
+    {
+        var appDataPath = Path.Combine(
+            Path.GetTempPath(),
+            "DevProjex",
+            "DevProjex.Tests.UI",
+            Guid.NewGuid().ToString("N"),
+            "appdata");
+        Directory.CreateDirectory(appDataPath);
+
+        // The workflow workspace is intentionally shared across heavy UI tests because the
+        // application never mutates opened projects. Each window still receives an isolated
+        // app-data sandbox, so persisted selection/profile state cannot bleed between tests.
+        return new UiTestProject(sharedRootPath, appDataPath, ownsWorkspaceRoot: false);
     }
 
     public void Dispose()
     {
         try
         {
-            var instanceRoot = Directory.GetParent(_rootPath)?.FullName;
-            if (!string.IsNullOrWhiteSpace(instanceRoot) && Directory.Exists(instanceRoot))
+            if (_ownsWorkspaceRoot)
             {
-                Directory.Delete(instanceRoot, recursive: true);
-                return;
+                var instanceRoot = Directory.GetParent(_rootPath)?.FullName;
+                if (!string.IsNullOrWhiteSpace(instanceRoot) && Directory.Exists(instanceRoot))
+                {
+                    Directory.Delete(instanceRoot, recursive: true);
+                    return;
+                }
+
+                if (Directory.Exists(_rootPath))
+                    Directory.Delete(_rootPath, recursive: true);
             }
 
-            if (Directory.Exists(_rootPath))
-                Directory.Delete(_rootPath, recursive: true);
-
             if (Directory.Exists(_appDataPath))
-                Directory.Delete(_appDataPath, recursive: true);
+            {
+                var appDataInstanceRoot = Directory.GetParent(_appDataPath)?.FullName;
+                if (!string.IsNullOrWhiteSpace(appDataInstanceRoot) && Directory.Exists(appDataInstanceRoot))
+                    Directory.Delete(appDataInstanceRoot, recursive: true);
+                else
+                    Directory.Delete(_appDataPath, recursive: true);
+            }
         }
         catch
         {

@@ -17,32 +17,31 @@ public sealed class ProjectLoadWorkflowCrossSectionStateMatrixIntegrationTests
         var extensionScenario = Enum.Parse<WorkflowExtensionScenario>(extensionScenarioName);
         var ignoreScenario = Enum.Parse<WorkflowIgnoreScenario>(ignoreScenarioName);
 
-        using var temp = new TemporaryDirectory();
-        ProjectLoadWorkflowWorkspaceSeeder.Seed(temp.Path);
+        var rootPath = ProjectLoadWorkflowSharedWorkspace.RootPath;
 
         var services = CreateServices();
         var baselineSnapshot = services.Engine.ComputeFullRefreshSnapshot(
-            CreateDefaultContext(temp.Path),
+            CreateDefaultContext(rootPath),
             CancellationToken.None);
         var scenario = CreateScenario(baselineSnapshot, rootScenario, extensionScenario, ignoreScenario);
 
         var firstSnapshot = services.Engine.ComputeFullRefreshSnapshot(
-            CreateScenarioContext(temp.Path, scenario),
+            CreateScenarioContext(rootPath, scenario),
             CancellationToken.None);
 
         AssertVisibleAdvancedIgnoreOptionsCarryPositiveCounts(firstSnapshot);
         AssertScenarioSelectionContract(firstSnapshot, scenario);
 
         var secondSnapshot = services.Engine.ComputeFullRefreshSnapshot(
-            BuildConvergedContext(temp.Path, firstSnapshot),
+            BuildConvergedContext(rootPath, firstSnapshot),
             CancellationToken.None);
 
         AssertEquivalentSnapshots(firstSnapshot, secondSnapshot);
         AssertVisibleAdvancedIgnoreOptionsCarryPositiveCounts(secondSnapshot);
         AssertScenarioSelectionContract(secondSnapshot, scenario);
 
-        var firstMetrics = await ComputeMetricsFromSnapshotAsync(temp.Path, firstSnapshot);
-        var secondMetrics = await ComputeMetricsFromSnapshotAsync(temp.Path, secondSnapshot);
+        var firstMetrics = await ComputeMetricsFromSnapshotAsync(rootPath, firstSnapshot);
+        var secondMetrics = await ComputeMetricsFromSnapshotAsync(rootPath, secondSnapshot);
         Assert.Equal(firstMetrics.TreeMetrics, secondMetrics.TreeMetrics);
         Assert.Equal(firstMetrics.ContentMetrics, secondMetrics.ContentMetrics);
     }

@@ -17,24 +17,23 @@ public sealed class ProjectLoadWorkflowSectionMutationMatrixIntegrationTests
         string mutationCaseName)
     {
         var mutationCase = GetMutationCase(mutationCaseName);
-        using var temp = new TemporaryDirectory();
-        ProjectLoadWorkflowWorkspaceSeeder.Seed(temp.Path);
+        var rootPath = ProjectLoadWorkflowSharedWorkspace.RootPath;
 
         var services = CreateServices();
         var baselineSnapshot = services.Engine.ComputeFullRefreshSnapshot(
-            CreateDefaultsContext(temp.Path),
+            CreateDefaultsContext(rootPath),
             CancellationToken.None);
-        var baselineMetrics = await ComputeMetricsFromSnapshotAsync(temp.Path, baselineSnapshot);
+        var baselineMetrics = await ComputeMetricsFromSnapshotAsync(rootPath, baselineSnapshot);
 
         var mutatedSnapshot = services.Engine.ComputeFullRefreshSnapshot(
-            mutationCase.CreateContext(temp.Path, baselineSnapshot),
+            mutationCase.CreateContext(rootPath, baselineSnapshot),
             CancellationToken.None);
 
         mutationCase.AssertSnapshot(mutatedSnapshot);
         AssertVisibleAdvancedIgnoreOptionsCarryPositiveCounts(mutatedSnapshot);
 
         var convergedSnapshot = services.Engine.ComputeFullRefreshSnapshot(
-            BuildConvergedContext(temp.Path, mutatedSnapshot),
+            BuildConvergedContext(rootPath, mutatedSnapshot),
             CancellationToken.None);
 
         // A real refresh bug often looks "fine" on the first snapshot and only leaks out
@@ -43,7 +42,7 @@ public sealed class ProjectLoadWorkflowSectionMutationMatrixIntegrationTests
 
         if (mutationCase.RequiresAppliedMetricsChange)
         {
-            var mutatedMetrics = await ComputeMetricsFromSnapshotAsync(temp.Path, mutatedSnapshot);
+            var mutatedMetrics = await ComputeMetricsFromSnapshotAsync(rootPath, mutatedSnapshot);
             Assert.True(
                 mutatedMetrics.TreeMetrics != baselineMetrics.TreeMetrics ||
                 mutatedMetrics.ContentMetrics != baselineMetrics.ContentMetrics,

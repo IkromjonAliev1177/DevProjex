@@ -19,20 +19,19 @@ public sealed class ProjectLoadWorkflowMutationOrderMatrixIntegrationTests
         var ignoreScenario = Enum.Parse<WorkflowIgnoreScenario>(ignoreScenarioName);
         var mutationOrder = mutationOrderNames.Select(name => Enum.Parse<WorkflowMutationStep>(name)).ToArray();
 
-        using var temp = new TemporaryDirectory();
-        ProjectLoadWorkflowWorkspaceSeeder.Seed(temp.Path);
+        var rootPath = ProjectLoadWorkflowSharedWorkspace.RootPath;
 
         var services = CreateServices();
         var baselineSnapshot = services.Engine.ComputeFullRefreshSnapshot(
-            CreateDefaultContext(temp.Path),
+            CreateDefaultContext(rootPath),
             CancellationToken.None);
         var targetScenario = CreateScenario(baselineSnapshot, rootScenario, extensionScenario, ignoreScenario);
 
         var directSnapshot = services.Engine.ComputeFullRefreshSnapshot(
-            CreateScenarioContext(temp.Path, targetScenario),
+            CreateScenarioContext(rootPath, targetScenario),
             CancellationToken.None);
         var directConverged = services.Engine.ComputeFullRefreshSnapshot(
-            BuildConvergedContext(temp.Path, directSnapshot),
+            BuildConvergedContext(rootPath, directSnapshot),
             CancellationToken.None);
 
         AssertEquivalentSnapshots(directSnapshot, directConverged);
@@ -41,20 +40,20 @@ public sealed class ProjectLoadWorkflowMutationOrderMatrixIntegrationTests
         var currentSnapshot = baselineSnapshot;
         foreach (var step in mutationOrder)
         {
-            var stepContext = ApplyScenarioStep(temp.Path, currentSnapshot, targetScenario, step);
+            var stepContext = ApplyScenarioStep(rootPath, currentSnapshot, targetScenario, step);
             currentSnapshot = services.Engine.ComputeFullRefreshSnapshot(stepContext, CancellationToken.None);
         }
 
         var orderedConverged = services.Engine.ComputeFullRefreshSnapshot(
-            BuildConvergedContext(temp.Path, currentSnapshot),
+            BuildConvergedContext(rootPath, currentSnapshot),
             CancellationToken.None);
 
         AssertEquivalentVisibleSnapshots(directConverged, orderedConverged);
         AssertVisibleAdvancedIgnoreOptionsCarryPositiveCounts(orderedConverged);
         AssertScenarioSelectionContract(orderedConverged, targetScenario);
 
-        var directMetrics = await ComputeMetricsFromSnapshotAsync(temp.Path, directConverged);
-        var orderedMetrics = await ComputeMetricsFromSnapshotAsync(temp.Path, orderedConverged);
+        var directMetrics = await ComputeMetricsFromSnapshotAsync(rootPath, directConverged);
+        var orderedMetrics = await ComputeMetricsFromSnapshotAsync(rootPath, orderedConverged);
         Assert.Equal(directMetrics.TreeMetrics, orderedMetrics.TreeMetrics);
         Assert.Equal(directMetrics.ContentMetrics, orderedMetrics.ContentMetrics);
     }

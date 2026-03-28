@@ -11,6 +11,7 @@ permissions:
 env:
   DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
   DOTNET_CLI_TELEMETRY_OPTOUT: true
+  DEVPROJEX_FAST_UI_TESTS: 1
 
 concurrency:
   group: dotnet-ci-${{ github.workflow }}-${{ github.ref }}
@@ -116,7 +117,7 @@ jobs:
           dotnet test ${{ matrix.project_path }}
           -c Release
           --no-build
-          --verbosity normal
+          --verbosity minimal
           --logger "trx;LogFileName=${{ matrix.trx_name }}"
           --results-directory "TestResults/${{ matrix.suite_id }}"
 
@@ -127,7 +128,7 @@ jobs:
           xvfb-run -a dotnet test ${{ matrix.project_path }}
           -c Release
           --no-build
-          --verbosity normal
+          --verbosity minimal
           --logger "trx;LogFileName=${{ matrix.trx_name }}"
           --results-directory "TestResults/${{ matrix.suite_id }}"
 

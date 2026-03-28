@@ -9,6 +9,12 @@ namespace DevProjex.Tests.Shared.ProjectLoadWorkflow;
 
 public static class ProjectLoadWorkflowRuntime
 {
+    // Workflow tests intentionally reuse one immutable seeded workspace. Caching the
+    // expected metrics by normalized selection state keeps the assertions production-accurate
+    // while avoiding hundreds of repeated tree/content rebuilds in CI.
+    private static readonly Lock MetricsCacheLock = new();
+    private static readonly Dictionary<MetricsCacheKey, ProjectLoadWorkflowMetrics> MetricsCache = [];
+
     public static LocalizationService CreateLocalizationService() =>
         new(new WorkflowLocalizationCatalog(), AppLanguage.En);
 
@@ -50,6 +56,14 @@ public static class ProjectLoadWorkflowRuntime
         // drift away from the real BuildTree/Export pipeline on large workspaces.
         var selectedRootSet = new HashSet<string>(selectedRoots, PathComparer.Default);
         var allowedExtensionSet = new HashSet<string>(allowedExtensions, StringComparer.OrdinalIgnoreCase);
+        var cacheKey = MetricsCacheKey.Create(rootPath, selectedRootSet, allowedExtensionSet, selectedIgnoreOptions);
+
+        lock (MetricsCacheLock)
+        {
+            if (MetricsCache.TryGetValue(cacheKey, out var cachedMetrics))
+                return cachedMetrics;
+        }
+
         var ignoreRulesService = CreateIgnoreRulesService();
         var ignoreRules = ignoreRulesService.Build(rootPath, selectedIgnoreOptions, selectedRootSet);
 
@@ -71,7 +85,11 @@ public static class ProjectLoadWorkflowRuntime
             cancellationToken);
         var contentMetrics = ExportOutputMetricsCalculator.FromText(contentText);
 
-        return new ProjectLoadWorkflowMetrics(treeMetrics, contentMetrics);
+        var computedMetrics = new ProjectLoadWorkflowMetrics(treeMetrics, contentMetrics);
+        lock (MetricsCacheLock)
+            MetricsCache[cacheKey] = computedMetrics;
+
+        return computedMetrics;
     }
 
     public static IEnumerable<string> EnumerateAllFiles(TreeNodeDescriptor node)
@@ -98,6 +116,29 @@ public static class ProjectLoadWorkflowRuntime
     public sealed record ProjectLoadWorkflowMetrics(
         ExportOutputMetrics TreeMetrics,
         ExportOutputMetrics ContentMetrics);
+
+    private readonly record struct MetricsCacheKey(
+        string RootPath,
+        string RootsKey,
+        string ExtensionsKey,
+        string IgnoreKey)
+    {
+        public static MetricsCacheKey Create(
+            string rootPath,
+            IEnumerable<string> selectedRoots,
+            IEnumerable<string> allowedExtensions,
+            IEnumerable<IgnoreOptionId> selectedIgnoreOptions)
+        {
+            return new MetricsCacheKey(
+                rootPath,
+                Normalize(selectedRoots, StringComparer.OrdinalIgnoreCase),
+                Normalize(allowedExtensions, StringComparer.OrdinalIgnoreCase),
+                string.Join("|", selectedIgnoreOptions.OrderBy(static option => (int)option).Select(static option => option.ToString())));
+        }
+
+        private static string Normalize(IEnumerable<string> values, StringComparer comparer) =>
+            string.Join("|", values.OrderBy(static value => value, comparer));
+    }
 
     private sealed class WorkflowLocalizationCatalog : ILocalizationCatalog
     {
