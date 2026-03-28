@@ -512,6 +512,7 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
             RaisePropertyChanged(nameof(IsPreviewTreeSelected));
             RaisePropertyChanged(nameof(IsPreviewContentSelected));
             RaisePropertyChanged(nameof(IsPreviewTreeAndContentSelected));
+            RaisePropertyChanged(nameof(PreviewCopyCurrentModeTooltip));
         }
     }
 
@@ -1174,6 +1175,12 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
     public string PreviewSelectionCopy { get; private set; } = string.Empty;
     public string PreviewSelectionSelectAll { get; private set; } = string.Empty;
     public string PreviewSelectionClear { get; private set; } = string.Empty;
+    public string PreviewCopyCurrentModeTooltip => _selectedPreviewContentMode switch
+    {
+        PreviewContentMode.Tree => MenuCopyTree,
+        PreviewContentMode.Content => MenuCopyContent,
+        _ => MenuCopyTreeAndContent
+    };
 
     // StatusBar labels
     public string StatusTreeLabel { get; private set; } = string.Empty;
@@ -1422,6 +1429,7 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         RaisePropertyChanged(nameof(PreviewSelectionCopy));
         RaisePropertyChanged(nameof(PreviewSelectionSelectAll));
         RaisePropertyChanged(nameof(PreviewSelectionClear));
+        RaisePropertyChanged(nameof(PreviewCopyCurrentModeTooltip));
 
         // StatusBar labels
         RaisePropertyChanged(nameof(StatusTreeLabel));

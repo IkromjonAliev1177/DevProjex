@@ -109,6 +109,65 @@ public sealed class MainWindowPreviewUiTests(UiWorkspaceFixture workspace)
     }
 
     [AvaloniaFact]
+    public async Task PreviewCopyButton_IsPlacedBeforeModeSelector_AndMatchesCloseButtonSize()
+    {
+        var window = await UiTestDriver.CreateLoadedMainWindowAsync(workspace.Project);
+
+        try
+        {
+            await UiTestDriver.OpenPreviewAsync(window);
+
+            var copyButton = UiTestDriver.GetRequiredControl<Button>(window, "PreviewCopyButton");
+            var segmentedControl = UiTestDriver.GetRequiredControl<Border>(window, "PreviewSegmentedControl");
+            var closeButton = UiTestDriver.GetRequiredControl<Button>(window, "PreviewCloseButton");
+
+            var copyBounds = UiTestDriver.GetBoundsInWindow(copyButton, window);
+            var segmentedBounds = UiTestDriver.GetBoundsInWindow(segmentedControl, window);
+            var closeBounds = UiTestDriver.GetBoundsInWindow(closeButton, window);
+
+            Assert.True(copyBounds.Left < segmentedBounds.Left);
+            Assert.InRange(segmentedBounds.Left - copyBounds.Right, 0, 12);
+            Assert.InRange(Math.Abs(copyBounds.Width - closeBounds.Width), 0, 1.5);
+            Assert.InRange(Math.Abs(copyBounds.Height - closeBounds.Height), 0, 1.5);
+        }
+        finally
+        {
+            await UiTestDriver.CloseWindowAsync(window);
+        }
+    }
+
+    [AvaloniaFact]
+    public async Task PreviewCopyButton_CopiesPayloadForActivePreviewMode()
+    {
+        var window = await UiTestDriver.CreateLoadedMainWindowAsync(workspace.Project);
+
+        try
+        {
+            await UiTestDriver.OpenPreviewAsync(window);
+
+            foreach (var mode in new[]
+                     {
+                         PreviewContentMode.Tree,
+                         PreviewContentMode.Content,
+                         PreviewContentMode.TreeAndContent
+                     })
+            {
+                await UiTestDriver.SwitchPreviewModeAsync(window, mode);
+                var expectedText = await UiTestDriver.ComputeAppliedPreviewCopyPayloadAsync(window, mode);
+                Assert.False(string.IsNullOrWhiteSpace(expectedText));
+
+                await UiTestDriver.SetClipboardTextAsync(window, $"preview-copy-sentinel-{mode}-{Guid.NewGuid():N}");
+                await UiTestDriver.ClickPreviewCopyButtonAsync(window);
+                await UiTestDriver.WaitForClipboardTextAsync(window, expectedText);
+            }
+        }
+        finally
+        {
+            await UiTestDriver.CloseWindowAsync(window);
+        }
+    }
+
+    [AvaloniaFact]
     public async Task TreeHideButton_SwitchesPreviewToPreviewOnly()
     {
         var window = await UiTestDriver.CreateLoadedMainWindowAsync(workspace.Project);

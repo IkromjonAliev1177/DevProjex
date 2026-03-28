@@ -239,6 +239,12 @@ internal static class UiTestDriver
         await WaitForPreviewClosedAsync(window);
     }
 
+    public static async Task ClickPreviewCopyButtonAsync(MainWindow window)
+    {
+        var previewCopyButton = GetRequiredControl<Button>(window, "PreviewCopyButton");
+        await ClickAsync(window, previewCopyButton);
+    }
+
     public static async Task WaitForPreviewClosedAsync(MainWindow window)
     {
         await WaitForConditionAsync(
@@ -438,6 +444,96 @@ internal static class UiTestDriver
         var contentMetrics = ExportOutputMetricsCalculator.FromText(contentText);
 
         return new ProjectLoadWorkflowRuntime.ProjectLoadWorkflowMetrics(treeMetrics, contentMetrics);
+    }
+
+    public static async Task<string> ComputeAppliedPreviewCopyPayloadAsync(
+        MainWindow window,
+        PreviewContentMode mode,
+        CancellationToken cancellationToken = default)
+    {
+        await WaitForSelectionRefreshIdleAsync(window);
+
+        var currentTree = GetRequiredPrivateField<BuildTreeResult>(window, "_currentTree");
+        var currentPath = GetRequiredPrivateField<string>(window, "_currentPath");
+        var treeExport = GetRequiredPrivateField<TreeExportService>(window, "_treeExport");
+        var contentExport = GetRequiredPrivateField<SelectedContentExportService>(window, "_contentExport");
+        var treeAndContentExport = GetRequiredPrivateField<TreeAndContentExportService>(window, "_treeAndContentExport");
+        var selectedPaths = CollectCheckedPaths(GetViewModel(window));
+        var hasSelection = selectedPaths.Count > 0;
+        var treeFormat = InvokePrivateMethod<TreeTextFormat>(window, "GetCurrentTreeTextFormat");
+        var pathPresentation = InvokePrivateMethodAllowNull<ExportPathPresentation>(window, "CreateExportPathPresentation");
+
+        return mode switch
+        {
+            PreviewContentMode.Tree => hasSelection
+                ? treeExport.BuildSelectedTree(
+                    currentPath,
+                    currentTree.Root,
+                    selectedPaths,
+                    treeFormat,
+                    pathPresentation?.DisplayRootPath,
+                    pathPresentation?.DisplayRootName)
+                : treeExport.BuildFullTree(
+                    currentPath,
+                    currentTree.Root,
+                    treeFormat,
+                    pathPresentation?.DisplayRootPath,
+                    pathPresentation?.DisplayRootName),
+            PreviewContentMode.Content => await contentExport.BuildAsync(
+                hasSelection
+                    ? BuildOrderedSelectedFilePaths(selectedPaths)
+                    : BuildOrderedAllFilePaths(currentTree.Root),
+                cancellationToken,
+                pathPresentation?.MapFilePath),
+            PreviewContentMode.TreeAndContent => await treeAndContentExport.BuildAsync(
+                currentPath,
+                currentTree.Root,
+                selectedPaths,
+                treeFormat,
+                cancellationToken,
+                pathPresentation),
+            _ => throw new ArgumentOutOfRangeException(nameof(mode), mode, null)
+        };
+    }
+
+    public static async Task SetClipboardTextAsync(MainWindow window, string content)
+    {
+        var clipboard = TopLevel.GetTopLevel(window)?.Clipboard;
+        Assert.NotNull(clipboard);
+        await clipboard.SetTextAsync(content);
+        await WaitForSettledFramesAsync(frameCount: 2);
+    }
+
+    public static async Task<string?> GetClipboardTextAsync(MainWindow window)
+    {
+        var clipboard = TopLevel.GetTopLevel(window)?.Clipboard;
+        Assert.NotNull(clipboard);
+        return await global::Avalonia.Input.Platform.ClipboardExtensions.TryGetTextAsync(clipboard);
+    }
+
+    public static async Task WaitForClipboardTextAsync(
+        MainWindow window,
+        string expectedText,
+        TimeSpan? timeout = null)
+    {
+        var deadline = DateTime.UtcNow + (timeout ?? TimeSpan.FromSeconds(20));
+        string? lastClipboardText = null;
+
+        while (DateTime.UtcNow < deadline)
+        {
+            lastClipboardText = await GetClipboardTextAsync(window);
+            if (string.Equals(lastClipboardText, expectedText, StringComparison.Ordinal))
+            {
+                await WaitForSettledFramesAsync(frameCount: 4);
+                return;
+            }
+
+            await Task.Delay(PollDelay);
+            await WaitForSettledFramesAsync(frameCount: 2);
+        }
+
+        throw new Xunit.Sdk.XunitException(
+            $"Timed out waiting for clipboard text to match the expected preview copy payload. Expected length={expectedText.Length}, actual length={lastClipboardText?.Length ?? 0}.");
     }
 
     public static async Task WaitForStatusMetricsReadyAsync(MainWindow window, TimeSpan? timeout = null)

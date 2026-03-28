@@ -655,10 +655,26 @@
               <Border Name="PreviewBar"
                       Classes="preview-panel">
               <Grid Name="PreviewBarLayoutGrid"
-                    ColumnDefinitions="*,Auto"
+                    ColumnDefinitions="Auto,*,Auto"
                     Margin="12,5"
                     VerticalAlignment="Center">
-                <Border Grid.Column="0"
+                <Button Grid.Column="0"
+                        Name="PreviewCopyButton"
+                        Classes="menu-icon-button preview-copy-button"
+                        Width="32"
+                        Height="32"
+                        Margin="0,0,8,0"
+                        ToolTip.Tip="{Binding PreviewCopyCurrentModeTooltip}"
+                        Click="OnPreviewCopyCurrentMode">
+                  <Viewbox Width="15"
+                           Height="15"
+                           Stretch="Uniform">
+                    <Path Classes="preview-icon"
+                          Data="{StaticResource PreviewCopyIconGeometry}"
+                          Fill="{DynamicResource AppTextBrush}" />
+                  </Viewbox>
+                </Button>
+                <Border Grid.Column="1"
                         Name="PreviewSegmentedControl"
                         Margin="0,0,8,0"
                         Classes="segmented-control preview-segmented-control">
@@ -687,7 +703,7 @@
                             Click="OnPreviewTreeAndContentModeClick" />
                   </Grid>
                 </Border>
-                <Button Grid.Column="1"
+                <Button Grid.Column="2"
                         Name="PreviewCloseButton"
                         Classes="menu-icon-button preview-close-button"
                         Width="32"

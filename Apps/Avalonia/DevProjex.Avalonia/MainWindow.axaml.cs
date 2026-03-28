@@ -1169,7 +1169,9 @@ public partial class MainWindow : Window
 
     private PreviewToolbarLayoutMode DeterminePreviewToolbarLayoutMode()
     {
-        var previewBarWidth = _previewBar?.Bounds.Width ?? _previewBarContainer?.Bounds.Width ?? 0;
+        var previewBarWidth = _previewSegmentGrid?.Bounds.Width > 0
+            ? _previewSegmentGrid.Bounds.Width
+            : _previewBar?.Bounds.Width ?? _previewBarContainer?.Bounds.Width ?? 0;
         if (previewBarWidth <= 0)
             return _previewToolbarLayoutMode;
 
@@ -3259,6 +3261,27 @@ public partial class MainWindow : Window
             return;
 
         ClosePreviewMode();
+    }
+
+    private void OnPreviewCopyCurrentMode(object? sender, RoutedEventArgs e)
+    {
+        if (!_viewModel.IsProjectLoaded)
+            return;
+
+        switch (_viewModel.SelectedPreviewContentMode)
+        {
+            case PreviewContentMode.Tree:
+                OnCopyTree(sender, e);
+                break;
+
+            case PreviewContentMode.Content:
+                OnCopyContent(sender, e);
+                break;
+
+            default:
+                OnCopyTreeAndContent(sender, e);
+                break;
+        }
     }
 
     private void OnPreviewTreeHide(object? sender, RoutedEventArgs e)
