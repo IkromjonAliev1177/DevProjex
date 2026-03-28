@@ -5,6 +5,7 @@ using DevProjex.Tests.Shared.ProjectLoadWorkflow;
 
 namespace DevProjex.Tests.UI;
 
+[Collection(UiWorkspaceCollection.Name)]
 public sealed class MainWindowProjectLoadWorkflowUiTests
 {
     [AvaloniaFact]
@@ -544,6 +545,8 @@ public sealed class MainWindowProjectLoadWorkflowUiTests
         string rootPath,
         MainWindow window)
     {
+        await UiTestDriver.WaitForSelectionRefreshIdleAsync(window);
+
         var viewModel = UiTestDriver.GetViewModel(window);
         var selectedRoots = CollectCheckedNames(viewModel.RootFolders, PathComparer.Default);
         var allowedExtensions = CollectCheckedNames(viewModel.Extensions, StringComparer.OrdinalIgnoreCase);

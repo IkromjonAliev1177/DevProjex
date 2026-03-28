@@ -3,12 +3,14 @@ using DevProjex.Application.Services;
 using System.Globalization;
 using System.Reflection;
 using System.Text.RegularExpressions;
+using System.Collections.Concurrent;
 
 namespace DevProjex.Tests.UI;
 
 internal static class UiTestDriver
 {
     private static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(20);
+    private static readonly ConcurrentDictionary<MainWindow, string> WindowAppDataPaths = new();
     private static readonly bool FastTimingsEnabled =
         string.Equals(Environment.GetEnvironmentVariable("DEVPROJEX_FAST_UI_TESTS"), "1", StringComparison.Ordinal);
     private static readonly TimeSpan PollDelay = FastTimingsEnabled ? TimeSpan.FromMilliseconds(1) : TimeSpan.FromMilliseconds(15);
@@ -17,12 +19,16 @@ internal static class UiTestDriver
     public static async Task<MainWindow> CreateLoadedMainWindowAsync(UiTestProject project)
     {
         var options = new CommandLineOptions(project.RootPath, AppLanguage.En, false);
-        var services = AvaloniaCompositionRoot.CreateDefault(options);
+        var appDataPath = Path.Combine(project.AppDataPath, Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(appDataPath);
+
+        var services = AvaloniaCompositionRoot.CreateDefault(options, () => appDataPath);
         var window = new MainWindow(options, services)
         {
             Width = 1500,
             Height = 920
         };
+        WindowAppDataPaths[window] = appDataPath;
 
         window.Show();
 
@@ -41,6 +47,8 @@ internal static class UiTestDriver
                        !viewModel.StatusBusy;
             },
             "project to finish loading");
+
+        await WaitForSelectionRefreshIdleAsync(window);
 
         await WaitForConditionAsync(
             window,
@@ -62,10 +70,14 @@ internal static class UiTestDriver
     public static async Task CloseWindowAsync(MainWindow window)
     {
         if (!window.IsVisible)
+        {
+            CleanupWindowAppData(window);
             return;
+        }
 
         window.Close();
         await WaitForSettledFramesAsync(frameCount: 6);
+        CleanupWindowAppData(window);
     }
 
     public static MainWindowViewModel GetViewModel(MainWindow window)
@@ -344,6 +356,8 @@ internal static class UiTestDriver
         ExportOutputMetrics expectedTreeMetrics,
         ExportOutputMetrics expectedContentMetrics)
     {
+        await WaitForSelectionRefreshIdleAsync(window, TimeSpan.FromSeconds(30));
+
         await WaitForConditionAsync(
             window,
             () =>
@@ -401,9 +415,26 @@ internal static class UiTestDriver
 
     public static IReadOnlyCollection<IgnoreOptionId> GetSelectedIgnoreOptionIds(MainWindow window)
     {
-        var field = typeof(MainWindow).GetField("_selectionCoordinator", BindingFlags.Instance | BindingFlags.NonPublic);
-        var coordinator = Assert.IsType<DevProjex.Avalonia.Coordinators.SelectionSyncCoordinator>(field?.GetValue(window));
-        return coordinator.GetSelectedIgnoreOptionIds();
+        return GetSelectionCoordinator(window).GetSelectedIgnoreOptionIds();
+    }
+
+    public static async Task WaitForSelectionRefreshIdleAsync(MainWindow window, TimeSpan? timeout = null)
+    {
+        var effectiveTimeout = timeout ?? TimeSpan.FromSeconds(30);
+        using var cts = new CancellationTokenSource(effectiveTimeout);
+        await GetSelectionCoordinator(window).WaitForPendingRefreshesAsync(cts.Token);
+
+        await WaitForConditionAsync(
+            window,
+            () =>
+            {
+                var viewModel = GetViewModel(window);
+                return !viewModel.StatusBusy;
+            },
+            "selection refresh pipeline to become idle",
+            effectiveTimeout);
+
+        await WaitForSettledFramesAsync(frameCount: 6);
     }
 
     public static async Task SwitchPreviewModeAsync(MainWindow window, PreviewContentMode mode)
@@ -689,6 +720,28 @@ internal static class UiTestDriver
 
     private static bool IsInteractableWithinWindow(Control control, MainWindow window)
         => control.IsVisible && control.TranslatePoint(default, window).HasValue;
+
+    private static DevProjex.Avalonia.Coordinators.SelectionSyncCoordinator GetSelectionCoordinator(MainWindow window)
+    {
+        var field = typeof(MainWindow).GetField("_selectionCoordinator", BindingFlags.Instance | BindingFlags.NonPublic);
+        return Assert.IsType<DevProjex.Avalonia.Coordinators.SelectionSyncCoordinator>(field?.GetValue(window));
+    }
+
+    private static void CleanupWindowAppData(MainWindow window)
+    {
+        if (!WindowAppDataPaths.TryRemove(window, out var appDataPath))
+            return;
+
+        try
+        {
+            if (Directory.Exists(appDataPath))
+                Directory.Delete(appDataPath, recursive: true);
+        }
+        catch
+        {
+            // Best effort cleanup only. CI can keep temporary handles alive for a short time.
+        }
+    }
 
     private static bool TryParseMetricNumber(string text, out int value)
     {

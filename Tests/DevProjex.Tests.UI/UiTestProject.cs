@@ -5,13 +5,16 @@ namespace DevProjex.Tests.UI;
 internal sealed class UiTestProject : IDisposable
 {
     private readonly string _rootPath;
+    private readonly string _appDataPath;
 
-    private UiTestProject(string rootPath)
+    private UiTestProject(string rootPath, string appDataPath)
     {
         _rootPath = rootPath;
+        _appDataPath = appDataPath;
     }
 
     public string RootPath => _rootPath;
+    public string AppDataPath => _appDataPath;
 
     public static UiTestProject CreateDefault()
     {
@@ -90,24 +93,37 @@ internal sealed class UiTestProject : IDisposable
 
     private static UiTestProject Create(Action<string> seedWorkspace)
     {
-        var rootPath = Path.Combine(
+        var testRoot = Path.Combine(
             Path.GetTempPath(),
             "DevProjex",
-            "DevProjex.Tests.UI",
-            Guid.NewGuid().ToString("N"));
+            "DevProjex.Tests.UI");
+        var instanceId = Guid.NewGuid().ToString("N");
+        var rootPath = Path.Combine(testRoot, instanceId, "workspace");
+        var appDataPath = Path.Combine(testRoot, instanceId, "appdata");
 
         Directory.CreateDirectory(rootPath);
+        Directory.CreateDirectory(appDataPath);
         seedWorkspace(rootPath);
 
-        return new UiTestProject(rootPath);
+        return new UiTestProject(rootPath, appDataPath);
     }
 
     public void Dispose()
     {
         try
         {
+            var instanceRoot = Directory.GetParent(_rootPath)?.FullName;
+            if (!string.IsNullOrWhiteSpace(instanceRoot) && Directory.Exists(instanceRoot))
+            {
+                Directory.Delete(instanceRoot, recursive: true);
+                return;
+            }
+
             if (Directory.Exists(_rootPath))
                 Directory.Delete(_rootPath, recursive: true);
+
+            if (Directory.Exists(_appDataPath))
+                Directory.Delete(_appDataPath, recursive: true);
         }
         catch
         {

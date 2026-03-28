@@ -58,6 +58,8 @@ public sealed class SelectionSyncCoordinator(
     private readonly object _backgroundRefreshSync = new();
     private CancellationTokenSource? _liveOptionsRefreshCts;
     private CancellationTokenSource? _fullRefreshRequestCts;
+    private Task _latestLiveOptionsRefreshTask = Task.CompletedTask;
+    private Task _latestFullRefreshTask = Task.CompletedTask;
     private int _liveOptionsRequestVersion;
     private int _fullRefreshRequestVersion;
     private readonly object _ignoreRulesBuildCacheSync = new();
@@ -564,8 +566,37 @@ public sealed class SelectionSyncCoordinator(
 
     public async Task WaitForPendingRefreshesAsync(CancellationToken cancellationToken = default)
     {
-        await _refreshLock.WaitAsync(cancellationToken).ConfigureAwait(false);
-        _refreshLock.Release();
+        while (true)
+        {
+            await _refreshLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+            _refreshLock.Release();
+
+            Task liveTask;
+            Task fullTask;
+            lock (_backgroundRefreshSync)
+            {
+                liveTask = _latestLiveOptionsRefreshTask;
+                fullTask = _latestFullRefreshTask;
+            }
+
+            // The UI can queue a live-options refresh and a full refresh back-to-back.
+            // Waiting only on the refresh lock is not sufficient because the coalesced
+            // background tasks run outside that lock. Tests and Apply must observe the
+            // fully converged snapshot, not an intermediate state between these phases.
+            await AwaitBackgroundRefreshTaskAsync(liveTask, cancellationToken).ConfigureAwait(false);
+            await AwaitBackgroundRefreshTaskAsync(fullTask, cancellationToken).ConfigureAwait(false);
+
+            lock (_backgroundRefreshSync)
+            {
+                if (ReferenceEquals(liveTask, _latestLiveOptionsRefreshTask) &&
+                    ReferenceEquals(fullTask, _latestFullRefreshTask) &&
+                    liveTask.IsCompleted &&
+                    fullTask.IsCompleted)
+                {
+                    return;
+                }
+            }
+        }
     }
 
     /// <summary>
@@ -873,12 +904,13 @@ public sealed class SelectionSyncCoordinator(
         {
             _liveOptionsRefreshCts?.Cancel();
             _liveOptionsRefreshCts?.Dispose();
-            _liveOptionsRefreshCts = new CancellationTokenSource();
-            token = _liveOptionsRefreshCts.Token;
-            version = unchecked(++_liveOptionsRequestVersion);
-        }
+              _liveOptionsRefreshCts = new CancellationTokenSource();
+              token = _liveOptionsRefreshCts.Token;
+              version = unchecked(++_liveOptionsRequestVersion);
+              _latestLiveOptionsRefreshTask = RunQueuedLiveOptionsRefreshAsync(currentPath, version, token);
+          }
 
-        FireAndForgetSafe(RunQueuedLiveOptionsRefreshAsync(currentPath, version, token));
+        FireAndForgetSafe(_latestLiveOptionsRefreshTask);
     }
 
     /// <summary>
@@ -895,12 +927,13 @@ public sealed class SelectionSyncCoordinator(
         {
             _fullRefreshRequestCts?.Cancel();
             _fullRefreshRequestCts?.Dispose();
-            _fullRefreshRequestCts = new CancellationTokenSource();
-            token = _fullRefreshRequestCts.Token;
-            version = unchecked(++_fullRefreshRequestVersion);
-        }
+              _fullRefreshRequestCts = new CancellationTokenSource();
+              token = _fullRefreshRequestCts.Token;
+              version = unchecked(++_fullRefreshRequestVersion);
+              _latestFullRefreshTask = RunQueuedFullRefreshAsync(currentPath, version, token);
+          }
 
-        FireAndForgetSafe(RunQueuedFullRefreshAsync(currentPath, version, token));
+        FireAndForgetSafe(_latestFullRefreshTask);
     }
 
     private async Task RunQueuedLiveOptionsRefreshAsync(
@@ -1313,6 +1346,19 @@ public sealed class SelectionSyncCoordinator(
         catch
         {
             // Log or handle if needed; suppressed to not crash UI
+        }
+    }
+
+    private static async Task AwaitBackgroundRefreshTaskAsync(Task task, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await task.WaitAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            // Coalesced refreshes cancel superseded tasks on purpose. Waiting for idleness
+            // should ignore those expected cancellations and continue with the latest task.
         }
     }
 
