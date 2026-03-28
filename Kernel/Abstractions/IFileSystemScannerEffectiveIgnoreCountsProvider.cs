@@ -1,18 +1,16 @@
 namespace DevProjex.Kernel;
 
-public interface IFileSystemScannerVisibleNodeCounter
+public interface IFileSystemScannerEffectiveIgnoreCountsProvider
 {
-	ScanResult<int> GetAffectedIgnoreOptionTreeNodeCount(
+	ScanResult<IgnoreOptionCounts> GetEffectiveIgnoreOptionCounts(
 		string rootPath,
 		IReadOnlySet<string> allowedExtensions,
 		IgnoreRules rules,
-		IgnoreOptionId optionId,
 		CancellationToken cancellationToken = default);
 
-	ScanResult<int> GetAffectedIgnoreOptionRootFileCount(
+	ScanResult<IgnoreOptionCounts> GetEffectiveRootFileIgnoreOptionCounts(
 		string rootPath,
 		IReadOnlySet<string> allowedExtensions,
 		IgnoreRules rules,
-		IgnoreOptionId optionId,
 		CancellationToken cancellationToken = default);
 }

@@ -325,7 +325,7 @@ public sealed class ScanOptionsUseCase(IFileSystemScanner scanner)
 	{
 		cancellationToken.ThrowIfCancellationRequested();
 
-		if (scanner is not IFileSystemScannerVisibleNodeCounter)
+		if (scanner is not IFileSystemScannerEffectiveIgnoreCountsProvider counter)
 		{
 			var effectiveEmptyFolderCount = GetEffectiveEmptyFolderCountForRootFolders(
 				rootPath,
@@ -340,83 +340,99 @@ public sealed class ScanOptionsUseCase(IFileSystemScanner scanner)
 				effectiveEmptyFolderCount.HadAccessDenied);
 		}
 
-		// EmptyFolders is a subtree-pruning rule, so it keeps its dedicated
-		// tree-based calculation. The rest should count only nodes whose own
-		// visibility is controlled by the corresponding toggle.
-		var hiddenFolders = GetAffectedIgnoreOptionCountForRootFolders(
+		var effectiveCounts = IgnoreOptionCounts.Empty;
+		var rootAccessDenied = 0;
+		var hadAccessDenied = 0;
+		var mergeLock = new object();
+
+		var rootFileCounts = counter.GetEffectiveRootFileIgnoreOptionCounts(
 			rootPath,
-			rootFolders,
-			allowedExtensions,
-			ignoreRules,
-			IgnoreOptionId.HiddenFolders,
-			cancellationToken);
-		var hiddenFiles = GetAffectedIgnoreOptionCountForRootFolders(
-			rootPath,
-			rootFolders,
-			allowedExtensions,
-			ignoreRules,
-			IgnoreOptionId.HiddenFiles,
-			cancellationToken);
-		var dotFolders = GetAffectedIgnoreOptionCountForRootFolders(
-			rootPath,
-			rootFolders,
-			allowedExtensions,
-			ignoreRules,
-			IgnoreOptionId.DotFolders,
-			cancellationToken);
-		var dotFiles = GetAffectedIgnoreOptionCountForRootFolders(
-			rootPath,
-			rootFolders,
-			allowedExtensions,
-			ignoreRules,
-			IgnoreOptionId.DotFiles,
-			cancellationToken);
-		var emptyFolders = GetEffectiveEmptyFolderCountForRootFolders(
-			rootPath,
-			rootFolders,
 			allowedExtensions,
 			ignoreRules,
 			cancellationToken);
-		var extensionlessFiles = GetAffectedIgnoreOptionCountForRootFolders(
-			rootPath,
-			rootFolders,
-			allowedExtensions,
-			ignoreRules,
-			IgnoreOptionId.ExtensionlessFiles,
-			cancellationToken);
-		var emptyFiles = GetAffectedIgnoreOptionCountForRootFolders(
-			rootPath,
-			rootFolders,
-			allowedExtensions,
-			ignoreRules,
-			IgnoreOptionId.EmptyFiles,
-			cancellationToken);
+		effectiveCounts = effectiveCounts.Add(rootFileCounts.Value);
+		if (rootFileCounts.RootAccessDenied)
+			Interlocked.Exchange(ref rootAccessDenied, 1);
+		if (rootFileCounts.HadAccessDenied)
+			Interlocked.Exchange(ref hadAccessDenied, 1);
+
+		if (rootFolders.Count > 0)
+		{
+			if (rootFolders.Count <= 2)
+			{
+				foreach (var folder in rootFolders)
+				{
+					cancellationToken.ThrowIfCancellationRequested();
+
+					var folderPath = Path.Combine(rootPath, folder);
+					var result = counter.GetEffectiveIgnoreOptionCounts(
+						folderPath,
+						allowedExtensions,
+						ignoreRules,
+						cancellationToken);
+					effectiveCounts = effectiveCounts.Add(result.Value);
+
+					if (result.RootAccessDenied)
+						Interlocked.Exchange(ref rootAccessDenied, 1);
+					if (result.HadAccessDenied)
+						Interlocked.Exchange(ref hadAccessDenied, 1);
+				}
+			}
+			else
+			{
+				var parallelOptions = new ParallelOptions
+				{
+					MaxDegreeOfParallelism = Math.Min(MaxParallelism, rootFolders.Count),
+					CancellationToken = cancellationToken
+				};
+
+				Parallel.ForEach(
+					rootFolders,
+					parallelOptions,
+					() => IgnoreOptionCounts.Empty,
+					(folder, _, localCounts) =>
+					{
+						cancellationToken.ThrowIfCancellationRequested();
+
+						var folderPath = Path.Combine(rootPath, folder);
+						var result = counter.GetEffectiveIgnoreOptionCounts(
+							folderPath,
+							allowedExtensions,
+							ignoreRules,
+							cancellationToken);
+						if (result.RootAccessDenied)
+							Interlocked.Exchange(ref rootAccessDenied, 1);
+						if (result.HadAccessDenied)
+							Interlocked.Exchange(ref hadAccessDenied, 1);
+
+						return localCounts.Add(result.Value);
+					},
+					localCounts =>
+					{
+						if (localCounts == IgnoreOptionCounts.Empty)
+							return;
+
+						lock (mergeLock)
+						{
+							effectiveCounts = effectiveCounts.Add(localCounts);
+						}
+					});
+			}
+		}
 
 		return new ScanResult<IgnoreOptionCounts>(
 			rawCounts with
 			{
-				HiddenFolders = hiddenFolders.Value,
-				HiddenFiles = hiddenFiles.Value,
-				DotFolders = dotFolders.Value,
-				DotFiles = dotFiles.Value,
-				EmptyFolders = Math.Max(0, emptyFolders.Value),
-				ExtensionlessFiles = extensionlessFiles.Value,
-				EmptyFiles = emptyFiles.Value
+				HiddenFolders = effectiveCounts.HiddenFolders,
+				HiddenFiles = effectiveCounts.HiddenFiles,
+				DotFolders = effectiveCounts.DotFolders,
+				DotFiles = effectiveCounts.DotFiles,
+				EmptyFolders = Math.Max(0, effectiveCounts.EmptyFolders),
+				ExtensionlessFiles = effectiveCounts.ExtensionlessFiles,
+				EmptyFiles = effectiveCounts.EmptyFiles
 			},
-			hiddenFolders.RootAccessDenied ||
-			hiddenFiles.RootAccessDenied ||
-			dotFolders.RootAccessDenied ||
-			dotFiles.RootAccessDenied ||
-			emptyFolders.RootAccessDenied ||
-			extensionlessFiles.RootAccessDenied ||
-			emptyFiles.RootAccessDenied,
-			hiddenFolders.HadAccessDenied ||
-			hiddenFiles.HadAccessDenied ||
-			dotFolders.HadAccessDenied ||
-			dotFiles.HadAccessDenied ||
-			emptyFolders.HadAccessDenied ||
-			extensionlessFiles.HadAccessDenied ||
-			emptyFiles.HadAccessDenied);
+			rootAccessDenied == 1,
+			hadAccessDenied == 1);
 	}
 
 	public bool CanReadRoot(string rootPath) => scanner.CanReadRoot(rootPath);
@@ -425,109 +441,6 @@ public sealed class ScanOptionsUseCase(IFileSystemScanner scanner)
 	{
 		public HashSet<string> Extensions { get; } = new(StringComparer.OrdinalIgnoreCase);
 		public IgnoreOptionCounts IgnoreOptionCounts { get; set; } = IgnoreOptionCounts.Empty;
-	}
-
-	private ScanResult<int> GetAffectedIgnoreOptionCountForRootFolders(
-		string rootPath,
-		IReadOnlyCollection<string> rootFolders,
-		IReadOnlySet<string> allowedExtensions,
-		IgnoreRules ignoreRules,
-		IgnoreOptionId optionId,
-		CancellationToken cancellationToken)
-	{
-		cancellationToken.ThrowIfCancellationRequested();
-
-		if (scanner is not IFileSystemScannerVisibleNodeCounter counter ||
-		    string.IsNullOrWhiteSpace(rootPath) ||
-		    !Directory.Exists(rootPath))
-		{
-			return new ScanResult<int>(0, RootAccessDenied: false, HadAccessDenied: false);
-		}
-
-		var affectedNodeCount = 0;
-		var rootAccessDenied = 0;
-		var hadAccessDenied = 0;
-		var mergeLock = new object();
-
-		var rootFiles = counter.GetAffectedIgnoreOptionRootFileCount(
-			rootPath,
-			allowedExtensions,
-			ignoreRules,
-			optionId,
-			cancellationToken);
-		affectedNodeCount += rootFiles.Value;
-		if (rootFiles.RootAccessDenied)
-			Interlocked.Exchange(ref rootAccessDenied, 1);
-		if (rootFiles.HadAccessDenied)
-			Interlocked.Exchange(ref hadAccessDenied, 1);
-
-		if (rootFolders.Count == 0)
-			return new ScanResult<int>(affectedNodeCount, rootAccessDenied == 1, hadAccessDenied == 1);
-
-		if (rootFolders.Count <= 2)
-		{
-			foreach (var folder in rootFolders)
-			{
-				cancellationToken.ThrowIfCancellationRequested();
-
-				var folderPath = Path.Combine(rootPath, folder);
-				var result = counter.GetAffectedIgnoreOptionTreeNodeCount(
-					folderPath,
-					allowedExtensions,
-					ignoreRules,
-					optionId,
-					cancellationToken);
-				affectedNodeCount += result.Value;
-
-				if (result.RootAccessDenied)
-					Interlocked.Exchange(ref rootAccessDenied, 1);
-				if (result.HadAccessDenied)
-					Interlocked.Exchange(ref hadAccessDenied, 1);
-			}
-		}
-		else
-		{
-			var parallelOptions = new ParallelOptions
-			{
-				MaxDegreeOfParallelism = Math.Min(MaxParallelism, rootFolders.Count),
-				CancellationToken = cancellationToken
-			};
-
-			Parallel.ForEach(
-				rootFolders,
-				parallelOptions,
-				() => 0,
-				(folder, _, localCount) =>
-				{
-					cancellationToken.ThrowIfCancellationRequested();
-
-					var folderPath = Path.Combine(rootPath, folder);
-					var result = counter.GetAffectedIgnoreOptionTreeNodeCount(
-						folderPath,
-						allowedExtensions,
-						ignoreRules,
-						optionId,
-						cancellationToken);
-					if (result.RootAccessDenied)
-						Interlocked.Exchange(ref rootAccessDenied, 1);
-					if (result.HadAccessDenied)
-						Interlocked.Exchange(ref hadAccessDenied, 1);
-
-					return localCount + result.Value;
-				},
-				localCount =>
-				{
-					if (localCount == 0)
-						return;
-
-					lock (mergeLock)
-					{
-						affectedNodeCount += localCount;
-					}
-				});
-		}
-
-		return new ScanResult<int>(affectedNodeCount, rootAccessDenied == 1, hadAccessDenied == 1);
 	}
 
 }
