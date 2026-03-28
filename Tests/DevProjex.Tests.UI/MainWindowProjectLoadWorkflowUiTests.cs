@@ -179,6 +179,84 @@ public sealed class MainWindowProjectLoadWorkflowUiTests
     }
 
     [AvaloniaFact]
+    public async Task PendingGitIgnoreToggle_RevealsAdditionalRootFoldersWithoutChangingAppliedStatusBarUntilApply()
+    {
+        using var project = UiTestProject.CreateWithProjectLoadWorkflowWorkspace();
+        var window = await UiTestDriver.CreateLoadedMainWindowAsync(project);
+
+        try
+        {
+            var baseline = await ComputeExpectedAppliedMetricsAsync(project.RootPath, window);
+            await UiTestDriver.WaitForStatusMetricsAsync(window, baseline.TreeMetrics, baseline.ContentMetrics);
+
+            await UiTestDriver.ClickAsync(window, UiTestDriver.GetRequiredIgnoreOptionCheckBox(window, IgnoreOptionId.UseGitIgnore));
+            await UiTestDriver.WaitForConditionAsync(
+                window,
+                () =>
+                {
+                    var rootNames = UiTestDriver.GetViewModel(window).RootFolders.Select(option => option.Name).ToArray();
+                    return rootNames.Contains("generated", StringComparer.Ordinal) &&
+                           rootNames.Contains("logs", StringComparer.Ordinal);
+                },
+                "gitignored root folders to appear in the pending selection state");
+
+            await UiTestDriver.WaitForConditionAsync(
+                window,
+                () =>
+                {
+                    var viewModel = UiTestDriver.GetViewModel(window);
+                    return UiTestDriver.TryParseStatusMetrics(viewModel.StatusTreeStatsText, out var actualTreeMetrics) &&
+                           UiTestDriver.TryParseStatusMetrics(viewModel.StatusContentStatsText, out var actualContentMetrics) &&
+                           actualTreeMetrics == baseline.TreeMetrics &&
+                           actualContentMetrics == baseline.ContentMetrics;
+                },
+                "pending gitignore change to leave the applied status bar unchanged");
+
+            var expectedAfterApply = await ComputeExpectedAppliedMetricsAsync(project.RootPath, window);
+            await UiTestDriver.ClickAsync(window, UiTestDriver.GetRequiredApplySettingsButton(window));
+            await UiTestDriver.WaitForStatusMetricsAsync(window, expectedAfterApply.TreeMetrics, expectedAfterApply.ContentMetrics);
+        }
+        finally
+        {
+            await UiTestDriver.CloseWindowAsync(window);
+        }
+    }
+
+    [AvaloniaFact]
+    public async Task ApplySettings_GitIgnoreRoundTrip_RestoresBaselineMetrics()
+    {
+        using var project = UiTestProject.CreateWithProjectLoadWorkflowWorkspace();
+        var window = await UiTestDriver.CreateLoadedMainWindowAsync(project);
+
+        try
+        {
+            var baseline = await ComputeExpectedAppliedMetricsAsync(project.RootPath, window);
+            await UiTestDriver.WaitForStatusMetricsAsync(window, baseline.TreeMetrics, baseline.ContentMetrics);
+
+            await UiTestDriver.ClickAsync(window, UiTestDriver.GetRequiredIgnoreOptionCheckBox(window, IgnoreOptionId.UseGitIgnore));
+            await UiTestDriver.WaitForSettledFramesAsync(frameCount: 10);
+            var disabledExpected = await ComputeExpectedAppliedMetricsAsync(project.RootPath, window);
+            AssertMetricsChanged(baseline, disabledExpected, "gitignore round-trip disable");
+
+            await UiTestDriver.ClickAsync(window, UiTestDriver.GetRequiredApplySettingsButton(window));
+            await UiTestDriver.WaitForStatusMetricsAsync(window, disabledExpected.TreeMetrics, disabledExpected.ContentMetrics);
+
+            await UiTestDriver.ClickAsync(window, UiTestDriver.GetRequiredIgnoreOptionCheckBox(window, IgnoreOptionId.UseGitIgnore));
+            await UiTestDriver.WaitForSettledFramesAsync(frameCount: 10);
+            var restoredExpected = await ComputeExpectedAppliedMetricsAsync(project.RootPath, window);
+            Assert.Equal(baseline.TreeMetrics, restoredExpected.TreeMetrics);
+            Assert.Equal(baseline.ContentMetrics, restoredExpected.ContentMetrics);
+
+            await UiTestDriver.ClickAsync(window, UiTestDriver.GetRequiredApplySettingsButton(window));
+            await UiTestDriver.WaitForStatusMetricsAsync(window, baseline.TreeMetrics, baseline.ContentMetrics);
+        }
+        finally
+        {
+            await UiTestDriver.CloseWindowAsync(window);
+        }
+    }
+
+    [AvaloniaFact]
     public async Task ApplySettings_EachCheckedRootFolderToggle_RebuildsMetricsAndRestoresBaseline()
     {
         using var project = UiTestProject.CreateWithProjectLoadWorkflowWorkspace();
