@@ -131,15 +131,15 @@ public sealed class FileSystemScanner : IFileSystemScanner, IFileSystemScannerAd
 
 		try
 		{
-			foreach (var dir in Directory.EnumerateDirectories(rootPath))
+			foreach (var dir in FileSystemEntryEnumerator.EnumerateDirectories(rootPath))
 			{
 				cancellationToken.ThrowIfCancellationRequested();
 
-				var dirName = Path.GetFileName(dir);
+				var dirName = dir.Name;
 				var directoryGitIgnore = useGitIgnore
-					? rules.EvaluateGitIgnore(dir, isDirectory: true, dirName)
+					? rules.EvaluateGitIgnore(dir.FullPath, isDirectory: true, dirName)
 					: IgnoreRules.GitIgnoreEvaluation.NotIgnored;
-				if (ShouldSkipDirectoryByName(dirName, dir, rules, directoryGitIgnore))
+				if (ShouldSkipDirectoryByName(dirName, dir.FullPath, dir.IsHidden, rules, directoryGitIgnore))
 					continue;
 
 				names.Add(dirName);
@@ -172,6 +172,25 @@ public sealed class FileSystemScanner : IFileSystemScanner, IFileSystemScannerAd
 		IgnoreRules rules,
 		in IgnoreRules.GitIgnoreEvaluation gitIgnoreEvaluation)
 	{
+		return ShouldSkipDirectoryByName(
+			name,
+			fullPath,
+			HasHiddenAttribute(fullPath),
+			rules,
+			gitIgnoreEvaluation);
+	}
+
+	/// <summary>
+	/// Entry-based scans already know whether a directory is hidden.
+	/// Reusing that metadata avoids an extra stat call for every candidate folder.
+	/// </summary>
+	private static bool ShouldSkipDirectoryByName(
+		string name,
+		string fullPath,
+		bool isHidden,
+		IgnoreRules rules,
+		in IgnoreRules.GitIgnoreEvaluation gitIgnoreEvaluation)
+	{
 		if (gitIgnoreEvaluation.IsIgnored)
 		{
 			if (!gitIgnoreEvaluation.ShouldTraverseIgnoredDirectory)
@@ -184,22 +203,8 @@ public sealed class FileSystemScanner : IFileSystemScanner, IFileSystemScannerAd
 		if (rules.IgnoreDotFolders && name.StartsWith(".", StringComparison.Ordinal))
 			return true;
 
-		if (rules.IgnoreHiddenFolders)
-		{
-			try
-			{
-				if (File.GetAttributes(fullPath).HasFlag(FileAttributes.Hidden))
-					return true;
-			}
-			catch (IOException)
-			{
-				return true;
-			}
-			catch (UnauthorizedAccessException)
-			{
-				return true;
-			}
-		}
+		if (rules.IgnoreHiddenFolders && isHidden)
+			return true;
 
 		return false;
 	}
@@ -211,6 +216,29 @@ public sealed class FileSystemScanner : IFileSystemScanner, IFileSystemScannerAd
 	private static bool ShouldSkipFileByName(
 		string name,
 		string fullPath,
+		IgnoreRules rules,
+		bool shouldApplySmartIgnore,
+		in IgnoreRules.GitIgnoreEvaluation gitIgnoreEvaluation)
+	{
+		return ShouldSkipFileByName(
+			name,
+			fullPath,
+			HasHiddenAttribute(fullPath),
+			GetFileLength(fullPath),
+			rules,
+			shouldApplySmartIgnore,
+			gitIgnoreEvaluation);
+	}
+
+	/// <summary>
+	/// File scans reuse the metadata captured during enumeration so hidden/empty checks
+	/// stay purely in-memory instead of bouncing back to the filesystem for every file.
+	/// </summary>
+	private static bool ShouldSkipFileByName(
+		string name,
+		string fullPath,
+		bool isHidden,
+		long length,
 		IgnoreRules rules,
 		bool shouldApplySmartIgnore,
 		in IgnoreRules.GitIgnoreEvaluation gitIgnoreEvaluation)
@@ -227,30 +255,25 @@ public sealed class FileSystemScanner : IFileSystemScanner, IFileSystemScannerAd
 		if (rules.IgnoreExtensionlessFiles && IsExtensionlessFileName(name))
 			return true;
 
-		if (rules.IgnoreEmptyFiles && IsZeroLengthFile(fullPath))
+		if (rules.IgnoreEmptyFiles && length == 0)
 			return true;
 
-		if (rules.IgnoreHiddenFiles)
-		{
-			try
-			{
-				if (File.GetAttributes(fullPath).HasFlag(FileAttributes.Hidden))
-					return true;
-			}
-			catch (IOException)
-			{
-				return true;
-			}
-			catch (UnauthorizedAccessException)
-			{
-				return true;
-			}
-		}
+		if (rules.IgnoreHiddenFiles && isHidden)
+			return true;
 
 		return false;
 	}
 
 	private static DirectoryScanFacts AnalyzeDirectory(string fullPath, string name, IgnoreRules rules)
+	{
+		return AnalyzeDirectory(fullPath, name, HasHiddenAttribute(fullPath), rules);
+	}
+
+	private static DirectoryScanFacts AnalyzeDirectory(
+		string fullPath,
+		string name,
+		bool isHidden,
+		IgnoreRules rules)
 	{
 		var gitIgnoreEvaluation = rules.UseGitIgnore
 			? rules.EvaluateGitIgnore(fullPath, isDirectory: true, name)
@@ -259,7 +282,7 @@ public sealed class FileSystemScanner : IFileSystemScanner, IFileSystemScannerAd
 		return new DirectoryScanFacts(
 			Name: name,
 			FullPath: fullPath,
-			IsHidden: HasHiddenAttribute(fullPath),
+			IsHidden: isHidden,
 			IsDot: IsDotName(name),
 			IsSmartIgnored: rules.ShouldApplySmartIgnore(fullPath, isDirectory: true) &&
 			                rules.SmartIgnoredFolders.Contains(name),
@@ -272,6 +295,23 @@ public sealed class FileSystemScanner : IFileSystemScanner, IFileSystemScannerAd
 		bool shouldApplySmartIgnoreForFiles,
 		IgnoreRules rules)
 	{
+		return AnalyzeFile(
+			fullPath,
+			name,
+			HasHiddenAttribute(fullPath),
+			GetFileLength(fullPath),
+			shouldApplySmartIgnoreForFiles,
+			rules);
+	}
+
+	private static FileScanFacts AnalyzeFile(
+		string fullPath,
+		string name,
+		bool isHidden,
+		long length,
+		bool shouldApplySmartIgnoreForFiles,
+		IgnoreRules rules)
+	{
 		var isExtensionless = IsExtensionlessFileName(name);
 		var gitIgnored = rules.UseGitIgnore &&
 		                 rules.EvaluateGitIgnore(fullPath, isDirectory: false, name).IsIgnored;
@@ -279,9 +319,9 @@ public sealed class FileSystemScanner : IFileSystemScanner, IFileSystemScannerAd
 		return new FileScanFacts(
 			Name: name,
 			Extension: Path.GetExtension(name),
-			IsHidden: HasHiddenAttribute(fullPath),
+			IsHidden: isHidden,
 			IsDot: IsDotName(name),
-			IsEmpty: IsZeroLengthFile(fullPath),
+			IsEmpty: length == 0,
 			IsExtensionless: isExtensionless,
 			IsSmartIgnored: shouldApplySmartIgnoreForFiles && rules.SmartIgnoredFiles.Contains(name),
 			IsGitIgnored: gitIgnored);
@@ -454,7 +494,7 @@ public sealed class FileSystemScanner : IFileSystemScanner, IFileSystemScannerAd
 		// Selected root folders must obey the same directory-level rules as the tree itself.
 		// Otherwise a stale root selection (for example a dot-folder discovered before the
 		// dynamic DotFolders toggle appeared) would still leak its subtree into counts.
-		if (ShouldSkipDirectoryByName(rootName, rootPath, rules, rootGitIgnore))
+		if (ShouldSkipDirectoryByName(rootName, rootPath, HasHiddenAttribute(rootPath), rules, rootGitIgnore))
 		{
 			return new ScanResult<ExtensionsScanData>(
 				new ExtensionsScanData(uniqueExtensions, IgnoreOptionCounts.Empty),
@@ -481,25 +521,28 @@ public sealed class FileSystemScanner : IFileSystemScanner, IFileSystemScannerAd
 			directories.Add(new DirectoryScanNode(dir, parentIndex, isAccessDenied: false));
 
 			if (collectIgnoreOptionCounts && isRootDirectory && includeRootDirectoryInCounts)
-				AccumulateDirectoryIgnoreOptionCounts(dir, Path.GetFileName(dir), ref directoryCounts);
+			{
+				AccumulateDirectoryIgnoreOptionCounts(
+					new FileSystemDirectoryEntry(Path.GetFileName(dir), dir, HasHiddenAttribute(dir)),
+					ref directoryCounts);
+			}
 
 			try
 			{
-				foreach (var sd in Directory.EnumerateDirectories(dir))
+				foreach (var sd in FileSystemEntryEnumerator.EnumerateDirectories(dir))
 				{
 					cancellationToken.ThrowIfCancellationRequested();
 
-					var dirName = Path.GetFileName(sd);
 					if (collectIgnoreOptionCounts)
-						AccumulateDirectoryIgnoreOptionCounts(sd, dirName, ref directoryCounts);
+						AccumulateDirectoryIgnoreOptionCounts(sd, ref directoryCounts);
 
 					var directoryGitIgnore = useGitIgnore
-						? rules.EvaluateGitIgnore(sd, isDirectory: true, dirName)
+						? rules.EvaluateGitIgnore(sd.FullPath, isDirectory: true, sd.Name)
 						: IgnoreRules.GitIgnoreEvaluation.NotIgnored;
-					if (ShouldSkipDirectoryByName(dirName, sd, rules, directoryGitIgnore))
+					if (ShouldSkipDirectoryByName(sd.Name, sd.FullPath, sd.IsHidden, rules, directoryGitIgnore))
 						continue;
 
-					pending.Push((sd, currentDirectoryIndex, IsRootDirectory: false));
+					pending.Push((sd.FullPath, currentDirectoryIndex, IsRootDirectory: false));
 				}
 			}
 			catch (OperationCanceledException)
@@ -540,24 +583,30 @@ public sealed class FileSystemScanner : IFileSystemScanner, IFileSystemScannerAd
 				var hasVisibleFiles = false;
 				try
 				{
-					foreach (var file in Directory.EnumerateFiles(dir))
+					foreach (var file in FileSystemEntryEnumerator.EnumerateFiles(dir))
 					{
 						cancellationToken.ThrowIfCancellationRequested();
 
-						var name = Path.GetFileName(file);
 						if (collectIgnoreOptionCounts)
-							AccumulateFileIgnoreOptionCounts(file, name, ref localCounts);
+							AccumulateFileIgnoreOptionCounts(file, ref localCounts);
 
 						var fileGitIgnore = useGitIgnore
-							? rules.EvaluateGitIgnore(file, isDirectory: false, name)
+							? rules.EvaluateGitIgnore(file.FullPath, isDirectory: false, file.Name)
 							: IgnoreRules.GitIgnoreEvaluation.NotIgnored;
-						if (ShouldSkipFileByName(name, file, rules, shouldApplySmartIgnoreForFiles, fileGitIgnore))
+						if (ShouldSkipFileByName(
+							    file.Name,
+							    file.FullPath,
+							    file.IsHidden,
+							    file.Length,
+							    rules,
+							    shouldApplySmartIgnoreForFiles,
+							    fileGitIgnore))
 							continue;
 
 						hasVisibleFiles = true;
-						var ext = Path.GetExtension(name);
-						if (IsExtensionlessFileName(name))
-							uniqueExtensions.Add(name);
+						var ext = Path.GetExtension(file.Name);
+						if (IsExtensionlessFileName(file.Name))
+							uniqueExtensions.Add(file.Name);
 						else if (!string.IsNullOrWhiteSpace(ext))
 							uniqueExtensions.Add(ext);
 					}
@@ -604,24 +653,30 @@ public sealed class FileSystemScanner : IFileSystemScanner, IFileSystemScannerAd
 					var hasVisibleFiles = false;
 					try
 					{
-						foreach (var file in Directory.EnumerateFiles(dir))
+						foreach (var file in FileSystemEntryEnumerator.EnumerateFiles(dir))
 						{
 							parallelOptions.CancellationToken.ThrowIfCancellationRequested();
 
-							var name = Path.GetFileName(file);
 							if (collectIgnoreOptionCounts)
-								AccumulateFileIgnoreOptionCounts(file, name, ref localState.Counts);
+								AccumulateFileIgnoreOptionCounts(file, ref localState.Counts);
 
 							var fileGitIgnore = useGitIgnore
-								? rules.EvaluateGitIgnore(file, isDirectory: false, name)
+								? rules.EvaluateGitIgnore(file.FullPath, isDirectory: false, file.Name)
 								: IgnoreRules.GitIgnoreEvaluation.NotIgnored;
-							if (ShouldSkipFileByName(name, file, rules, shouldApplySmartIgnoreForFiles, fileGitIgnore))
+							if (ShouldSkipFileByName(
+								    file.Name,
+								    file.FullPath,
+								    file.IsHidden,
+								    file.Length,
+								    rules,
+								    shouldApplySmartIgnoreForFiles,
+								    fileGitIgnore))
 								continue;
 
 							hasVisibleFiles = true;
-							var ext = Path.GetExtension(name);
-							if (IsExtensionlessFileName(name))
-								localState.Extensions.Add(name);
+							var ext = Path.GetExtension(file.Name);
+							if (IsExtensionlessFileName(file.Name))
+								localState.Extensions.Add(file.Name);
 							else if (!string.IsNullOrWhiteSpace(ext))
 								localState.Extensions.Add(ext);
 						}
@@ -716,23 +771,29 @@ public sealed class FileSystemScanner : IFileSystemScanner, IFileSystemScannerAd
 		var shouldApplySmartIgnoreForFiles = rules.ShouldApplySmartIgnore(rootPath, isDirectory: true);
 		try
 		{
-			foreach (var file in Directory.EnumerateFiles(rootPath))
+			foreach (var file in FileSystemEntryEnumerator.EnumerateFiles(rootPath))
 			{
 				cancellationToken.ThrowIfCancellationRequested();
 
-				var name = Path.GetFileName(file);
 				if (collectIgnoreOptionCounts)
-					AccumulateFileIgnoreOptionCounts(file, name, ref counts);
+					AccumulateFileIgnoreOptionCounts(file, ref counts);
 
 				var fileGitIgnore = useGitIgnore
-					? rules.EvaluateGitIgnore(file, isDirectory: false, name)
+					? rules.EvaluateGitIgnore(file.FullPath, isDirectory: false, file.Name)
 					: IgnoreRules.GitIgnoreEvaluation.NotIgnored;
-				if (ShouldSkipFileByName(name, file, rules, shouldApplySmartIgnoreForFiles, fileGitIgnore))
+				if (ShouldSkipFileByName(
+					    file.Name,
+					    file.FullPath,
+					    file.IsHidden,
+					    file.Length,
+					    rules,
+					    shouldApplySmartIgnoreForFiles,
+					    fileGitIgnore))
 					continue;
 
-				var ext = Path.GetExtension(name);
-				if (IsExtensionlessFileName(name))
-					exts.Add(name);
+				var ext = Path.GetExtension(file.Name);
+				if (IsExtensionlessFileName(file.Name))
+					exts.Add(file.Name);
 				else if (!string.IsNullOrWhiteSpace(ext))
 					exts.Add(ext);
 			}
@@ -827,17 +888,22 @@ public sealed class FileSystemScanner : IFileSystemScanner, IFileSystemScannerAd
 
 		try
 		{
-			foreach (var file in Directory.EnumerateFiles(rootPath))
+			foreach (var file in FileSystemEntryEnumerator.EnumerateFiles(rootPath))
 			{
 				cancellationToken.ThrowIfCancellationRequested();
 
-				var name = Path.GetFileName(file);
-				AccumulateFileIgnoreOptionCounts(file, name, ref rawCounts);
+				AccumulateFileIgnoreOptionCounts(file, ref rawCounts);
 
-				var facts = AnalyzeFile(file, name, shouldApplySmartIgnoreForFiles, effectiveRules);
+				var facts = AnalyzeFile(
+					file.FullPath,
+					file.Name,
+					file.IsHidden,
+					file.Length,
+					shouldApplySmartIgnoreForFiles,
+					effectiveRules);
 				var passesDiscovery = PassesExtensionDiscoveryRules(facts, extensionDiscoveryRules);
 				if (passesDiscovery)
-					AddExtensionEntry(name, facts.Extension, facts.IsExtensionless, extensions);
+					AddExtensionEntry(file.Name, facts.Extension, facts.IsExtensionless, extensions);
 
 				var visibility = EvaluateFileVisibilityProfile(
 					facts,
@@ -943,14 +1009,19 @@ public sealed class FileSystemScanner : IFileSystemScanner, IFileSystemScannerAd
 
 			try
 			{
-				foreach (var file in Directory.EnumerateFiles(node.Path))
+				foreach (var file in FileSystemEntryEnumerator.EnumerateFiles(node.Path))
 				{
 					token.ThrowIfCancellationRequested();
 
-					var name = Path.GetFileName(file);
-					var facts = AnalyzeFile(file, name, shouldApplySmartIgnoreForFiles, effectiveRules);
+					var facts = AnalyzeFile(
+						file.FullPath,
+						file.Name,
+						file.IsHidden,
+						file.Length,
+						shouldApplySmartIgnoreForFiles,
+						effectiveRules);
 					if (extensionDiscoveryVisible)
-						AccumulateFileIgnoreOptionCounts(file, name, ref localRawCounts);
+						AccumulateFileIgnoreOptionCounts(file, ref localRawCounts);
 
 					// When "all extensions" is selected we still must respect the discovery result.
 					// Otherwise a subtree hidden from extension availability could leak back into the
@@ -959,7 +1030,7 @@ public sealed class FileSystemScanner : IFileSystemScanner, IFileSystemScannerAd
 					                      PassesExtensionDiscoveryRules(facts, extensionDiscoveryRules);
 					if (passesDiscovery)
 					{
-						AddExtensionEntry(name, facts.Extension, facts.IsExtensionless, localExtensions);
+						AddExtensionEntry(file.Name, facts.Extension, facts.IsExtensionless, localExtensions);
 						localMetrics.ExtensionDiscoveryVisibleFiles++;
 					}
 
@@ -1144,7 +1215,7 @@ public sealed class FileSystemScanner : IFileSystemScanner, IFileSystemScannerAd
 			return new ScanResult<List<EffectiveIgnoreScanNode>>([], RootAccessDenied: false, HadAccessDenied: false);
 
 		var rootName = Path.GetFileName(rootPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
-		var rootFacts = AnalyzeDirectory(rootPath, rootName, effectiveRules);
+		var rootFacts = AnalyzeDirectory(rootPath, rootName, HasHiddenAttribute(rootPath), effectiveRules);
 		var rootExtensionDiscoveryRuleState = EvaluateDirectoryRuleState(
 			rootFacts,
 			extensionDiscoveryRules.IgnoreHiddenFolders,
@@ -1200,12 +1271,15 @@ public sealed class FileSystemScanner : IFileSystemScanner, IFileSystemScannerAd
 
 			try
 			{
-				foreach (var childDirectory in Directory.EnumerateDirectories(facts.FullPath))
+				foreach (var childDirectory in FileSystemEntryEnumerator.EnumerateDirectories(facts.FullPath))
 				{
 					cancellationToken.ThrowIfCancellationRequested();
 
-					var childName = Path.GetFileName(childDirectory);
-					var childFacts = AnalyzeDirectory(childDirectory, childName, effectiveRules);
+					var childFacts = AnalyzeDirectory(
+						childDirectory.FullPath,
+						childDirectory.Name,
+						childDirectory.IsHidden,
+						effectiveRules);
 					var childExtensionDiscoveryRuleState = EvaluateDirectoryRuleState(
 						childFacts,
 						extensionDiscoveryRules.IgnoreHiddenFolders,
@@ -1505,29 +1579,27 @@ public sealed class FileSystemScanner : IFileSystemScanner, IFileSystemScannerAd
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	private static void AccumulateDirectoryIgnoreOptionCounts(
-		string fullPath,
-		string name,
+		FileSystemDirectoryEntry entry,
 		ref MutableIgnoreOptionCounts counts)
 	{
-		if (IsDotName(name))
+		if (IsDotName(entry.Name))
 			counts.DotFolders++;
-		if (HasHiddenAttribute(fullPath))
+		if (entry.IsHidden)
 			counts.HiddenFolders++;
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	private static void AccumulateFileIgnoreOptionCounts(
-		string fullPath,
-		string name,
+		FileSystemFileEntry entry,
 		ref MutableIgnoreOptionCounts counts)
 	{
-		if (IsExtensionlessFileName(name))
+		if (IsExtensionlessFileName(entry.Name))
 			counts.ExtensionlessFiles++;
-		if (IsZeroLengthFile(fullPath))
+		if (entry.Length == 0)
 			counts.EmptyFiles++;
-		if (IsDotName(name))
+		if (IsDotName(entry.Name))
 			counts.DotFiles++;
-		if (HasHiddenAttribute(fullPath))
+		if (entry.IsHidden)
 			counts.HiddenFiles++;
 	}
 
@@ -1549,15 +1621,15 @@ public sealed class FileSystemScanner : IFileSystemScanner, IFileSystemScannerAd
 		}
 	}
 
-	private static bool IsZeroLengthFile(string fullPath)
+	private static long GetFileLength(string fullPath)
 	{
 		try
 		{
-			return new FileInfo(fullPath).Length == 0;
+			return new FileInfo(fullPath).Length;
 		}
 		catch
 		{
-			return false;
+			return 0;
 		}
 	}
 

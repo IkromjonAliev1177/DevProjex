@@ -1028,71 +1028,68 @@ public sealed class SelectionSyncCoordinator(
         // so we must run one extra extension pass to make the displayed counts match the
         // final selected ignore set instead of the pre-appearance state.
         var ignoreSelectionBeforeScan = new HashSet<IgnoreOptionId>(GetSelectedIgnoreOptionIds());
-
-        var hadIgnoreCountsBefore = _hasIgnoreOptionCounts;
-        var ignoreCountsBefore = _ignoreOptionCounts;
-        var extensionlessBefore = _hasExtensionlessExtensionEntries;
-        var extensionlessCountBefore = _extensionlessExtensionEntriesCount;
+        var snapshotStateBefore = CaptureIgnoreSectionSnapshotState();
 
         await PopulateExtensionsForRootSelectionAsync(currentPath, selectedRoots, cancellationToken);
-        var ignoreOptionsRefreshed = await RefreshIgnoreOptionsAfterExtensionScanIfNeeded(
+        var refreshPlan = await RefreshIgnoreOptionsAfterExtensionScanIfNeeded(
             selectedRoots,
             currentPath,
-            hadIgnoreCountsBefore,
-            ignoreCountsBefore,
-            extensionlessBefore,
-            extensionlessCountBefore,
+            ignoreSelectionBeforeScan,
+            snapshotStateBefore,
             cancellationToken);
 
-        if (!ignoreOptionsRefreshed)
-            return;
-
-        var ignoreSelectionAfterRefresh = new HashSet<IgnoreOptionId>(GetSelectedIgnoreOptionIds());
-        if (ignoreSelectionBeforeScan.SetEquals(ignoreSelectionAfterRefresh))
+        if (!refreshPlan.RequiresSecondSnapshotPass)
             return;
 
         // Dynamic directory toggles such as DotFolders/HiddenFolders can invalidate the
         // root-folder list itself. Rebuild roots before the second extension pass so the
         // refreshed counts are based on the final selected roots instead of the pre-toggle set.
-        await PopulateRootFoldersAsync(currentPath, cancellationToken);
-        selectedRoots = GetSelectedRootFolders();
+        // File-level toggles only affect snapshot math, so a second root scan would be pure waste.
+        // Rebuild roots only when the newly-applied ignore selection can actually hide/show folders.
+        if (refreshPlan.RequiresRootFolderRefresh)
+        {
+            await PopulateRootFoldersAsync(currentPath, cancellationToken);
+            selectedRoots = GetSelectedRootFolders();
+        }
 
-        hadIgnoreCountsBefore = _hasIgnoreOptionCounts;
-        ignoreCountsBefore = _ignoreOptionCounts;
-        extensionlessBefore = _hasExtensionlessExtensionEntries;
-        extensionlessCountBefore = _extensionlessExtensionEntriesCount;
+        snapshotStateBefore = CaptureIgnoreSectionSnapshotState();
 
         await PopulateExtensionsForRootSelectionAsync(currentPath, selectedRoots, cancellationToken);
         await RefreshIgnoreOptionsAfterExtensionScanIfNeeded(
             selectedRoots,
             currentPath,
-            hadIgnoreCountsBefore,
-            ignoreCountsBefore,
-            extensionlessBefore,
-            extensionlessCountBefore,
+            new HashSet<IgnoreOptionId>(GetSelectedIgnoreOptionIds()),
+            snapshotStateBefore,
             cancellationToken);
     }
 
-    private async Task<bool> RefreshIgnoreOptionsAfterExtensionScanIfNeeded(
+    private async Task<IgnoreSectionRefreshPlan> RefreshIgnoreOptionsAfterExtensionScanIfNeeded(
         IReadOnlyCollection<string> selectedRoots,
         string currentPath,
-        bool hadIgnoreCountsBefore,
-        IgnoreOptionCounts ignoreCountsBefore,
-        bool extensionlessBefore,
-        int extensionlessCountBefore,
+        IReadOnlySet<IgnoreOptionId> ignoreSelectionBeforeRefresh,
+        IgnoreSectionSnapshotState snapshotStateBefore,
         CancellationToken cancellationToken)
     {
-        var ignoreAvailabilityChanged = hadIgnoreCountsBefore != _hasIgnoreOptionCounts ||
-                                        ignoreCountsBefore != _ignoreOptionCounts;
-        var extensionlessChanged = extensionlessBefore != _hasExtensionlessExtensionEntries ||
-                                   extensionlessCountBefore != _extensionlessExtensionEntriesCount;
-
-        if (!ignoreAvailabilityChanged && !extensionlessChanged)
-            return false;
+        var snapshotStateAfterScan = CaptureIgnoreSectionSnapshotState();
+        if (!snapshotStateBefore.HasAvailabilityDifference(snapshotStateAfterScan))
+            return IgnoreSectionRefreshPlan.None;
 
         await PopulateIgnoreOptionsForRootSelectionAsync(selectedRoots, currentPath, cancellationToken);
-        return true;
+
+        var ignoreSelectionAfterRefresh = new HashSet<IgnoreOptionId>(GetSelectedIgnoreOptionIds());
+        return IgnoreSectionRefreshPlanBuilder.Build(
+            snapshotStateBefore,
+            snapshotStateAfterScan,
+            ignoreSelectionBeforeRefresh,
+            ignoreSelectionAfterRefresh);
     }
+
+    private IgnoreSectionSnapshotState CaptureIgnoreSectionSnapshotState() =>
+        new(
+            _hasIgnoreOptionCounts,
+            _ignoreOptionCounts,
+            _hasExtensionlessExtensionEntries,
+            _extensionlessExtensionEntriesCount);
 
     private IgnoreRules GetOrBuildIgnoreRules(
         string path,
