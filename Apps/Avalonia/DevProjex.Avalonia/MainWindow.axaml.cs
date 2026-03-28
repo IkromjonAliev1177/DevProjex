@@ -6880,50 +6880,89 @@ public partial class MainWindow : Window
 
     private TreeNodeViewModel BuildTreeViewModel(TreeNodeDescriptor descriptor, TreeNodeViewModel? parent)
     {
-        return BuildTreeViewModelCore(descriptor, parent, allowParallelAtThisLevel: parent is null);
+        return BuildTreeViewModelCore(
+            descriptor,
+            parent,
+            materializeChildrenNow: parent is null,
+            allowParallelAtThisLevel: parent is null);
     }
 
     private TreeNodeViewModel BuildTreeViewModelCore(
         TreeNodeDescriptor descriptor,
         TreeNodeViewModel? parent,
+        bool materializeChildrenNow,
         bool allowParallelAtThisLevel)
     {
         var icon = _iconCache.GetIcon(descriptor.IconKey);
-        var node = new TreeNodeViewModel(descriptor, parent, icon);
+        // Eagerly building the entire view-model graph was one of the biggest remaining
+        // startup costs on large projects. We now materialize only the root-visible level
+        // during load and defer deeper branches until the UI actually needs them.
+        var node = materializeChildrenNow || descriptor.Children.Count == 0
+            ? new TreeNodeViewModel(descriptor, parent, icon)
+            : new TreeNodeViewModel(descriptor, parent, icon, BuildDeferredChildViewModels);
 
-        if (descriptor.Children.Count == 0)
+        if (!materializeChildrenNow || descriptor.Children.Count == 0)
             return node;
 
-        if (allowParallelAtThisLevel && descriptor.Children.Count >= TreeViewModelParallelChildrenThreshold)
+        foreach (var child in BuildImmediateChildViewModels(node, descriptor.Children, allowParallelAtThisLevel))
+            node.Children.Add(child);
+
+        return node;
+    }
+
+    private IReadOnlyList<TreeNodeViewModel> BuildDeferredChildViewModels(TreeNodeViewModel parent)
+    {
+        if (parent.Descriptor.Children.Count == 0)
+            return [];
+
+        return BuildImmediateChildViewModels(
+            parent,
+            parent.Descriptor.Children,
+            allowParallelAtThisLevel: false);
+    }
+
+    private List<TreeNodeViewModel> BuildImmediateChildViewModels(
+        TreeNodeViewModel parent,
+        IReadOnlyList<TreeNodeDescriptor> children,
+        bool allowParallelAtThisLevel)
+    {
+        if (children.Count == 0)
+            return [];
+
+        if (allowParallelAtThisLevel && children.Count >= TreeViewModelParallelChildrenThreshold)
         {
-            // Build first-level branches in parallel on background threads, preserving original order.
-            var childNodes = new TreeNodeViewModel[descriptor.Children.Count];
+            // Only the first visible level is built eagerly. Deeper subtrees stay lazy until the
+            // user expands them or a tree-wide operation explicitly traverses that branch.
+            var childNodes = new TreeNodeViewModel[children.Count];
             var parallelOptions = new ParallelOptions
             {
-                MaxDegreeOfParallelism = Math.Min(TreeViewModelBuildParallelism, descriptor.Children.Count)
+                MaxDegreeOfParallelism = Math.Min(TreeViewModelBuildParallelism, children.Count)
             };
 
-            Parallel.For(0, descriptor.Children.Count, parallelOptions, index =>
+            Parallel.For(0, children.Count, parallelOptions, index =>
             {
                 childNodes[index] = BuildTreeViewModelCore(
-                    descriptor.Children[index],
-                    node,
+                    children[index],
+                    parent,
+                    materializeChildrenNow: false,
                     allowParallelAtThisLevel: false);
             });
 
-            for (var i = 0; i < childNodes.Length; i++)
-                node.Children.Add(childNodes[i]);
-
-            return node;
+            return [.. childNodes];
         }
 
-        foreach (var child in descriptor.Children)
+        var realizedChildren = new List<TreeNodeViewModel>(children.Count);
+        foreach (var child in children)
         {
-            var childViewModel = BuildTreeViewModelCore(child, node, allowParallelAtThisLevel: false);
-            node.Children.Add(childViewModel);
+            var childViewModel = BuildTreeViewModelCore(
+                child,
+                parent,
+                materializeChildrenNow: false,
+                allowParallelAtThisLevel: false);
+            realizedChildren.Add(childViewModel);
         }
 
-        return node;
+        return realizedChildren;
     }
 
     private void StartPostLoadBackgroundWork(TreeNodeDescriptor treeRoot, CancellationToken cancellationToken)

@@ -482,6 +482,69 @@ public sealed class TreeNodeViewModelTests
         Assert.True(dirNode.HasChildren);
     }
 
+    [Fact]
+    public void HasChildren_ReturnsTrue_ForLazyDescriptorChildrenBeforeMaterialization()
+    {
+        var descriptor = CreateDescriptor(
+            "Root",
+            new TreeNodeDescriptor("Child", @"C:\Root\Child", true, false, "icon", []));
+
+        var node = new TreeNodeViewModel(descriptor, null, null, BuildChildrenFromDescriptor);
+
+        Assert.True(node.HasChildren);
+    }
+
+    [Fact]
+    public void ChildItemsSource_RealizesLazyChildrenOnDemand()
+    {
+        var descriptor = CreateDescriptor(
+            "Root",
+            new TreeNodeDescriptor("Child", @"C:\Root\Child", true, false, "icon", []));
+
+        var node = new TreeNodeViewModel(descriptor, null, null, BuildChildrenFromDescriptor);
+
+        var itemsSource = node.ChildItemsSource.ToList();
+
+        Assert.Single(itemsSource);
+        Assert.Equal("Child", itemsSource[0].DisplayName);
+        Assert.Single(node.Children);
+    }
+
+    [Fact]
+    public void ClearRecursive_DoesNotMaterializeLazyChildren()
+    {
+        var descriptor = CreateDescriptor(
+            "Root",
+            new TreeNodeDescriptor("Child", @"C:\Root\Child", true, false, "icon", []));
+        var factoryCallCount = 0;
+        var node = new TreeNodeViewModel(descriptor, null, null, parent =>
+        {
+            factoryCallCount++;
+            return BuildChildrenFromDescriptor(parent);
+        });
+
+        node.ClearRecursive();
+
+        Assert.Equal(0, factoryCallCount);
+        Assert.False(node.HasChildren);
+        Assert.Empty(node.ChildItemsSource);
+    }
+
+    [Fact]
+    public void IsChecked_RealizesLazyChildrenForCascadeUpdates()
+    {
+        var leafDescriptor = new TreeNodeDescriptor("Leaf", @"C:\Root\Child\Leaf", false, false, "icon", []);
+        var childDescriptor = new TreeNodeDescriptor("Child", @"C:\Root\Child", true, false, "icon", [leafDescriptor]);
+        var rootDescriptor = CreateDescriptor("Root", childDescriptor);
+        var root = new TreeNodeViewModel(rootDescriptor, null, null, BuildChildrenFromDescriptor);
+
+        root.IsChecked = true;
+
+        Assert.True(root.IsChecked is true);
+        Assert.True(root.Children[0].IsChecked is true);
+        Assert.True(root.Children[0].Children[0].IsChecked is true);
+    }
+
     #endregion
 
     private static TreeNodeViewModel CreateNode(string name)
@@ -503,5 +566,12 @@ public sealed class TreeNodeViewModelTests
 
     private static TreeNodeDescriptor CreateDescriptor(string name, params TreeNodeDescriptor[] children)
         => new(name, $"C:\\{name}", true, false, "icon", children);
+
+    private static IReadOnlyList<TreeNodeViewModel> BuildChildrenFromDescriptor(TreeNodeViewModel parent)
+    {
+        return parent.Descriptor.Children
+            .Select(child => new TreeNodeViewModel(child, parent, null, BuildChildrenFromDescriptor))
+            .ToList();
+    }
 
 }
