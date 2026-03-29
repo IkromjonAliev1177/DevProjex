@@ -53,6 +53,45 @@ public sealed class MainWindowKeyboardAndSettingsUiTests(UiWorkspaceFixture work
     }
 
     [AvaloniaFact]
+    public async Task SettingsOpen_InTreeMode_KeepsTreePaneAnchoredToLeftEdge()
+    {
+        var window = await UiTestDriver.CreateLoadedMainWindowAsync(workspace.Project);
+
+        try
+        {
+            var treePaneContainer = UiTestDriver.GetRequiredControl<Border>(window, "TreePaneContainer");
+
+            await UiTestDriver.PressKeyAsync(window, Key.P, RawInputModifiers.Control);
+            await UiTestDriver.WaitForSettingsVisibilityAsync(window, visible: false);
+
+            var anchoredLeft = UiTestDriver.GetBoundsInWindow(treePaneContainer, window).Left;
+
+            await UiTestDriver.PressKeyAsync(window, Key.P, RawInputModifiers.Control);
+
+            var minimumObservedLeft = double.PositiveInfinity;
+            for (var frame = 0; frame < 18; frame++)
+            {
+                minimumObservedLeft = Math.Min(
+                    minimumObservedLeft,
+                    UiTestDriver.GetBoundsInWindow(treePaneContainer, window).Left);
+                await UiTestDriver.WaitForSettledFramesAsync(frameCount: 1);
+            }
+
+            await UiTestDriver.WaitForSettingsVisibilityAsync(window, visible: true);
+
+            Assert.True(
+                minimumObservedLeft >= anchoredLeft - 0.75,
+                $"Tree pane shifted left during settings open. Expected left >= {anchoredLeft - 0.75:F2}, actual minimum {minimumObservedLeft:F2}.");
+            Assert.True(double.IsNaN(treePaneContainer.Width));
+            Assert.Equal(global::Avalonia.Layout.HorizontalAlignment.Stretch, treePaneContainer.HorizontalAlignment);
+        }
+        finally
+        {
+            await UiTestDriver.CloseWindowAsync(window);
+        }
+    }
+
+    [AvaloniaFact]
     public async Task PreviewOpen_WhenSettingsAreHidden_DoesNotReopenSettings()
     {
         var window = await UiTestDriver.CreateLoadedMainWindowAsync(workspace.Project);

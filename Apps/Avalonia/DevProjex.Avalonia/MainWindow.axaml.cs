@@ -1528,12 +1528,89 @@ public partial class MainWindow : Window
         return Math.Max(SplitTreePaneMinWidth, workspaceWidth - settingsWidth);
     }
 
+    private double GetAvailableWorkspaceWidthForSettingsAnimation(double settingsPanelWidth, bool includeSplitter)
+    {
+        if (_workspaceGrid is null)
+            return 0;
+
+        var workspaceWidth = _workspaceGrid.Bounds.Width;
+        if (workspaceWidth <= 0.5)
+            return 0;
+
+        var reservedSettingsWidth = settingsPanelWidth > 0.5
+            ? settingsPanelWidth + (includeSplitter ? PreviewSettingsSplitterWidth : 0.0)
+            : 0.0;
+        return Math.Max(0, workspaceWidth - reservedSettingsWidth);
+    }
+
+    private double ResolveTreeModeTargetWidthForSettingsAnimation(double settingsPanelWidth, bool includeSplitter)
+    {
+        var availableWidth = GetAvailableWorkspaceWidthForSettingsAnimation(settingsPanelWidth, includeSplitter);
+        return availableWidth <= 0.5
+            ? SplitTreePaneMinWidth
+            : Math.Max(SplitTreePaneMinWidth, availableWidth);
+    }
+
+    private double ResolvePreviewOnlyTargetWidthForSettingsAnimation(double settingsPanelWidth, bool includeSplitter)
+    {
+        var availableWidth = GetAvailableWorkspaceWidthForSettingsAnimation(settingsPanelWidth, includeSplitter);
+        return availableWidth <= 0.5
+            ? SplitPreviewPaneMinWidth
+            : Math.Max(SplitPreviewPaneMinWidth, availableWidth);
+    }
+
+    private double ResolvePreviewPaneTargetWidthForSettingsAnimation(
+        double treePaneWidth,
+        double settingsPanelWidth,
+        bool includeSplitter)
+    {
+        var availableWorkspaceWidth = GetAvailableWorkspaceWidthForSettingsAnimation(settingsPanelWidth, includeSplitter);
+        var availableSplitWidth = Math.Max(0, availableWorkspaceWidth - TreePreviewSplitterWidth);
+        return availableSplitWidth <= 0.5
+            ? SplitPreviewPaneMinWidth
+            : Math.Max(SplitPreviewPaneMinWidth, availableSplitWidth - treePaneWidth);
+    }
+
+    private void SetSettingsAnimationPaneAnchors(WorkspaceDisplayMode displayMode, bool anchoredToLeftEdge)
+    {
+        switch (displayMode)
+        {
+            case WorkspaceDisplayMode.Tree:
+                SetSettingsAnimationPaneAnchor(_treePaneContainer, anchoredToLeftEdge);
+                break;
+
+            case WorkspaceDisplayMode.PreviewOnly:
+            case WorkspaceDisplayMode.PreviewWithTree:
+                SetSettingsAnimationPaneAnchor(_previewPaneContainer, anchoredToLeftEdge);
+                break;
+        }
+    }
+
+    private static void SetSettingsAnimationPaneAnchor(Border? pane, bool anchoredToLeftEdge)
+    {
+        if (pane is null)
+            return;
+
+        // Explicit Width stops Stretch from controlling layout. While the settings panel is
+        // animating, anchor the active pane to the left edge so the grid cannot recenter it.
+        pane.HorizontalAlignment = anchoredToLeftEdge
+            ? HorizontalAlignment.Left
+            : HorizontalAlignment.Stretch;
+    }
+
     private void UpdatePreviewSettingsSplitterState()
     {
         if (_previewSettingsSplitterColumn is null)
             return;
 
-        var isVisible = ShouldShowPreviewSettingsSplitter();
+        SetPreviewSettingsSplitterVisibility(ShouldShowPreviewSettingsSplitter());
+    }
+
+    private void SetPreviewSettingsSplitterVisibility(bool isVisible)
+    {
+        if (_previewSettingsSplitterColumn is null)
+            return;
+
         _previewSettingsSplitterColumn.Width = new GridLength(isVisible ? PreviewSettingsSplitterWidth : 0);
 
         if (_previewSettingsSplitter is not null)
@@ -4365,23 +4442,113 @@ public partial class MainWindow : Window
         if (_settingsIsland is null || _settingsTransform is null || _settingsContainer is null) return;
         if (_settingsAnimating) return;
 
+        var displayMode = GetCurrentDisplayMode();
         _settingsAnimating = true;
         try
         {
+            await Dispatcher.UIThread.InvokeAsync(static () => { }, DispatcherPriority.Render);
+
             EnsureSettingsPanelTransitions();
             _currentSettingsPanelWidth = GetClampedSettingsPanelWidth(_currentSettingsPanelWidth);
             var targetVisibleWidth = _currentSettingsPanelWidth;
+            var currentTreeWidth = Math.Max(SplitTreePaneMinWidth, ResolvePreviewTreePaneVisibleWidth());
+            var currentPreviewWidth = Math.Max(SplitPreviewPaneMinWidth, ResolvePreviewPaneVisibleWidth());
+
+            SetSettingsAnimationPaneAnchors(displayMode, anchoredToLeftEdge: true);
 
             if (show)
-                UpdatePreviewSettingsSplitterState();
+            {
+                SetPreviewSettingsSplitterVisibility(true);
+
+                // Drive the neighboring pane with the same easing so the grid does not
+                // have to "catch up" to an Auto-sized settings column on every frame.
+                switch (displayMode)
+                {
+                    case WorkspaceDisplayMode.Tree:
+                        ApplyPreviewTreePaneWidth(currentTreeWidth, animate: false);
+                        ApplyPreviewTreePaneWidth(
+                            ResolveTreeModeTargetWidthForSettingsAnimation(targetVisibleWidth, includeSplitter: true),
+                            animate: true);
+                        break;
+
+                    case WorkspaceDisplayMode.PreviewOnly:
+                        ApplyPreviewPaneWidth(currentPreviewWidth, animate: false);
+                        ApplyPreviewPaneWidth(
+                            ResolvePreviewOnlyTargetWidthForSettingsAnimation(targetVisibleWidth, includeSplitter: true),
+                            animate: true);
+                        break;
+
+                    case WorkspaceDisplayMode.PreviewWithTree:
+                        ApplyPreviewTreePaneWidth(currentTreeWidth, animate: false);
+                        ApplyPreviewPaneWidth(currentPreviewWidth, animate: false);
+                        ApplyPreviewPaneWidth(
+                            ResolvePreviewPaneTargetWidthForSettingsAnimation(
+                                currentTreeWidth,
+                                targetVisibleWidth,
+                                includeSplitter: true),
+                            animate: true);
+                        break;
+                }
+            }
+            else
+            {
+                // Drop the splitter at close start so the neighboring pane can reclaim
+                // the full width during the animation instead of jumping at the end.
+                SetPreviewSettingsSplitterVisibility(false);
+
+                switch (displayMode)
+                {
+                    case WorkspaceDisplayMode.Tree:
+                        ApplyPreviewTreePaneWidth(currentTreeWidth, animate: false);
+                        ApplyPreviewTreePaneWidth(
+                            ResolveTreeModeTargetWidthForSettingsAnimation(0.0, includeSplitter: false),
+                            animate: true);
+                        break;
+
+                    case WorkspaceDisplayMode.PreviewOnly:
+                        ApplyPreviewPaneWidth(currentPreviewWidth, animate: false);
+                        ApplyPreviewPaneWidth(
+                            ResolvePreviewOnlyTargetWidthForSettingsAnimation(0.0, includeSplitter: false),
+                            animate: true);
+                        break;
+
+                    case WorkspaceDisplayMode.PreviewWithTree:
+                        ApplyPreviewTreePaneWidth(currentTreeWidth, animate: false);
+                        ApplyPreviewPaneWidth(currentPreviewWidth, animate: false);
+                        ApplyPreviewPaneWidth(
+                            ResolvePreviewPaneTargetWidthForSettingsAnimation(
+                                currentTreeWidth,
+                                0.0,
+                                includeSplitter: false),
+                            animate: true);
+                        break;
+                }
+            }
 
             ApplySettingsPanelWidth(show ? targetVisibleWidth : 0.0, animate: true);
             _settingsTransform.X = show ? 0.0 : targetVisibleWidth;
             _settingsIsland.Opacity = show ? 1.0 : 0.0;
             await WaitForPanelAnimationAsync(SettingsPanelAnimationDuration);
+
+            switch (displayMode)
+            {
+                case WorkspaceDisplayMode.Tree:
+                    ApplyPreviewTreePaneWidth(double.NaN, animate: false);
+                    break;
+
+                case WorkspaceDisplayMode.PreviewOnly:
+                    ApplyPreviewPaneWidth(double.NaN, animate: false);
+                    break;
+
+                case WorkspaceDisplayMode.PreviewWithTree:
+                    ApplyPreviewTreePaneWidth(ResolveDesiredPreviewTreePaneWidth(), animate: false);
+                    ApplyPreviewPaneWidth(double.NaN, animate: false);
+                    break;
+            }
         }
         finally
         {
+            SetSettingsAnimationPaneAnchors(displayMode, anchoredToLeftEdge: false);
             _settingsAnimating = false;
             UpdatePreviewSettingsSplitterState();
             UpdateAdaptiveWorkspaceChrome();
