@@ -13,6 +13,7 @@ internal static class Program
     {
         var builder = AppBuilder.Configure<App>()
             .UsePlatformDetect()
+            .With(CreateWin32PlatformOptions())
             .With(new SkiaOptions
             {
                 MaxGpuResourceSizeBytes = SkiaGpuCacheLimitBytes
@@ -24,4 +25,12 @@ internal static class Program
 
         return builder;
     }
+
+    internal static Win32PlatformOptions CreateWin32PlatformOptions()
+        => new()
+        {
+            // Rounded WinUI composition backdrops prevent square translucent corners
+            // on blurred top-levels such as popups, tooltips and borderless dialogs.
+            WinUICompositionBackdropCornerRadius = 12f
+        };
 }
