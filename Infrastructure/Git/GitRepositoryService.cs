@@ -34,6 +34,8 @@ public sealed class GitRepositoryService : IGitRepositoryService
     /// </summary>
     public async Task<bool> IsGitAvailableAsync(CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+
         try
         {
             var result = await RunGitCommandAsync(null, "--version", cancellationToken);
