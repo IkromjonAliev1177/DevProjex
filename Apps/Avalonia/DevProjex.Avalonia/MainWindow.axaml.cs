@@ -4019,11 +4019,10 @@ public partial class MainWindow : Window
     [DllImport("kernel32.dll")]
     private static extern bool SetProcessWorkingSetSize(IntPtr process, nint minWorkingSetSize, nint maxWorkingSetSize);
 
-    private static async Task WaitForTreeRenderStabilizationAsync(CancellationToken cancellationToken)
+    private async Task WaitForTreeRenderStabilizationAsync(CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        // Wait for two render passes so the tree has time to materialize and paint.
         await Dispatcher.UIThread.InvokeAsync(
             static () => { },
             DispatcherPriority.Render);
@@ -4034,8 +4033,62 @@ public partial class MainWindow : Window
             DispatcherPriority.Render);
         cancellationToken.ThrowIfCancellationRequested();
 
-        // Small buffer helps avoid visual contention with immediate post-load updates.
-        await Task.Delay(UiTimingProfile.Scale(TimeSpan.FromMilliseconds(140)), cancellationToken);
+        if (_workspaceGrid is null || _treePaneContainer is null || _settingsContainer is null)
+        {
+            await Task.Delay(UiTimingProfile.Scale(TimeSpan.FromMilliseconds(140)), cancellationToken);
+            return;
+        }
+
+        var readinessTimeout = UiTimingProfile.Scale(TimeSpan.FromMilliseconds(700));
+        var frameDelay = UiTimingProfile.Scale(TimeSpan.FromMilliseconds(16));
+        var stopwatch = Stopwatch.StartNew();
+        var previousWorkspaceWidth = 0.0;
+        var previousTreeWidth = 0.0;
+        var stableSamples = 0;
+
+        while (stopwatch.Elapsed < readinessTimeout)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            await Dispatcher.UIThread.InvokeAsync(
+                static () => { },
+                DispatcherPriority.Render);
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var workspaceWidth = _workspaceGrid.Bounds.Width;
+            var treeWidth = ResolvePreviewTreePaneVisibleWidth();
+            var previewWidth = ResolvePreviewPaneVisibleWidth();
+            var settingsWidth = _settingsContainer.Bounds.Width > 0.5
+                ? _settingsContainer.Bounds.Width
+                : _settingsContainer.Width;
+
+            // The deferred settings animation must start only after the tree already owns
+            // the full workspace width. Otherwise the animation begins from a fallback width
+            // and the first reveal looks like a jump instead of a smooth shrink.
+            var treeOccupiesWorkspace =
+                workspaceWidth > 0.5 &&
+                treeWidth > 0.5 &&
+                previewWidth <= 0.5 &&
+                settingsWidth <= 0.5 &&
+                Math.Abs(treeWidth - workspaceWidth) <= 2.0;
+
+            var widthStable =
+                Math.Abs(workspaceWidth - previousWorkspaceWidth) <= 0.5 &&
+                Math.Abs(treeWidth - previousTreeWidth) <= 0.5;
+
+            stableSamples = treeOccupiesWorkspace && widthStable
+                ? stableSamples + 1
+                : 0;
+
+            if (stableSamples >= 2)
+                break;
+
+            previousWorkspaceWidth = workspaceWidth;
+            previousTreeWidth = treeWidth;
+            await Task.Delay(frameDelay, cancellationToken);
+        }
+
+        await Task.Delay(UiTimingProfile.Scale(TimeSpan.FromMilliseconds(60)), cancellationToken);
     }
 
     private void EnsurePreviewTreePaneTransitions()

@@ -21,7 +21,9 @@ internal static class UiTestDriver
     private static readonly TimeSpan PollDelay = FastTimingsEnabled ? TimeSpan.FromMilliseconds(1) : TimeSpan.FromMilliseconds(15);
     private static readonly TimeSpan FrameDelay = FastTimingsEnabled ? TimeSpan.FromMilliseconds(1) : TimeSpan.FromMilliseconds(6);
 
-    public static async Task<MainWindow> CreateLoadedMainWindowAsync(UiTestProject project)
+    public static async Task<MainWindow> CreateLoadedMainWindowAsync(
+        UiTestProject project,
+        bool waitForInitialSettingsPane = true)
     {
         var options = new CommandLineOptions(project.RootPath, AppLanguage.En, false);
         var appDataPath = Path.Combine(project.AppDataPath, Guid.NewGuid().ToString("N"));
@@ -55,18 +57,21 @@ internal static class UiTestDriver
 
         await WaitForSelectionRefreshIdleAsync(window);
 
-        await WaitForConditionAsync(
-            window,
-            () =>
-            {
-                var viewModel = GetViewModel(window);
-                if (!viewModel.SettingsVisible)
-                    return true;
+        if (waitForInitialSettingsPane)
+        {
+            await WaitForConditionAsync(
+                window,
+                () =>
+                {
+                    var viewModel = GetViewModel(window);
+                    if (!viewModel.SettingsVisible)
+                        return true;
 
-                var settingsContainer = GetRequiredControl<Border>(window, "SettingsContainer");
-                return GetActualWidth(settingsContainer) >= 200;
-            },
-            "initial settings pane to become visually available");
+                    var settingsContainer = GetRequiredControl<Border>(window, "SettingsContainer");
+                    return GetActualWidth(settingsContainer) >= 200;
+                },
+                "initial settings pane to become visually available");
+        }
 
         await WaitForSettledFramesAsync(frameCount: 24);
         return window;
