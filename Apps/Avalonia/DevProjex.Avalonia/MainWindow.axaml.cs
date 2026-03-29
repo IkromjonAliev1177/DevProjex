@@ -79,6 +79,7 @@ public partial class MainWindow : Window
     private readonly record struct PreviewSelectionMetricsSnapshot(
         IPreviewTextDocument Document,
         PreviewSelectionRange SelectionRange);
+    private readonly record struct ProjectProfileLoadSnapshot(bool HasProfile, ProjectSelectionProfile? Profile);
 
     private readonly record struct TreeMetricsCacheKey(
         int TreeIdentity,
@@ -178,6 +179,8 @@ public partial class MainWindow : Window
     private ExportPathPresentation? _cachedPathPresentation;
     private bool _elevationAttempted;
     private bool _wasThemePopoverOpen;
+    private bool _awaitingSystemDialogActivation;
+    private TaskCompletionSource<bool>? _systemDialogActivationTcs;
     private UserSettingsDb _userSettingsDb = new();
     private ThemePresetVariant _currentThemeVariant = ThemePresetVariant.Dark;
     private ThemePresetEffect _currentEffectMode = ThemePresetEffect.Transparent;
@@ -316,6 +319,7 @@ public partial class MainWindow : Window
     private int _previewMemoryCleanupVersion;
     private CancellationTokenSource? _searchMemoryCleanupCts;
     private int _searchMemoryCleanupVersion;
+    private CancellationTokenSource? _backgroundMemoryCleanupCts;
     private PreviewCacheKeyData? _cachedPreviewKey;
     private CancellationTokenSource? _previewModeSwitchCts;
     private int _previewModeSwitchVersion;
@@ -572,6 +576,7 @@ public partial class MainWindow : Window
             () => _currentPath);
 
         Closed += OnWindowClosed;
+        Activated += OnActivated;
         Deactivated += OnDeactivated;
 
         _elevationAttempted = startupOptions.ElevationAttempted;
@@ -707,6 +712,7 @@ public partial class MainWindow : Window
         // Unsubscribe from window lifecycle events
         Opened -= OnOpened;
         Closed -= OnWindowClosed;
+        Activated -= OnActivated;
         Deactivated -= OnDeactivated;
 
         // Cancel metrics calculation
@@ -720,6 +726,7 @@ public partial class MainWindow : Window
             _metricsDebounceTimer.Stop();
             _metricsDebounceTimer.Tick -= OnMetricsDebounceTimerTick;
         }
+        CancelBackgroundMemoryCleanup();
         _previewSelectionMetricsCts?.Cancel();
         _previewSelectionMetricsCts?.Dispose();
         if (_previewSelectionMetricsDebounceTimer is not null)
@@ -864,16 +871,66 @@ public partial class MainWindow : Window
         UpdateToastHostLayout();
     }
 
+    private void OnActivated(object? sender, EventArgs e)
+    {
+        CancelBackgroundMemoryCleanup();
+        _systemDialogActivationTcs?.TrySetResult(true);
+    }
+
     private void OnDeactivated(object? sender, EventArgs e)
     {
+        if (_awaitingSystemDialogActivation && _systemDialogActivationTcs is null)
+        {
+            _systemDialogActivationTcs =
+                new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        }
+
         if (_viewModel.HelpPopoverOpen)
             _viewModel.HelpPopoverOpen = false;
         if (_viewModel.HelpDocsPopoverOpen)
             _viewModel.HelpDocsPopoverOpen = false;
 
+        // Native pickers temporarily deactivate the main window too. Running aggressive cleanup
+        // during that handoff makes the dialog open/close path feel heavier than it should.
+        if (_awaitingSystemDialogActivation)
+            return;
+
         // App lost focus — ideal time to compact the heap and return pages to the OS.
         // Runs on a background thread so the deactivation handler returns instantly.
         ScheduleBackgroundMemoryCleanup();
+    }
+
+    private async Task WaitForWindowActivationAfterSystemDialogAsync(CancellationToken cancellationToken = default)
+    {
+        var activationTcs = _systemDialogActivationTcs;
+        _systemDialogActivationTcs = null;
+        _awaitingSystemDialogActivation = false;
+
+        if (activationTcs is not null)
+        {
+            var activationTimeout = UiTimingProfile.Scale(TimeSpan.FromMilliseconds(700));
+            await Task.WhenAny(
+                activationTcs.Task,
+                Task.Delay(activationTimeout, cancellationToken));
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+        await Dispatcher.UIThread.InvokeAsync(static () => { }, DispatcherPriority.Background);
+        cancellationToken.ThrowIfCancellationRequested();
+        await Dispatcher.UIThread.InvokeAsync(static () => { }, DispatcherPriority.Render);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        // The first frame after a native picker closes is often the focus/activation handoff frame.
+        // Give the window one short extra beat before project-load work starts on the same UI loop.
+        await Task.Delay(UiTimingProfile.Scale(TimeSpan.FromMilliseconds(50)), cancellationToken);
+    }
+
+    private static async Task YieldProjectLoadStartupFrameAsync(CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        await Dispatcher.UIThread.InvokeAsync(static () => { }, DispatcherPriority.Background);
+        cancellationToken.ThrowIfCancellationRequested();
+        await Dispatcher.UIThread.InvokeAsync(static () => { }, DispatcherPriority.Render);
     }
 
     private async void OnOpened(object? sender, EventArgs e)
@@ -2107,26 +2164,39 @@ public partial class MainWindow : Window
                 Title = _viewModel.MenuFileOpen
             };
 
+            CancelBackgroundMemoryCleanup();
+            _awaitingSystemDialogActivation = true;
+            _systemDialogActivationTcs = null;
             var folders = await StorageProvider.OpenFolderPickerAsync(options);
             var folder = folders.FirstOrDefault();
             var path = folder?.TryGetLocalPath();
             if (string.IsNullOrWhiteSpace(path))
+            {
+                _awaitingSystemDialogActivation = false;
+                _systemDialogActivationTcs = null;
                 return;
+            }
 
+            await WaitForWindowActivationAfterSystemDialogAsync();
             await TryOpenFolderAsync(path, fromDialog: true);
         }
         catch (OperationCanceledException)
         {
+            _awaitingSystemDialogActivation = false;
+            _systemDialogActivationTcs = null;
             // Cancellation is handled by status operation fallback.
         }
         catch (Exception ex)
         {
+            _awaitingSystemDialogActivation = false;
+            _systemDialogActivationTcs = null;
             await ShowErrorAsync(ex.Message);
         }
     }
 
     private async void OnRefresh(object? sender, RoutedEventArgs e)
     {
+        CancelBackgroundMemoryCleanup();
         CancelPreviewRefresh();
         var refreshCts = ReplaceCancellationSource(ref _projectOperationCts);
         var cancellationToken = refreshCts.Token;
@@ -2139,6 +2209,8 @@ public partial class MainWindow : Window
         {
             await ReloadProjectAsync(cancellationToken, applyStoredProfile: true);
             CompleteStatusOperation(statusOperationId);
+            ScheduleBackgroundMemoryCleanupAfterUiSettles(
+                SettingsPanelAnimationDuration + TimeSpan.FromMilliseconds(300));
             _toastService.Show(_localization["Toast.Refresh.Success"]);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -3894,13 +3966,68 @@ public partial class MainWindow : Window
     /// (project load, git branch switch, git pull, search/filter close, deactivation).
     /// The delay lets finalizers and UI thread finish releasing references before sweep.
     /// </summary>
-    private static void ScheduleBackgroundMemoryCleanup()
+    private void ScheduleBackgroundMemoryCleanup()
+        => ScheduleBackgroundMemoryCleanupCore(
+            UiTimingProfile.Scale(TimeSpan.FromMilliseconds(400)),
+            waitForUiSettled: false);
+
+    private void ScheduleBackgroundMemoryCleanupAfterUiSettles(TimeSpan additionalDelay)
+        => ScheduleBackgroundMemoryCleanupCore(
+            UiTimingProfile.Scale(additionalDelay),
+            waitForUiSettled: true);
+
+    private void ScheduleBackgroundMemoryCleanupCore(TimeSpan delay, bool waitForUiSettled)
     {
+        var cleanupCts = ReplaceCancellationSource(ref _backgroundMemoryCleanupCts);
+
         _ = Task.Run(async () =>
         {
-            await Task.Delay(UiTimingProfile.Scale(TimeSpan.FromMilliseconds(400)));
-            ForceMemoryCleanup();
-        });
+            try
+            {
+                if (waitForUiSettled)
+                    await WaitForUiReadyForMemoryCleanupAsync(cleanupCts.Token);
+
+                await Task.Delay(delay, cleanupCts.Token);
+                cleanupCts.Token.ThrowIfCancellationRequested();
+                ForceMemoryCleanup();
+            }
+            catch (OperationCanceledException)
+            {
+                // Ignore canceled cleanup runs; a newer user interaction superseded them.
+            }
+            finally
+            {
+                DisposeIfCurrent(ref _backgroundMemoryCleanupCts, cleanupCts);
+            }
+        }, cleanupCts.Token);
+    }
+
+    private async Task WaitForUiReadyForMemoryCleanupAsync(CancellationToken cancellationToken)
+    {
+        var stableSamples = 0;
+
+        while (stableSamples < 3)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var isUiReady = await Dispatcher.UIThread.InvokeAsync(
+                () => IsVisible &&
+                      !_viewModel.StatusBusy &&
+                      !_viewModel.IsPreviewLoading &&
+                      !_settingsAnimating &&
+                      !_previewModeSwitchInProgress,
+                DispatcherPriority.Background);
+
+            stableSamples = isUiReady ? stableSamples + 1 : 0;
+            await Task.Delay(UiTimingProfile.Scale(TimeSpan.FromMilliseconds(120)), cancellationToken);
+        }
+    }
+
+    private void CancelBackgroundMemoryCleanup()
+    {
+        var previous = Interlocked.Exchange(ref _backgroundMemoryCleanupCts, null);
+        previous?.Cancel();
+        previous?.Dispose();
     }
 
     /// <summary>
@@ -6636,6 +6763,13 @@ public partial class MainWindow : Window
         return _projectProfileStore.TryLoadProfile(_currentPath, out profile);
     }
 
+    private ProjectProfileLoadSnapshot LoadProjectProfileSnapshot()
+    {
+        return TryGetLocalProjectProfile(out var profile)
+            ? new ProjectProfileLoadSnapshot(true, profile)
+            : new ProjectProfileLoadSnapshot(false, null);
+    }
+
     private bool IsLocalProjectProfilePersistenceApplicable()
         => _viewModel.ProjectSourceType == ProjectSourceType.LocalFolder;
 
@@ -6659,11 +6793,13 @@ public partial class MainWindow : Window
 
         _activeProjectLoadCancellationSnapshot = CaptureProjectLoadCancellationSnapshot();
         await PrepareSearchAndFilterForProjectLoadAsync();
+        CancelBackgroundMemoryCleanup();
         CancelPreviewRefresh();
+        var hadLoadedProjectBefore = _viewModel.IsProjectLoaded;
 
         // Clear previous project state BEFORE loading new one to release memory early
         // This is critical when switching between large projects
-        if (_viewModel.IsProjectLoaded)
+        if (hadLoadedProjectBefore)
             ClearPreviousProjectState(forceCompactingGc: true);
 
         var cachedRepoPathToDeleteOnSuccess = fromDialog ? _currentCachedRepoPath : null;
@@ -6695,6 +6831,7 @@ public partial class MainWindow : Window
             }
 
             UpdateTitle();
+            await YieldProjectLoadStartupFrameAsync(cancellationToken);
 
             await ReloadProjectAsync(cancellationToken, applyStoredProfile: true);
 
@@ -6708,9 +6845,21 @@ public partial class MainWindow : Window
             _activeProjectLoadCancellationSnapshot = null;
             CompleteStatusOperation(statusOperationId);
 
-            // Clean up memory from previous project (old tree, strings, etc.)
-            // Must be AFTER loading new project so old references are replaced
-            ScheduleBackgroundMemoryCleanup();
+            // First project load has nothing meaningful to reclaim yet. Skip the post-load sweep there
+            // so the initial settings reveal and early interaction stay as smooth as possible.
+            if (hadLoadedProjectBefore)
+            {
+                // Clean up memory from previous project (old tree, strings, etc.)
+                // Must be AFTER loading new project so old references are replaced.
+                ScheduleBackgroundMemoryCleanup();
+            }
+            else
+            {
+                // First load still creates temporary buffers and transient strings, but reclaim them
+                // only after the initial UI settles so opening the project keeps feeling smooth.
+                ScheduleBackgroundMemoryCleanupAfterUiSettles(
+                    SettingsPanelAnimationDuration + TimeSpan.FromMilliseconds(500));
+            }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -6772,8 +6921,11 @@ public partial class MainWindow : Window
 
         if (applyStoredProfile)
         {
-            if (TryGetLocalProjectProfile(out var profile))
-                _selectionCoordinator.ApplyProjectProfileSelections(_currentPath, profile);
+            var profileSnapshot = await Task.Run(LoadProjectProfileSnapshot, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (profileSnapshot is { HasProfile: true, Profile: not null })
+                _selectionCoordinator.ApplyProjectProfileSelections(_currentPath, profileSnapshot.Profile);
             else
                 _selectionCoordinator.ResetProjectProfileSelections(_currentPath);
         }
@@ -7342,7 +7494,7 @@ public partial class MainWindow : Window
         // so opening a project is no longer blocked by metrics warmup or cosmetic panel animation.
         StartDeferredSettingsPanelAnimation(cancellationToken);
         ObserveDetachedTask(
-            InitializeFileMetricsCacheAsync(treeRoot, cancellationToken),
+            InitializeFileMetricsCacheWhenUiSettlesAsync(treeRoot, cancellationToken),
             "InitializeFileMetricsCache");
     }
 
@@ -7361,6 +7513,26 @@ public partial class MainWindow : Window
         await WaitForTreeRenderStabilizationAsync(cancellationToken);
         if (_viewModel.SettingsVisible && !_settingsAnimating)
             AnimateSettingsPanel(true);
+    }
+
+    private async Task InitializeFileMetricsCacheWhenUiSettlesAsync(
+        TreeNodeDescriptor treeRoot,
+        CancellationToken cancellationToken)
+    {
+        await Dispatcher.UIThread.InvokeAsync(static () => { }, DispatcherPriority.Render);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        await Dispatcher.UIThread.InvokeAsync(static () => { }, DispatcherPriority.Render);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        // Metrics warmup is useful but not user-critical. Let the initial layout, activation handoff
+        // and the first settings reveal finish before background metrics start posting progress updates.
+        await Task.Delay(
+            SettingsPanelAnimationDuration + UiTimingProfile.Scale(TimeSpan.FromMilliseconds(80)),
+            cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        await InitializeFileMetricsCacheAsync(treeRoot, cancellationToken);
     }
 
     private static async void ObserveDetachedTask(Task task, string operationName)
