@@ -26,6 +26,37 @@
     <Style Selector="Border.content-processing-status-indicator:pointerover">
       <Setter Property="Opacity" Value="1" />
     </Style>
+	<Style Selector="Grid.git-scope-row">
+	  <Setter Property="Margin" Value="5,5,5,0" />
+	</Style>
+	<Style Selector="TextBlock.git-scope-label">
+	  <Setter Property="FontSize" Value="13" />
+	  <Setter Property="VerticalAlignment" Value="Center" />
+	  <Setter Property="TextWrapping" Value="NoWrap" />
+	  <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+	</Style>
+	<Style Selector="ComboBox.git-scope">
+	  <Setter Property="MinWidth" Value="0" />
+	  <Setter Property="Height" Value="26" />
+	  <Setter Property="HorizontalAlignment" Value="Stretch" />
+	  <Setter Property="Background" Value="Transparent" />
+	  <Setter Property="BorderBrush" Value="{DynamicResource AppBorderBrush}" />
+	  <Setter Property="BorderThickness" Value="1" />
+	  <Setter Property="CornerRadius" Value="4" />
+	</Style>
+	<Style Selector="ComboBox.git-scope.non-default /template/ ContentPresenter#PART_ContentPresenter TextBlock.git-scope-selected-text">
+	  <Setter Property="Foreground" Value="{DynamicResource AppAccentBrush}" />
+	</Style>
+	<Style Selector="Window.compact-mode Grid.git-scope-row">
+	  <Setter Property="Margin" Value="5,3,5,0" />
+	</Style>
+	<Style Selector="Window.compact-mode TextBlock.git-scope-label">
+	  <Setter Property="FontSize" Value="11" />
+	</Style>
+	<Style Selector="Window.compact-mode ComboBox.git-scope">
+	  <Setter Property="Height" Value="23" />
+	  <Setter Property="FontSize" Value="12" />
+	</Style>
     <Style Selector="ListBox.settings-list /template/ ScrollViewer">
       <Setter Property="Padding" Value="5" />
       <Setter Property="Background" Value="Transparent" />
@@ -121,8 +152,59 @@
                     IsChecked="{Binding AllIgnoreChecked, Mode=TwoWay}"
                     IsCheckedChanged="OnIgnoreAllChanged" />
         </Grid>
-        <Border Grid.Row="1" Classes="checklist-border">
-          <ListBox Name="IgnoreOptionsList"
+		<Border Grid.Row="1" Classes="checklist-border">
+		  <Grid RowDefinitions="Auto,*">
+			<Grid Name="GitScopeRow"
+			      Grid.Row="0"
+			      Classes="git-scope-row"
+			      RowDefinitions="Auto,Auto"
+			      ColumnDefinitions="Auto,8,*"
+			      IsVisible="{Binding HasGitScopeOptions}">
+			  <TextBlock Grid.Row="0"
+			             Grid.Column="0"
+			             Classes="git-scope-label"
+			             Text="{Binding SettingsGitScopeLabel}" />
+			  <ComboBox Name="GitScopeComboBox"
+			            Grid.Row="0"
+			            Grid.Column="2"
+			            Classes="git-scope"
+			            Classes.non-default="{Binding IsGitScopeNonDefault}"
+			            ItemsSource="{Binding GitScopeOptions}"
+			            SelectedValueBinding="{Binding Kind}"
+			            SelectedValue="{Binding SelectedGitScope, Mode=TwoWay}"
+			            HorizontalContentAlignment="Stretch">
+				<ComboBox.SelectionBoxItemTemplate>
+				  <DataTemplate x:DataType="vm:GitScopeOptionViewModel">
+					<TextBlock Classes="git-scope-selected-text"
+					           Text="{Binding Label}"
+					           TextWrapping="NoWrap"
+					           TextTrimming="CharacterEllipsis" />
+				  </DataTemplate>
+				</ComboBox.SelectionBoxItemTemplate>
+				<ComboBox.ItemTemplate>
+				  <DataTemplate x:DataType="vm:GitScopeOptionViewModel">
+					<Border ToolTip.ShowDelay="450">
+					  <ToolTip.Tip>
+						<ToolTip MaxWidth="300">
+						  <TextBlock Text="{Binding Tooltip}"
+						             MaxWidth="280"
+						             TextWrapping="Wrap" />
+						</ToolTip>
+					  </ToolTip.Tip>
+					  <TextBlock Text="{Binding Label}"
+					             TextWrapping="NoWrap"
+					             TextTrimming="CharacterEllipsis" />
+					</Border>
+				  </DataTemplate>
+				</ComboBox.ItemTemplate>
+			  </ComboBox>
+			  <Border Grid.Row="1"
+			          Grid.ColumnSpan="3"
+			          Classes="ignore-option-separator"
+			          Margin="0,5,0,2" />
+			</Grid>
+            <ListBox Name="IgnoreOptionsList"
+			         Grid.Row="1"
                    Classes="settings-list"
                    ItemsSource="{Binding PathIgnoreOptions}"
                    SelectionMode="Multiple"
@@ -149,7 +231,8 @@
                 </Border>
               </DataTemplate>
             </ListBox.ItemTemplate>
-          </ListBox>
+			</ListBox>
+		  </Grid>
         </Border>
       </Grid>
 

@@ -74,6 +74,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
     private bool _allExtensionsChecked;
     private bool _allIgnoreChecked;
 	private bool _allContentProcessingChecked;
+	private GitScopeKind _selectedGitScope;
 	private IgnoreOptionViewModel? _hideSecretsOption;
 	private IgnoreOptionViewModel? _hidePrivateDataOption;
 	private ContentRedactionStatus _secretsRedactionStatus;
@@ -217,6 +218,21 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
 		new ResettableObservableCollection<IgnoreOptionViewModel>();
 	public ObservableCollection<IgnoreOptionViewModel> ContentProcessingOptions { get; } =
 		new ResettableObservableCollection<IgnoreOptionViewModel>();
+	public IReadOnlyList<GitScopeOptionViewModel> GitScopeOptions { get; private set; } = [];
+	public GitScopeKind SelectedGitScope
+	{
+		get => _selectedGitScope;
+		set
+		{
+			if (_selectedGitScope == value) return;
+			_selectedGitScope = value;
+			RaisePropertyChanged();
+			RaisePropertyChanged(nameof(IsGitScopeNonDefault));
+		}
+	}
+	public bool IsGitScopeNonDefault => SelectedGitScope != GitScopeKind.AllFiles;
+	public bool HasGitScopeOptions => PathIgnoreOptions.Any(static option =>
+		option.Id is IgnoreOptionId.UseGitIgnore or IgnoreOptionId.TrackedGitFilesOnly);
 	public IgnoreOptionViewModel? HideSecretsOption
 	{
 		get => _hideSecretsOption;
@@ -1701,6 +1717,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
     public string ThemeBorderVisibility { get; private set; } = string.Empty;
     public string ThemeMenuTransparency { get; private set; } = string.Empty;
     public string SettingsIgnoreTitle { get; private set; } = string.Empty;
+	public string SettingsGitScopeLabel { get; private set; } = string.Empty;
 	public string SettingsSecretsTitle { get; private set; } = string.Empty;
 	public string SettingsSecretsNotice { get; private set; } = string.Empty;
 	public string SettingsPrivateDataNotice { get; private set; } = string.Empty;
@@ -1879,6 +1896,30 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
         HelpAboutOpenLink = _localization["Help.About.OpenLink"];
         UpdateApplicationUpdateLocalization();
         SettingsIgnoreTitle = _localization["Settings.IgnoreTitle"];
+		SettingsGitScopeLabel = _localization["Settings.GitScope.Label"];
+		GitScopeOptions =
+		[
+			new GitScopeOptionViewModel(
+				GitScopeKind.AllFiles,
+				_localization["Settings.GitScope.AllFiles"],
+				_localization["Settings.GitScope.AllFiles.Tooltip"]),
+			new GitScopeOptionViewModel(
+				GitScopeKind.Tracked,
+				_localization["Settings.GitScope.Tracked"],
+				_localization["Settings.GitScope.Tracked.Tooltip"]),
+			new GitScopeOptionViewModel(
+				GitScopeKind.Changed,
+				_localization["Settings.GitScope.Changed"],
+				_localization["Settings.GitScope.Changed.Tooltip"]),
+			new GitScopeOptionViewModel(
+				GitScopeKind.Staged,
+				_localization["Settings.GitScope.Staged"],
+				_localization["Settings.GitScope.Staged.Tooltip"]),
+			new GitScopeOptionViewModel(
+				GitScopeKind.BranchDiff,
+				_localization["Settings.GitScope.BranchDiff"],
+				_localization["Settings.GitScope.BranchDiff.Tooltip"])
+		];
 		SettingsSecretsTitle = _localization["Settings.Secrets.Title"];
 		UpdateSettingsSecretsNotice();
 		UpdateSettingsPrivateDataNotice();
@@ -2050,7 +2091,9 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
         RaisePropertyChanged(nameof(HelpAboutBody));
         RaisePropertyChanged(nameof(HelpAboutSupport));
         RaisePropertyChanged(nameof(HelpAboutOpenLink));
-        RaisePropertyChanged(nameof(SettingsIgnoreTitle));
+		RaisePropertyChanged(nameof(SettingsIgnoreTitle));
+		RaisePropertyChanged(nameof(SettingsGitScopeLabel));
+		RaisePropertyChanged(nameof(GitScopeOptions));
 		RaisePropertyChanged(nameof(SettingsSecretsTitle));
 		RaisePropertyChanged(nameof(SettingsSecretsNotice));
 		RaisePropertyChanged(nameof(SettingsPrivateDataNotice));
@@ -2206,6 +2249,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
 			.ToHashSet();
 		((ResettableObservableCollection<IgnoreOptionViewModel>)PathIgnoreOptions).ReplaceAll(
 			IgnoreOptions.Where(option => !contentTransformationIds.Contains(option.Id)));
+		RaisePropertyChanged(nameof(HasGitScopeOptions));
 		HideSecretsOption = IgnoreOptions.FirstOrDefault(
 			static option => option.Id == IgnoreOptionId.HideSecrets);
 		HidePrivateDataOption = IgnoreOptions.FirstOrDefault(
